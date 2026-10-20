@@ -79,11 +79,9 @@ internal/
 ├── config/                # Settings, presets, and URLs
 └── logging/               # Context logger and secret redaction
 tools/task/go.mod          # Pinned development tool module
-scripts/                   # Local Spec Kit installation/check tooling
+scripts/                   # Local workflow and Spec Kit checks
 .speckit/feature-numbering/ # Local feature-directory hook source
-setup.command              # macOS setup and build
-run.command                # macOS launch wrapper
-Taskfile.yml               # Development workflows
+Taskfile.yml               # Setup, launch, and development workflows
 Makefile                   # Tool installation only
 ```
 

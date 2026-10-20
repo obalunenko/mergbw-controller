@@ -24,21 +24,21 @@ The project uses ordinary Go and `tinygo.org/x/bluetooth v0.16.0`; the TinyGo co
 ```bash
 git clone https://github.com/obalunenko/mergbw-controller.git
 cd mergbw-controller
-bash setup.command --identity AA:BB:CC:DD:EE:FF
-bash run.command
+go tool -modfile=tools/task/go.mod task tools
+task setup -- --identity AA:BB:CC:DD:EE:FF
+task run
 ```
 
-Replace the example identity with the lamp's identity described below. `setup.command` checks the tools, downloads Go modules, builds `sunset`, and initializes local settings. It does not install Go, Xcode, or a background service. On first setup without arguments, an interactive Terminal prompts for the identity. Existing settings are preserved on subsequent runs.
+Replace the example identity with the lamp's identity described below. `task setup` downloads application modules, builds `sunset`, and initializes missing settings. Existing settings are preserved. The pinned Task module requires Go 1.27.0; Go downloads that toolchain automatically when needed. Install Go and Xcode separately; no background service is installed.
 
-Setup prompts and CLI diagnostic messages are currently in Russian.
+CLI diagnostic messages are currently in Russian.
 
-Alternatively, build and initialize manually:
+Individual preparation steps are available separately:
 
 ```bash
-go mod download
-CGO_ENABLED=1 go build -buildvcs=false -o sunset ./cmd/sunset
-./sunset --identity AA:BB:CC:DD:EE:FF init
-./sunset serve
+task deps
+task build
+task init -- --identity AA:BB:CC:DD:EE:FF
 ```
 
 Disconnect the lamp in nRF Connect and close MeRGBW on the phone before starting the controller. Keep Terminal open or minimized, keep the Mac awake, and use Ctrl+C to stop the server.
@@ -51,11 +51,11 @@ This identity is not the macOS CoreBluetooth UUID. Do not substitute a scanner's
 
 ### macOS Bluetooth permission
 
-Allow Bluetooth access for Terminal, or the terminal application launching `sunset`, in **System Settings → Privacy & Security → Bluetooth**. The BLE dependency creates CoreBluetooth managers during package initialization, so even `init`, `--help`, `send`, or `dry-run` may trigger the permission prompt. This alone does not scan, connect, or send lamp commands. For an iTerm2 `abort: trap`, check its Bluetooth permission or try Apple's Terminal.
+Allow Bluetooth access for Terminal, or the terminal application launching `sunset`, in **System Settings → Privacy & Security → Bluetooth**. The BLE dependency creates CoreBluetooth managers during package initialization, so even `init`, `--help`, `send`, or `dry-run` may trigger the permission prompt. This alone does not scan, connect, or send lamp commands. Task retains the launching terminal's macOS permission context. Warp's missing `NSBluetoothAlwaysUsageDescription` can still cause an abort; Terminal.app worked in the recorded verification. No separate app runner is installed.
 
 ## Stream Deck setup
 
-1. Start `sunset serve` or `run.command` on the same Mac as Stream Deck.
+1. Start `task run` on the same Mac as Stream Deck.
 2. Open the generated **streamdeck-buttons.txt**.
 3. Add **System → Website** to a Stream Deck button.
 4. Paste the complete URL for the desired action.
@@ -63,26 +63,27 @@ Allow Bluetooth access for Terminal, or the terminal application launching `suns
 
 Check ON/OFF first, then verify RGB and brightness. URLs contain the generated access token: keep `settings.json` and `streamdeck-buttons.txt` private. Both are ignored by Git. Normal restarts preserve the token and button URLs.
 
-## CLI
+## Task commands
 
-Global flags go **before** the subcommand. By default, data files live beside the `sunset` executable.
+Task builds the controller before each application command. Pass arguments after `--`. Runtime and hardware tasks use the repository root for settings by default; override it with `MERGBW_DATA_DIR` or the Task variable `DATA_DIR`.
 
 ```bash
-./sunset --identity AA:BB:CC:DD:EE:FF init
-./sunset serve
-./sunset urls
-./sunset send off
-./sunset send on
-./sunset send color FF5000
-./sunset send brightness 40
-./sunset send preset sunset
-./sunset dry-run on
-./sunset dry-run preset sunset
-./sunset inspect
+task init -- --identity AA:BB:CC:DD:EE:FF
+task run                         # alias: task serve
+task urls
+task send -- off
+task send -- on
+task send -- color FF5000
+task send -- brightness 40
+task send -- preset sunset
+task dry-run -- on
+task dry-run -- preset sunset
+task inspect
+task version
 ```
 
 - `init` creates missing files and retains existing settings/presets. A new configuration requires `--identity`; `serve` can also initialize with that flag. A different identity cannot silently replace an existing one: stop the server and edit `settings.json` explicitly to change lamps.
-- `send` is an HTTP client. Leave the server running and execute it from another Terminal.
+- `send` is an HTTP client. Leave `task run` running and execute `task send` from another terminal.
 - `inspect` discovers and connects to the configured lamp to show advertisement/GATT information, without writing control packets. Stop `serve` before using it.
 - `dry-run` prints packets without connecting to the lamp or sending commands.
 - `urls` regenerates and prints the current button URLs.
@@ -90,8 +91,9 @@ Global flags go **before** the subcommand. By default, data files live beside th
 For a separate data directory, use the same directory in each command:
 
 ```bash
-./sunset --data-dir ./local-data --identity AA:BB:CC:DD:EE:FF init
-./sunset --data-dir ./local-data serve
+export MERGBW_DATA_DIR="$HOME/.config/mergbw"
+task init -- --identity AA:BB:CC:DD:EE:FF
+task run
 ```
 
 Keep a custom data directory outside the repository or add it to your local Git exclusions.
@@ -128,7 +130,7 @@ time=2026-01-01T12:00:00.000Z level=INFO msg=bluetooth.connected identity=AA:BB:
 Successful `/health` requests are quiet. Access tokens and complete command URLs are excluded from logs. Logs normally stay in Terminal; to also append them to a file, run from the project directory:
 
 ```bash
-bash run.command 2>&1 | tee -a sunset.log
+task run 2>&1 | tee -a sunset.log
 ```
 
 `*.log` is ignored by Git. The file contains device identifiers and command history. Logging does not change macOS Bluetooth permission requirements.
@@ -158,26 +160,29 @@ Stop the Python server, copy its `settings.json` and `presets.json` beside the G
 Install the pinned development tools, then use the project workflows:
 
 ```bash
-make tools
+task tools
 task --list
 task build
 task test:core
 task test:race
+task workflows:test
 ```
 
-`make tools` installs the tools declared in `tools/*/go.mod` with `go install tool`. Task 3.54.0 is pinned in `tools/task/go.mod` with its dependencies locked in `tools/task/go.sum`. Add `$(go env GOPATH)/bin` to `PATH` if needed, or run `go tool -modfile=tools/task/go.mod task --list` directly. The Task tool module requires Go 1.27.0; Go downloads the required toolchain automatically unless `GOTOOLCHAIN=local` is set. The controller still requires Go 1.25.0+.
+`task tools` delegates to the Make bootstrap, which installs tools declared in `tools/*/go.mod` with `go install tool`. If Task is not installed yet, use `go tool -modfile=tools/task/go.mod task tools`; `make tools` remains available for bootstrapping. Task 3.54.0 is pinned in `tools/task/go.mod` with its dependencies locked in `tools/task/go.sum`. Add `$(go env GOPATH)/bin` to `PATH` if needed, or run `go tool -modfile=tools/task/go.mod task --list` directly. The Task tool module requires Go 1.27.0; Go downloads the required toolchain automatically unless `GOTOOLCHAIN=local` is set. The controller still requires Go 1.25.0+.
+
+`task workflows:test` checks Task ordering, argument/data-directory forwarding, error propagation, and hardware prerequisites using recording executables without native Bluetooth.
 
 Go tests use Testify 1.11.1 assertions and Uber Mock 0.6.0 interface mocks. The test libraries belong to root `go.mod`; the generator is pinned separately in `tools/mockgen/go.mod` (Go 1.25.0). Run `task mocks:generate` after changing an interface and commit the generated `mock_*_test.go` files. Generation uses the pinned module directly, without relying on a global mockgen version.
 
 `task test:core` and `task test:race` include the BLE backend with generated adapter/device mocks. They do not import the native Bluetooth adapter or require equipment/permissions. Default `task test` also excludes hardware tests.
 
-Real-equipment integration tests require the `hardware` build tag and run only locally through a separate opt-in task. Stop `serve`, disconnect other clients, and point to an existing local configuration directory:
+Real-equipment integration tests require the `hardware` build tag and run only locally through a separate opt-in task. Stop `task run` and disconnect other clients. With settings in the repository root:
 
 ```bash
-MERGBW_DATA_DIR=/absolute/path/to/lamp-config task test:hardware
+task test:hardware
 ```
 
-The task rejects CI execution and requires the data-directory setting. `TestHardwareLamp` inspects FFF0/FFF3, then resolves and sends real commands through the controller and native BLE backend on one persistent link. It establishes a white/100% baseline, checks OFF/ON transmission, red/green/blue, brightness 0/50/100%, every preset from local configuration in sorted order, and a final OFF. Each successful command pauses for two seconds and prints its expected visual effect. The sequence stops on the first failure and releases the connection; final OFF is reached only if preceding steps succeed. The task has a 15-minute overall timeout; individual operations use cooperative 35-second contexts.
+The task rejects CI execution and requires settings.json and presets.json in the selected directory. For other settings, use `MERGBW_DATA_DIR=/absolute/path/to/lamp-config task test:hardware`. `TestHardwareLamp` inspects FFF0/FFF3, then resolves and sends real commands through the controller and native BLE backend on one persistent link. It establishes a white/100% baseline, checks OFF/ON transmission, red/green/blue, brightness 0/50/100%, every preset from local configuration in sorted order, and a final OFF. Each successful command pauses for two seconds and prints its expected visual effect. The sequence stops on the first failure and releases the connection; final OFF is reached only if preceding steps succeed. The task has a 15-minute overall timeout; individual operations use cooperative 35-second contexts.
 
 PASS confirms connection/GATT and command transmission, without physical state readback. Observe the lamp and record the device, command, and actual effect separately; keep device identifiers and secrets in local records. The [2026-10-21 verification](specs/002-ble-command-execution/hardware-verification.md) ran all command cases in separate filtered invocations with user confirmations; it did not run the whole sequence uninterrupted. Brightness changes were compared visually, without calibrated measurements. Importing the native package may request macOS Bluetooth permission. If Warp aborts with a missing `NSBluetoothAlwaysUsageDescription`, run the test from Terminal.app, which succeeded in this session. Hardware tests are excluded from normal tests, race checks, `task check`, and CI; compilation or a skipped test is not hardware-verification evidence.
 

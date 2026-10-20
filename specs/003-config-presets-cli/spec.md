@@ -19,7 +19,7 @@ This records built behavior rather than requesting implementation changes.
 ## Project Scope and Compatibility
 
 Primary code is `internal/config/config.go` and the CLI portions of
-`cmd/sunset/main.go`, supported by `setup.command`, `run.command`, and the public
+`cmd/sunset/main.go`, supported by `Taskfile.yml` and the public
 bundled `presets.json`. Existing config tests are colocated in
 `internal/config/config_test.go`. Complete main.go also contains transport and
 server integration owned by earlier migrations; its full line count is not
@@ -123,25 +123,26 @@ boundaries rather than initializing real CoreBluetooth.
 Import-time native initialization is a separate caveat: even help, init, or
 otherwise non-connecting commands may create CoreBluetooth managers on macOS.
 
-### User Story 5 - Build and Run Through macOS Wrappers (Priority: P2)
+### User Story 5 - Build and Run Through Task (Priority: P2)
 
-A user launches setup.command to check prerequisites, build locally, and run
-init, then launches run.command to keep the service in the terminal.
+A user runs task setup to check macOS prerequisites, download dependencies,
+build locally, and initialize config, then task run to serve in the foreground.
 
-**Independent Test**: Bash syntax was checked. Prompt/preflight/build/run behavior
-is code-derived; there is no automated wrapper behavior suite.
+**Independent Test**: Task workflow tests use recording executables to check
+ordering, arguments, data directories, failures, and hardware prerequisites
+without initializing native Bluetooth.
 
-1. With no script arguments and no settings.json in the script directory,
-   interactive setup prompts for identity; noninteractive setup fails with an
-   instruction to supply it. Existing settings suppress that prompt.
-2. Setup requires Darwin, project sources, a stable suitable Go executable,
-   Xcode command-line tools, clang, and a macOS SDK, then downloads dependencies,
-   builds a CGO Darwin binary, and forwards arguments to `sunset ... init`.
-3. Run requires Darwin and an executable sunset beside the wrapper, changes
-   to that directory, and execs `./sunset serve`. No background service or
-   automatic Go/Xcode/Task/Spec Kit installation is performed.
+1. First setup receives identity explicitly after `--`; missing identity fails
+   through Init. Existing settings, token, and presets remain preserved.
+2. On macOS, setup checks Xcode selection, clang, and SDK before downloading
+   dependencies, building, and forwarding arguments before init. Application Go
+   requirements come from root go.mod; Task is pinned in its separate module.
+3. Run builds and starts serve in the foreground from the project directory.
+   All runtime tasks default to project-root settings; MERGBW_DATA_DIR or the
+   higher-priority DATA_DIR Task variable selects another directory. No root
+   setup/run shell files, app runner, or background service are installed.
 
-Evidence: setup.command, run.command, both READMEs; Bash syntax checks passed.
+Evidence: Taskfile.yml, scripts/test_task_workflows.py, and both READMEs.
 
 ### Edge Cases
 
@@ -227,19 +228,21 @@ Evidence: setup.command, run.command, both READMEs; Bash syntax checks passed.
   --version prints bridge.Version before command dispatch.
 - **FR-020**: CLI failures are logged to stderr and main exits 1. Loaded tokens
   configure log redaction; explicit urls output still includes the user's URLs.
-- **FR-021**: setup.command checks Darwin, project sources, stable numeric Go
-  version suitable for Go 1.25+, Xcode tools, clang, and SDK. Its first-run
-  identity prompt is limited to no arguments plus missing script-local settings;
-  failures report guidance and wait for Enter only when stdin is a terminal.
-- **FR-022**: Setup uses GOTOOLCHAIN=local, downloads modules, builds sunset with
-  CGO_ENABLED=1, GOOS=darwin and GOHOSTARCH, then runs `./sunset "$@" init`.
-  It forwards user arguments and preserves existing config through Init.
-- **FR-023**: run.command requires Darwin and executable ./sunset, changes to
-  its own directory, prints foreground-running guidance, and execs serve.
+- **FR-021**: task setup checks Xcode tools, clang, and SDK on macOS before
+  invoking dependencies/build/init. First initialization requires an explicit
+  identity after `--`; no interactive shell prompt or root setup/run script
+  exists. Application and tooling Go requirements remain in their own modules.
+- **FR-022**: Task owns dependency download, host-platform build, and init in
+  that order. It forwards arguments intact, including spaces/quotes, and uses
+  project-root settings by default. MERGBW_DATA_DIR selects another directory;
+  an explicit DATA_DIR Task variable takes precedence. Init preserves config.
+- **FR-023**: task run (alias serve) builds before starting the foreground
+  service from the project directory. Ctrl+C stops it through the existing
+  signal-aware lifecycle. Task failures propagate to the caller.
 - **FR-024**: Both READMEs describe compatible setup/CLI/Stream Deck use and
   physical-state limits. Root settings.json, streamdeck-buttons.txt, and binary
-  sunset are ignored; custom data locations need their own exclusion. Wrappers
-  do not install Go, Xcode, Task, Spec Kit, or a background service.
+  sunset are ignored; custom data locations need their own exclusion. Setup/run
+  do not install Go, Xcode, Spec Kit, an app runner, or a background service.
 
 ### Interfaces and Effects
 
@@ -252,16 +255,16 @@ Evidence: setup.command, run.command, both READMEs; Bash syntax checks passed.
 | send | HTTP request to the existing server; eventual device effect belongs to 001/002 |
 | inspect | Native connection/discovery without lighting writes, as specified in 002 |
 | serve | URL generation and HTTP/BLE lifecycle, as specified in 001/002 |
-| setup.command | Dependency download, local build, and init; not run during migration |
-| run.command | Foreground service execution; not run during migration |
+| task setup / init | Dependency download, local build, and explicit initialization |
+| task run / serve | Build and foreground service execution |
 
 ### Key Entities
 
 Settings carries manufacturer identity, port, and token. Preset maps stable slugs
 to label, three RGB integers, and brightness. Data directory contains settings,
 presets, and generated button text. CLI parses global flags/subcommands and
-composes configuration, protocol, HTTP, and BLE. macOS wrappers select a local
-Go toolchain and orchestrate setup/run without managing a system service.
+composes configuration, protocol, HTTP, and BLE. Task orchestrates setup/run
+without managing a system service.
 
 ### Verification Evidence
 
@@ -287,8 +290,10 @@ executed, so no real settings, server, or lamp state was changed.
   TestInitAndMissingBrightness (executed; FR-009, FR-010).
 - **SC-007**: Missing/null preset brightness and invalid RGB fail loading in
   TestInitAndMissingBrightness (executed; FR-007).
-- **SC-008**: Bundled preset values equal all six Go defaults and both wrappers
-  pass Bash syntax checks (read-only/static checks; FR-008, FR-021-FR-023).
+- **SC-008**: Bundled preset values equal all six Go defaults. Task workflow
+  tests verify setup ordering, runtime command/argument forwarding, data-dir
+  defaults/overrides, error propagation, and local hardware guards without
+  native Bluetooth (FR-008, FR-021-FR-023).
 
 ## Assumptions and Verification Limits
 
@@ -336,3 +341,14 @@ cases. The root module owns test-library dependencies. tools/mockgen is a new
 separate pinned tool module; make tools discovers it alongside tools/task.
 The CLI still imports native Bluetooth through internal/ble/native, so the
 existing import-time permission caveat remains. G01-G03 remain open.
+
+## Task Entry-Point Amendment (2026-10-21)
+
+The user's explicit follow-up replaces root setup/run shell files with Task
+workflows. US5, FR-021-FR-024, and SC-008 above describe the current contract;
+older wrapper counts/static checks describe the original migration only.
+Task covers application commands, tool installation through Make, and local
+verification. CLI hints and generated button instructions now point to task run.
+The broader G03 gap for real main-package dispatch remains separate from the
+controlled Task workflow checks. No app runner or Bluetooth-permission change
+is part of this amendment.

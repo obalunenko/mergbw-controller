@@ -70,12 +70,12 @@ were checked. Known gaps remain separately open.
 
 ## Phase 5: User Story 5 - macOS Setup and Run (P2)
 
-- [x] T021 [US5] Implement script-local setup, first-run identity prompting, and
-  Darwin/Go/Xcode/clang/SDK preflight checks in `setup.command`.
-- [x] T022 [US5] Download modules, build a CGO Darwin executable with the selected
-  local Go, and forward arguments to init with failure handling in `setup.command`.
-- [x] T023 [US5] Check the local executable and exec the foreground service
-  with terminal guidance in `run.command`.
+- [x] T021 [US5] Implement setup with macOS Xcode/clang/SDK preflight checks and
+  explicit first-use identity through `Taskfile.yml` (Task amendment).
+- [x] T022 [US5] Download modules, build the host executable, and forward
+  arguments to init with failure handling through `Taskfile.yml`.
+- [x] T023 [US5] Build and run the foreground service through task run/serve;
+  remove the root setup/run shell files (Task amendment).
 - [x] T024 [US5] Document setup/CLI/URL/privacy/device limits in `README.md` and
   `README_RU.md`, with root runtime-file exclusions in `.gitignore`.
 
@@ -98,7 +98,7 @@ to features 001/002 rather than represented as newly implemented work here.
 |-----|------------------|-----------|
 | G01 | Settings bounds/JSON, remaining preset format cases, zero brightness through LoadPresets, complete URL order | Add focused config fixtures to config_test.go |
 | G02 | File modes, filesystem failure/cleanup paths, partial-init outcomes | Controlled filesystem tests; separately specify any desired transactional changes |
-| G03 | CLI flags/data scope/dispatch and wrapper prompts/preflight/execution | Main-package tests behind a fake native boundary and a shell fixture harness |
+| G03 | Real CLI flags/data scope/dispatch; additional platform-preflight failure cases | Main-package tests behind a fake native boundary; Task ordering/argument checks are now covered separately |
 
 All 24 historical tasks are checked because the corresponding artifacts exist.
 The three gaps remain open. Existing init is not a multi-file transaction and

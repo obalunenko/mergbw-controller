@@ -3,6 +3,7 @@ version: '3'
 vars:
   GO: '{{default "go" .GO}}'
   PYTHON: '{{default "python3" .PYTHON}}'
+  DATA_DIR: '{{default .ROOT_DIR .MERGBW_DATA_DIR}}'
   CORE_PACKAGES: ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble
   SPECKIT_INSTALL: scripts/install-speckit.sh
   SPECKIT_UPDATE_CHECK: scripts/check-speckit-updates.py
@@ -23,6 +24,75 @@ tasks:
     cmds:
       - '{{.GO}} build -trimpath -buildvcs=false -o sunset ./cmd/sunset'
 
+  tools:
+    desc: Install pinned development tools through the Make bootstrap.
+    cmds:
+      - 'make tools GO="{{.GO}}"'
+
+  deps:
+    desc: Download application dependencies.
+    cmds:
+      - '{{.GO}} mod download'
+
+  setup:
+    desc: Download dependencies, build, and initialize settings (first use requires -- --identity VALUE).
+    preconditions:
+      - sh: 'test "$(uname -s)" != Darwin || (xcode-select -p >/dev/null 2>&1 && xcrun --find clang >/dev/null 2>&1 && xcrun --sdk macosx --show-sdk-path >/dev/null 2>&1)'
+        msg: Install Xcode Command Line Tools and select a working macOS SDK before running task setup on macOS.
+    cmds:
+      - task: deps
+      - task: init
+        vars:
+          CLI_ARGS: '{{.CLI_ARGS}}'
+
+  init:
+    desc: Build and initialize missing settings and Stream Deck URLs.
+    deps: [build]
+    cmds:
+      - './sunset --data-dir {{shellQuote .DATA_DIR}} {{.CLI_ARGS}} init'
+
+  run:
+    aliases: [serve]
+    desc: Build and run the controller in the foreground (Ctrl+C to stop).
+    deps: [build]
+    cmds:
+      - './sunset --data-dir {{shellQuote .DATA_DIR}} {{.CLI_ARGS}} serve'
+
+  urls:
+    desc: Build, regenerate, and print Stream Deck URLs (contains the access token).
+    deps: [build]
+    cmds:
+      - './sunset --data-dir {{shellQuote .DATA_DIR}} urls'
+
+  inspect:
+    desc: Build and inspect the real lamp without lighting commands (stop run first).
+    deps: [build]
+    cmds:
+      - './sunset --data-dir {{shellQuote .DATA_DIR}} inspect'
+
+  send:
+    desc: Build and send an HTTP command to the running controller (e.g. -- color FF5000).
+    deps: [build]
+    cmds:
+      - './sunset --data-dir {{shellQuote .DATA_DIR}} send {{.CLI_ARGS}}'
+
+  dry-run:
+    desc: Build and print command packets without sending them (e.g. -- preset sunset).
+    deps: [build]
+    cmds:
+      - './sunset --data-dir {{shellQuote .DATA_DIR}} dry-run {{.CLI_ARGS}}'
+
+  version:
+    desc: Build and print the controller version.
+    deps: [build]
+    cmds:
+      - './sunset --version'
+
+  workflows:test:
+    desc: Check Task workflow ordering and argument forwarding without native Bluetooth.
+    cmds:
+      - '{{.PYTHON}} scripts/test_task_workflows.py'
+
   # Hardware tests are excluded unless the explicit hardware tag is enabled.
   # Native-only packages have no default test binaries to initialize Bluetooth.
   test:
@@ -41,14 +111,14 @@ tasks:
       - '{{.GO}} test -race {{.CORE_PACKAGES}}'
 
   test:hardware:
-    desc: Locally inspect and send lighting commands to the real lamp (requires MERGBW_DATA_DIR; never runs in CI).
+    desc: Locally inspect and send commands to the real lamp using DATA_DIR (never runs in CI).
     preconditions:
       - sh: 'test -z "$CI"'
         msg: Hardware integration tests run only locally, outside CI.
-      - sh: 'test -n "$MERGBW_DATA_DIR"'
-        msg: Set MERGBW_DATA_DIR to the existing lamp configuration directory.
+      - sh: 'data_dir={{shellQuote .DATA_DIR}}; test -f "$data_dir/settings.json" && test -f "$data_dir/presets.json"'
+        msg: Run task setup first, or set MERGBW_DATA_DIR to a directory containing settings.json and presets.json.
     cmds:
-      - '{{.GO}} test -count=1 -tags=hardware -timeout=15m -v ./internal/ble/native'
+      - 'MERGBW_DATA_DIR={{shellQuote .DATA_DIR}} {{.GO}} test -count=1 -tags=hardware -timeout=15m -v ./internal/ble/native'
 
   mocks:generate:
     desc: Regenerate unit-test mocks using the pinned mockgen tool module.

@@ -55,7 +55,7 @@ existing behavior, not a claim of conformance to a nonexistent transaction rule.
 | Scope | Files | Lines | Interpretation |
 |-------|-------|-------|----------------|
 | Primary Go files | 2 | 518 | config.go 197; complete main.go 321, including shared lifecycle code |
-| Shell wrappers | 2 | 119 | setup.command 95; run.command 24 |
+| Retired shell wrappers | 2 | 119 | Original migration snapshot, superseded by Task |
 | Primary tests | 1 | 101 | config_test.go; three Test functions |
 | Bundled data | 1 | 32 | Public presets.json with six presets |
 | Supporting protocol source/tests | 2 | 220 | Validation/packet dependency also specified by feature 002 |
@@ -69,8 +69,8 @@ and BLE composition; they are not newly attributed to configuration alone.
 internal/config/config.go
 internal/config/config_test.go
 cmd/sunset/main.go
-setup.command
-run.command
+Taskfile.yml
+scripts/test_task_workflows.py
 presets.json
 internal/protocol/protocol.go       # shared validation dependency
 internal/protocol/protocol_test.go
@@ -137,24 +137,20 @@ before entering the lifecycle documented by 001/002. main logs failures to
 stderr and exits 1. There are no cmd/sunset tests for this dispatch/lifecycle
 (G03); import-time CoreBluetooth initialization can occur before run is called.
 
-### 4. macOS setup/run wrappers
+### 4. Task setup and run
 
-Both scripts change to their own physical directory and report failures through
-a helper that waits for Enter only when stdin is a TTY. setup first checks
-Darwin/source presence, then prompts for identity only when script-local settings
-are missing and no arguments were supplied. Argument-bearing invocations bypass
-that prompt; --data-dir is not parsed by the shell wrapper.
+Task is the setup/run entry point. Setup checks Xcode tools, clang, and SDK on
+macOS, downloads dependencies, builds on the host, and forwards explicit identity
+and other global arguments before init. Runtime commands build before invoking
+the existing CLI; run/serve remains in the foreground. Project-root data is the
+default, with MERGBW_DATA_DIR and higher-priority DATA_DIR overrides. Paths are
+shell-quoted, and arguments after `--` retain their boundaries.
 
-Setup searches `go`, `/usr/local/go/bin/go`, `/opt/homebrew/bin/go`, and
-`/usr/local/bin/go`, accepting numeric stable versions with Go major >1 or major
-1/minor >=25. It uses GOTOOLCHAIN=local, verifies Xcode selection, clang and SDK,
-downloads modules, builds a CGO Darwin binary for GOHOSTARCH, and forwards all
-arguments before appending init. It does not install Go/Xcode or background jobs.
-run checks Darwin and executable sunset, prints foreground-running guidance,
-and replaces itself with `./sunset serve`.
-
-These runtime paths were inspected, not executed. Wrappers passed native
-`/bin/bash -n`; no shell behavior harness exists (G03).
+Root setup/run scripts are removed. Make remains the tool-installation bootstrap
+behind task tools. The workflow tests execute the real Taskfile with recording
+Go/CLI executables, checking command order, quoting, defaults, error propagation,
+and hardware exclusion/prerequisites without starting native Bluetooth. Actual
+main-package dispatch coverage remains a separate G03 limitation.
 
 ## Complexity Assessment
 
@@ -170,7 +166,7 @@ No new abstraction, dependency, frontend, or persistence layer is introduced.
 
 - **Executed**: `go test ./internal/config` passed on 2026-10-20; all three
   existing config Test functions ran.
-- **Static checks**: `/bin/bash -n setup.command run.command` passed. A read-only
+- **Historical static checks**: Retired shell wrappers passed Bash syntax checks. A read-only
   comparison of public presets.json with parsed Go default literals matched all
   six label/RGB/brightness records.
 - **Not executed**: CLI commands, setup/run scripts, server, or native BLE
@@ -198,3 +194,13 @@ Taskfile mocks:generate task. The executable now supplies native.DefaultAdapter
 to ble.New; CLI commands and wrappers retain their existing behavior. README.md
 and README_RU.md describe the new test/tooling workflows. The earlier scope
 metrics and validation record remain historical migration evidence.
+
+## Task Entry-Point Amendment (2026-10-21)
+
+Per the user's follow-up, Taskfile.yml now owns setup, init, run/serve, urls,
+inspect, send, dry-run, version, dependencies, and development-tool installation.
+Root setup/run shell files are removed. Both READMEs, CLI recovery hints,
+generated button instructions, AGENTS.md, and the plan template reflect these
+entry points. Hardware data defaults to the project root, while configuration
+presence and local-only guards remain mandatory. No application interfaces or
+HTTP/BLE execution semantics change.

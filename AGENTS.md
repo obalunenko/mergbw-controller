@@ -10,8 +10,7 @@ Go modules for Task and mockgen development tooling.
   `cmd/sunset` is the composition root; keep protocol validation, HTTP handling,
   command sequencing, native BLE transport, config, and logging in their
   existing packages.
-- Tooling work: `tools/task/`, `tools/mockgen/`, `Makefile`, `Taskfile.yml`, `scripts/`,
-  `setup.command`, and `run.command`.
+- Tooling work: `tools/task/`, `tools/mockgen/`, `Makefile`, `Taskfile.yml`, and `scripts/`.
   Tool dependencies belong in their separate module. `make tools` installs
   tools; Taskfile owns the project workflows.
 - Spec Kit work: `.specify/`, `.speckit/feature-numbering/`, and generated

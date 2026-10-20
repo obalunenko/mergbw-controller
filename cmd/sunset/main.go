@@ -222,7 +222,7 @@ func send(settings config.Settings, action protocol.Action) (result error) {
 		if errors.As(err, &urlErr) {
 			err = urlErr.Err
 		}
-		return fmt.Errorf("HTTP-контроллер недоступен: %w; запустите run.command", err)
+		return fmt.Errorf("HTTP-контроллер недоступен: %w; запустите task run", err)
 	}
 	defer response.Body.Close()
 	requestID = response.Header.Get("X-Request-ID")
@@ -270,7 +270,7 @@ func serve(settings config.Settings, presets map[string]protocol.Preset) error {
 			if ctx.Err() == nil {
 				hint := "Следующая команда попробует подключиться."
 				if errors.Is(err, ble.ErrNeedsRestart) {
-					hint = "Остановите и снова запустите run.command."
+					hint = "Остановите и снова запустите task run."
 				}
 				slog.Warn("bluetooth.unavailable", "identity", settings.DeviceIdentity, "error", err, "hint", hint)
 			}

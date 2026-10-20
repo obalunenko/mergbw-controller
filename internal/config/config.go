@@ -157,7 +157,7 @@ func LoadPresets(directory string) (map[string]protocol.Preset, error) {
 
 func URLs(settings Settings, presets map[string]protocol.Preset) string {
 	var out strings.Builder
-	out.WriteString("MeRGBW LT-06 — кнопки Stream Deck\n\nSystem → Website → URL: скопируйте ссылку целиком.\nВключите GET request in background.\nПеред использованием запустите run.command или ./sunset serve.\n\n")
+	out.WriteString("MeRGBW LT-06 — кнопки Stream Deck\n\nSystem → Website → URL: скопируйте ссылку целиком.\nВключите GET request in background.\nПеред использованием запустите task run из папки проекта.\n\n")
 	add := func(label, route string) { fmt.Fprintf(&out, "%s\n%s/%s\n\n", label, settings.BaseURL(), route) }
 	add("Включить", "on")
 	add("Выключить", "off")
