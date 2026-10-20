@@ -31,3 +31,12 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Local controller runtime files
+/sunset
+/settings.json
+/streamdeck-buttons.txt
+/bin/
+/dist/
+*.log
+.DS_Store

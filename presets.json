@@ -1,0 +1,32 @@
+{
+  "sunset": {
+    "label": "Закат",
+    "rgb": [255, 80, 0],
+    "brightness": 60
+  },
+  "night": {
+    "label": "Ночь",
+    "rgb": [40, 60, 255],
+    "brightness": 25
+  },
+  "alarm": {
+    "label": "Тревога",
+    "rgb": [255, 0, 0],
+    "brightness": 70
+  },
+  "magic": {
+    "label": "Магия",
+    "rgb": [160, 0, 255],
+    "brightness": 45
+  },
+  "forest": {
+    "label": "Лес",
+    "rgb": [20, 180, 60],
+    "brightness": 40
+  },
+  "white": {
+    "label": "Белый RGB",
+    "rgb": [255, 255, 255],
+    "brightness": 50
+  }
+}

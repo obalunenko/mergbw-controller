@@ -1,0 +1,116 @@
+// Package bridge exposes the same local URLs as the previous Python controller.
+package bridge
+
+import (
+	"context"
+	"crypto/subtle"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/obalunenko/mergbw-controller/internal/config"
+	"github.com/obalunenko/mergbw-controller/internal/protocol"
+)
+
+const Version = "2.0.0-go"
+const RequestTimeout = 35 * time.Second
+
+type Controller interface {
+	Execute(context.Context, protocol.Action) error
+	Connected() bool
+}
+
+type Handler struct {
+	settings   config.Settings
+	presets    map[string]protocol.Preset
+	controller Controller
+}
+
+func New(settings config.Settings, presets map[string]protocol.Preset, controller Controller) *Handler {
+	return &Handler{settings: settings, presets: presets, controller: controller}
+}
+
+func respond(w http.ResponseWriter, r *http.Request, status int, payload any) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		status = http.StatusInternalServerError
+		data = []byte(`{"error":"JSON encoding failed"}`)
+	}
+	data = append(data, '\n')
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.WriteHeader(status)
+	if r.Method != http.MethodHead {
+		_, _ = w.Write(data)
+	}
+}
+
+func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	fail := func(status int, message string) {
+		respond(w, r, status, map[string]any{"error": message, "physical_state_verified": false})
+	}
+	host := strings.ToLower(r.Host)
+	if host != h.settings.Address() && host != fmt.Sprintf("localhost:%d", h.settings.Port) {
+		fail(http.StatusForbidden, "допускается только локальный адрес контроллера")
+		return
+	}
+	if r.URL.RawQuery != "" || r.URL.ForceQuery || r.URL.RawPath != "" || r.URL.Fragment != "" {
+		fail(http.StatusBadRequest, "используйте ссылку из streamdeck-buttons.txt без дополнительных параметров")
+		return
+	}
+	if r.Method != http.MethodGet && r.Method != http.MethodPost && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, POST")
+		fail(http.StatusMethodNotAllowed, "команды принимают GET или POST")
+		return
+	}
+	if r.URL.Path == "/health" {
+		respond(w, r, http.StatusOK, map[string]any{
+			"ok": true, "version": Version, "bluetooth_connected": h.controller.Connected(),
+			"physical_state_verified": false,
+		})
+		return
+	}
+	if r.Method == http.MethodHead {
+		w.Header().Set("Allow", "GET, POST")
+		fail(http.StatusMethodNotAllowed, "HEAD не выполняет команды; используйте GET или POST")
+		return
+	}
+	if r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
+		fail(http.StatusBadRequest, "команда задаётся в URL; тело запроса не используется")
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
+	if len(parts) != 2 && len(parts) != 3 {
+		fail(http.StatusNotFound, "неизвестный адрес команды")
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(parts[0]), []byte(h.settings.AccessToken)) != 1 {
+		fail(http.StatusForbidden, "неверная ссылка; используйте streamdeck-buttons.txt")
+		return
+	}
+	action, err := protocol.Resolve(parts[1:], h.presets)
+	if err != nil {
+		fail(http.StatusBadRequest, err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), RequestTimeout)
+	defer cancel()
+	// Do not detach the native BLE write on timeout: it may still be in progress.
+	if err := h.controller.Execute(ctx, action); err != nil {
+		status := http.StatusServiceUnavailable
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+			status = http.StatusGatewayTimeout
+		}
+		fail(status, err.Error())
+		return
+	}
+	respond(w, r, http.StatusOK, map[string]any{
+		"sent": true, "action": action.Route, "physical_state_verified": false,
+	})
+}
