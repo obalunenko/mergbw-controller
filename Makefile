@@ -1,25 +1,30 @@
 GO ?= go
-CORE_PACKAGES := ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge
 
-.DEFAULT_GOAL := build
-.PHONY: build test test-core test-race vet check
+TOOL_MODULES := $(sort $(wildcard tools/*/go.mod))
 
-build:
-	$(GO) build -trimpath -buildvcs=false -o sunset ./cmd/sunset
+.DEFAULT_GOAL := tools
+.PHONY: tools help
 
-# The full suite imports the native BLE package. On macOS, use test-core or
-# test-race to test without initializing CoreBluetooth or requesting permission.
-test:
-	$(GO) test ./...
+tools:
+	@set -eu; \
+	module_files='$(TOOL_MODULES)'; \
+	if [ -z "$$module_files" ]; then \
+		printf 'No Go tool modules found at tools/*/go.mod\n' >&2; \
+		exit 1; \
+	fi; \
+	for module_file in $$module_files; do \
+		module_dir="$${module_file%/go.mod}"; \
+		printf 'Installing tools from %s\n' "$$module_dir"; \
+		if ! (cd "$$module_dir" && $(GO) install tool); then \
+			printf 'Failed to install tools from %s\n' "$$module_dir" >&2; \
+			exit 1; \
+		fi; \
+	done
 
-test-core:
-	$(GO) test $(CORE_PACKAGES)
-
-test-race:
-	$(GO) test -race $(CORE_PACKAGES)
-
-vet:
-	$(GO) vet ./...
-
-# Intended for Linux CI; the macOS job only builds the executable.
-check: test test-race vet build
+help:
+	@printf '%s\n' \
+		'Make targets:' \
+		'  tools  Install every pinned Go tool from tools/*/go.mod (default).' \
+		'  help   Show this help.' \
+		'' \
+		'After make tools, run task --list for project workflows.'

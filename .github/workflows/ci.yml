@@ -31,19 +31,26 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Set up Go for tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/task/go.mod
+          cache-dependency-path: tools/task/go.sum
+      - name: Install pinned repository tools
+        run: make tools
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
           cache-dependency-path: go.sum
       - name: Run all tests without Bluetooth hardware
-        run: make test
+        run: task test
       - name: Check core concurrency with the race detector
-        run: make test-race
+        run: task test:race
       - name: Vet all packages
-        run: make vet
+        run: task vet
       - name: Build Linux controller
-        run: make build
+        run: task build
 
   macos:
     name: macOS / CoreBluetooth build
@@ -54,6 +61,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Set up Go for tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/task/go.mod
+          cache-dependency-path: tools/task/go.sum
+      - name: Install pinned repository tools
+        run: make tools
       - name: Set up minimum Go version
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -62,4 +76,4 @@ jobs:
       # Importing the native BLE package at runtime can prompt for Bluetooth
       # access. Compile/link with CGO here; do not run the binary or BLE tests.
       - name: Build macOS controller with CGO
-        run: make build
+        run: task build

@@ -154,14 +154,37 @@ Stop the Python server, copy its `settings.json` and `presets.json` beside the G
 | `internal/bridge` | Local HTTP API |
 | `internal/config` | Settings, presets, and button URLs |
 
+Install the pinned development tools, then use the project workflows:
+
 ```bash
-go test ./internal/protocol ./internal/config ./internal/controller ./internal/bridge
-go test -race ./internal/controller ./internal/bridge
+make tools
+task --list
+task build
+task test:core
+task test:race
 ```
+
+`make tools` installs the tools declared in `tools/*/go.mod` with `go install tool`. Task 3.54.0 is pinned in `tools/task/go.mod` with its dependencies locked in `tools/task/go.sum`. Add `$(go env GOPATH)/bin` to `PATH` if needed, or run `go tool -modfile=tools/task/go.mod task --list` directly. The tools module requires Go 1.27.0; Go downloads the required toolchain automatically unless `GOTOOLCHAIN=local` is set. The controller still requires Go 1.25.0+.
 
 The [CI workflow](.github/workflows/ci.yml) runs tests, the core race checks, vet, and build on Linux with Go 1.25.x and the current stable Go release. A separate macOS job compiles the CoreBluetooth backend with CGO; it does not run the controller or BLE tests. Neither these tests nor a successful macOS build validate a physical lamp. Hardware verification remains limited to the power packets described above.
 
 If the BLE backend reports that the process must be restarted, stop the server and start it again. Repeated commands cannot recover a native adapter marked unusable after an uncertain operation.
+
+### Spec Kit
+
+Specification tooling requires Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/):
+
+```bash
+task speckit:install
+task speckit:update:check
+task speckit:update:test
+```
+
+The Taskfile.yml pins Spec Kit 1.1.3, Companion 0.25.0, Brownfield 1.0.0, Bugfix 1.1.0, and the local feature-numbering extension 1.0.0. Installation uses `uv tool install` for the Specify CLI and installs all four project extensions with Codex skills. Existing Spec Kit initialization is preserved; a fresh project is initialized for Codex automatically. Restart Codex after installation to reload the generated skills.
+
+New feature directories use `specs/NNN-feature-name`, starting at `001`. The mandatory `before_specify` hook selects the next number for both stock Specify and Companion; its source lives in `.speckit/feature-numbering/`.
+
+The update check reports installed versions, pin drift, and available upstream releases without installing updates. It also checks the Companion editor extension when the VS Code or Cursor CLI is available. Edit the Taskfile.yml pins and rerun `task speckit:install` to apply an update. `task speckit:update:test` runs the checker's regression tests locally without network access.
 
 ## Protocol references
 

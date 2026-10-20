@@ -1,0 +1,82 @@
+version: '3'
+
+vars:
+  GO: '{{default "go" .GO}}'
+  PYTHON: '{{default "python3" .PYTHON}}'
+  CORE_PACKAGES: ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge
+  SPECKIT_INSTALL: scripts/install-speckit.sh
+  SPECKIT_UPDATE_CHECK: scripts/check-speckit-updates.py
+  SPECKIT_VERSION: '1.1.3'
+  SPECKIT_COMPANION_VERSION: '0.25.0'
+  SPECKIT_BROWNFIELD_VERSION: '1.0.0'
+  SPECKIT_BUGFIX_VERSION: '1.1.0'
+  SPECKIT_FEATURE_NUMBERING_VERSION: '1.0.0'
+
+tasks:
+  default:
+    desc: List available tasks.
+    cmds:
+      - task --list
+
+  build:
+    desc: Build the controller for the current platform.
+    cmds:
+      - '{{.GO}} build -trimpath -buildvcs=false -o sunset ./cmd/sunset'
+
+  # The full suite imports the native BLE package. On macOS, use test:core or
+  # test:race to test without initializing CoreBluetooth or requesting permission.
+  test:
+    desc: Run all tests (imports the native BLE package).
+    cmds:
+      - '{{.GO}} test ./...'
+
+  test:core:
+    desc: Test core packages without initializing Bluetooth.
+    cmds:
+      - '{{.GO}} test {{.CORE_PACKAGES}}'
+
+  test:race:
+    desc: Check core packages with the race detector.
+    cmds:
+      - '{{.GO}} test -race {{.CORE_PACKAGES}}'
+
+  vet:
+    desc: Vet all Go packages.
+    cmds:
+      - '{{.GO}} vet ./...'
+
+  speckit:install:
+    desc: Install pinned Spec Kit and all project extensions.
+    env:
+      SPECKIT_VERSION: '{{.SPECKIT_VERSION}}'
+      SPECKIT_COMPANION_VERSION: '{{.SPECKIT_COMPANION_VERSION}}'
+      SPECKIT_BROWNFIELD_VERSION: '{{.SPECKIT_BROWNFIELD_VERSION}}'
+      SPECKIT_BUGFIX_VERSION: '{{.SPECKIT_BUGFIX_VERSION}}'
+      SPECKIT_FEATURE_NUMBERING_VERSION: '{{.SPECKIT_FEATURE_NUMBERING_VERSION}}'
+    cmds:
+      - 'bash {{.SPECKIT_INSTALL}}'
+
+  speckit:update:check:
+    desc: Check for Spec Kit and Companion updates without installing them.
+    env:
+      SPECKIT_VERSION: '{{.SPECKIT_VERSION}}'
+      SPECKIT_COMPANION_VERSION: '{{.SPECKIT_COMPANION_VERSION}}'
+      SPECKIT_BROWNFIELD_VERSION: '{{.SPECKIT_BROWNFIELD_VERSION}}'
+      SPECKIT_BUGFIX_VERSION: '{{.SPECKIT_BUGFIX_VERSION}}'
+      SPECKIT_FEATURE_NUMBERING_VERSION: '{{.SPECKIT_FEATURE_NUMBERING_VERSION}}'
+    cmds:
+      - '{{.PYTHON}} {{.SPECKIT_UPDATE_CHECK}}'
+
+  speckit:update:test:
+    desc: Run the network-free Spec Kit update-checker regression tests.
+    cmds:
+      - '{{.PYTHON}} scripts/test_check_speckit_updates.py'
+
+  # Intended for Linux CI; the macOS job only builds the executable.
+  check:
+    desc: Run tests, race checks, vet, and build.
+    cmds:
+      - task: test
+      - task: test:race
+      - task: vet
+      - task: build

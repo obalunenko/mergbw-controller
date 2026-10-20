@@ -159,14 +159,37 @@ bash run.command 2>&1 | tee -a sunset.log
 
 CLI находится в `cmd/sunset`, протокол — в `internal/protocol`, Bluetooth — в `internal/ble`, очередь команд — в `internal/controller`, HTTP — в `internal/bridge`, настройки — в `internal/config`.
 
+Установите закреплённые инструменты разработки и используйте команды проекта:
+
 ```bash
-go test ./internal/protocol ./internal/config ./internal/controller ./internal/bridge
-go test -race ./internal/controller ./internal/bridge
+make tools
+task --list
+task build
+task test:core
+task test:race
 ```
+
+`make tools` устанавливает инструменты из `tools/*/go.mod` командой `go install tool`. Task 3.54.0 закреплён в `tools/task/go.mod`, зависимости — в `tools/task/go.sum`. При необходимости добавьте `$(go env GOPATH)/bin` в `PATH` либо запускайте `go tool -modfile=tools/task/go.mod task --list` напрямую. Модуль инструментов требует Go 1.27.0; Go автоматически загрузит нужный toolchain, если не задан `GOTOOLCHAIN=local`. Требование контроллера остаётся Go 1.25.0+.
 
 [CI workflow](.github/workflows/ci.yml) выполняет тесты, проверки гонок основной логики, vet и сборку на Linux с Go 1.25.x и текущей стабильной версией Go. Отдельная задача macOS компилирует CoreBluetooth-backend с CGO; она не запускает контроллер или BLE-тесты. Ни эти проверки, ни успешная сборка на Mac не проверяют реальную лампу. Физическая проверка ограничена указанными выше пакетами ON/OFF.
 
 Если Bluetooth-backend сообщает, что процесс требует перезапуска, остановите сервер и запустите его снова. Повторные HTTP-команды не восстанавливают адаптер, помеченный как непригодный после неопределённого результата операции.
+
+### Spec Kit
+
+Для работы со спецификациями нужны Python 3.11+ и [uv](https://docs.astral.sh/uv/getting-started/installation/):
+
+```bash
+task speckit:install
+task speckit:update:check
+task speckit:update:test
+```
+
+В Taskfile.yml закреплены Spec Kit 1.1.3, Companion 0.25.0, Brownfield 1.0.0, Bugfix 1.1.0 и локальное расширение feature-numbering 1.0.0. Установщик ставит Specify CLI через `uv tool install`, затем все четыре расширения проекта со skills для Codex. Существующая инициализация Spec Kit сохраняется; новый проект автоматически инициализируется для Codex. После установки перезапустите Codex, чтобы загрузить созданные skills.
+
+Каталоги новых возможностей имеют вид `specs/NNN-feature-name`, начиная с `001`. Обязательный hook `before_specify` выбирает следующий номер для стандартного Specify и Companion. Исходники расширения находятся в `.speckit/feature-numbering/`.
+
+Проверка обновлений показывает установленные версии, расхождения с закреплёнными версиями и новые релизы, не устанавливая обновления. При наличии CLI VS Code или Cursor также проверяется расширение Companion для редактора. Чтобы применить обновление, измените версии в Taskfile.yml и повторите `task speckit:install`. Команда `task speckit:update:test` запускает регрессионные тесты проверки обновлений локально без сети.
 
 ## Протокольные источники
 

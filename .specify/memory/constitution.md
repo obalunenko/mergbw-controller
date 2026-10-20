@@ -1,0 +1,127 @@
+# MeRGBW Controller Constitution
+
+## Project Identity
+
+MeRGBW Controller is a local Go CLI and HTTP bridge for MeRGBW LT-06 lamps
+and Stream Deck. One `sunset` process owns a persistent BLE connection and
+serializes lighting commands. The primary platform is macOS; Linux is a
+secondary build and automated-test target. Python and Bash support development
+and setup, rather than the controller runtime.
+
+## Core Principles
+
+### I. Preserve Package and Module Boundaries
+
+- `cmd/sunset/` composes the CLI, HTTP server, configuration, controller, and BLE
+  backend, and owns process startup and shutdown.
+- `internal/protocol/` validates actions and encodes packets using the standard
+  library. It does not import HTTP, configuration, or native Bluetooth packages.
+- `internal/controller/` serializes complete packet sequences through `Link`;
+  it depends on protocol and logging, not the concrete BLE backend.
+- `internal/bridge/` handles HTTP contracts using its `Controller` interface;
+  it depends on config, protocol, and logging, not the concrete BLE backend.
+- `internal/ble/` owns discovery, GATT operations, and the persistent connection.
+  `internal/config/` owns JSON files and generated URLs. `internal/logging/`
+  owns request-context logging and secret redaction.
+- `tools/task/` is a separate Go module for pinned development tooling. Keep
+  tool dependencies outside the application module. Resolve application
+  dependency changes in root `go.mod` and `go.sum`.
+
+Evidence: package imports and interfaces in `cmd/sunset/main.go`, `internal/`,
+root `go.mod`, and `tools/task/go.mod`.
+
+### II. Preserve the Local Command Contract
+
+HTTP listens on IPv4 loopback. Lighting actions accept GET or POST for Stream
+Deck compatibility; HEAD never executes an action. Validate the local Host,
+access token, route, and command parameters before dispatching packet sequences.
+Keep protocol validation separate from transport execution. Preserve existing
+CLI commands and generated URL behavior unless the feature explicitly changes
+their contract and describes compatibility.
+
+Evidence: `internal/bridge/http.go`, `internal/protocol/protocol.go`,
+`internal/config/config.go`, and `cmd/sunset/main.go`.
+
+### III. Make BLE Effects and Cancellation Explicit
+
+Keep complete actions serialized on the single connection. Retain bounded
+retries and do not retry cancellation, uncertain writes, permission failures,
+or an unusable backend as if they were transient failures. Native operations
+are synchronous and cancellation is cooperative: do not abandon a native write
+in a goroutine that may change the lamp later. Document timeout and restart
+behavior when changing BLE operations.
+
+A successful write or connected adapter does not prove physical lamp state.
+Retain `physical_state_verified: false` unless actual state verification is
+implemented and demonstrated. Distinguish automated packet tests from hardware
+verification: README currently records verified ON/OFF packets, while RGB,
+brightness, and the Go BLE implementation require physical verification.
+
+Evidence: `internal/controller/controller.go`, `internal/ble/doc.go`,
+`cmd/sunset/main.go`, `internal/bridge/http.go`, and both READMEs.
+
+### IV. Preserve Configuration and Secret Handling
+
+First initialization requires an explicit manufacturer-data identity. Repeated
+initialization preserves existing settings, access tokens, and presets; a
+conflicting identity is rejected. Keep access tokens and full command URLs out
+of logs and version control. Use the existing structured `log/slog` events,
+request IDs, and redaction helpers for command and BLE diagnostics.
+
+Evidence: `internal/config/config.go`, `internal/logging/`,
+`internal/bridge/http.go`, `.gitignore`, and configuration/logging tests.
+
+### V. Verify Behavior at the Appropriate Boundary
+
+Use Go's `testing` package and colocated `*_test.go` files. Existing tests use
+table-driven cases, fake interfaces, and `httptest` for protocol, HTTP,
+configuration, command ordering, retry/cancellation, and logging behavior.
+Choose checks that exercise changed behavior and regressions; no numeric
+coverage threshold or mandatory TDD process is established by this repository.
+Hardware claims require separate device evidence.
+
+## Naming and Documentation
+
+Go package names are lowercase; multiword filenames use underscores, and Go
+identifiers use the existing exported/unexported Go casing. Own Python tooling
+uses both hyphenated script names and underscore-separated test filenames;
+do not impose one naming style across languages. Keep English `README.md` and
+Russian `README_RU.md` consistent when documented behavior changes.
+
+The repository has `develop` and `master` branches. Two of three recorded
+commits use `feat:`; no comprehensive branch or commit naming policy is
+established. New feature directories follow the configured
+`specs/NNN-feature-name` numbering hook; directory allocation does not require
+creating or switching a Git branch.
+
+Evidence: source filenames and identifiers, Git history, READMEs, and
+`.speckit/feature-numbering/`.
+
+## Quality Gates and Development Tools
+
+- Use standard Go formatting for changed Go files and `task vet` for static
+  analysis. No additional linter configuration is currently established.
+- `make tools` installs pinned tools from `tools/*/go.mod`; project workflows
+  live in `Taskfile.yml`. Application and tooling Go versions are declared
+  separately in their respective modules.
+- Linux CI runs `task test`, `task test:race`, `task vet`, and `task build` with
+  Go 1.25.x and stable. macOS CI builds the CoreBluetooth backend with CGO and
+  does not execute BLE tests or lamp commands.
+- On macOS, use `task test:core` and `task test:race` for tests that do not
+  initialize native Bluetooth. `task check` includes the full suite and is
+  intended for Linux.
+- Spec Kit installation, update checks, and tooling tests are local tasks.
+  They are excluded from CI and from `task check`.
+
+Evidence: `Taskfile.yml`, `Makefile`, `.github/workflows/ci.yml`, and READMEs.
+
+## Governance
+
+This initial constitution records the existing implementation and explicitly
+agreed development workflow. Feature specifications and plans must identify
+which rules they affect and describe any proposed change to these contracts.
+Keep the constitution, templates, code, and bilingual documentation consistent
+when an architectural or workflow decision changes. Do not infer additional
+policies from generic template examples.
+
+**Version**: 1.0.0 | **Ratified**: 2026-10-20 | **Last Amended**: 2026-10-20
