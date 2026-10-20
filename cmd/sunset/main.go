@@ -36,15 +36,7 @@ func (l lampLink) Connect(ctx context.Context) error {
 }
 
 func (l lampLink) CanRetry(err error) bool {
-	for _, permanent := range []error{
-		context.Canceled, context.DeadlineExceeded, ble.ErrIncompatible,
-		ble.ErrPermission, ble.ErrNeedsRestart, ble.ErrWriteUncertain, ble.ErrInvalidPacket,
-	} {
-		if errors.Is(err, permanent) {
-			return false
-		}
-	}
-	return true
+	return ble.CanRetry(err)
 }
 
 func usage() {

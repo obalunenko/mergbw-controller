@@ -7,8 +7,8 @@ A local Go controller for **MeRGBW LT-06 sunset lamps**, with Stream Deck button
 ## Compatibility and verification
 
 - Targets the LT-06 protocol: advertised service `3519`, GATT service `FFF0`, writes to `FFF3`.
-- **Power ON/OFF packets were verified on an LT-06 using nRF Connect.** RGB and brightness are derived from the protocol reference and still need physical verification.
-- The Go BLE implementation requires testing on a Mac with the actual lamp. Other devices using the MeRGBW app are not automatically compatible.
+- **The Go BLE path was verified on one LT-06 on macOS on 2026-10-21:** ON/OFF, white and RGB colors, brightness 0/50/100%, and all six local presets, with user-confirmed visual effects. See the [hardware verification record](specs/002-ble-command-execution/hardware-verification.md). Power packets were also previously verified using nRF Connect.
+- Verification applies to that device and environment. Other devices using the MeRGBW app are not automatically compatible.
 - There is no physical power/color readback, music synchronization, built-in animation control, or smooth transition support.
 
 ## Quick start on macOS
@@ -177,9 +177,11 @@ Real-equipment integration tests require the `hardware` build tag and run only l
 MERGBW_DATA_DIR=/absolute/path/to/lamp-config task test:hardware
 ```
 
-The task rejects CI execution and requires the data-directory setting. Its current test connects and inspects FFF0/FFF3 without sending lighting commands; it does not verify physical power, RGB, or brightness. Importing the native package may request macOS Bluetooth permission. Hardware tests are excluded from normal tests, race checks, `task check`, and CI; compilation or a skipped test is not hardware-verification evidence.
+The task rejects CI execution and requires the data-directory setting. `TestHardwareLamp` inspects FFF0/FFF3, then resolves and sends real commands through the controller and native BLE backend on one persistent link. It establishes a white/100% baseline, checks OFF/ON transmission, red/green/blue, brightness 0/50/100%, every preset from local configuration in sorted order, and a final OFF. Each successful command pauses for two seconds and prints its expected visual effect. The sequence stops on the first failure and releases the connection; final OFF is reached only if preceding steps succeed. The task has a 15-minute overall timeout; individual operations use cooperative 35-second contexts.
 
-The [CI workflow](.github/workflows/ci.yml) runs tests, the core race checks, vet, and build on Linux with Go 1.25.x and the current stable Go release. A separate macOS job compiles the CoreBluetooth backend with CGO; it does not run the controller or BLE tests. Neither these tests nor a successful macOS build validate a physical lamp. Hardware verification remains limited to the power packets described above.
+PASS confirms connection/GATT and command transmission, without physical state readback. Observe the lamp and record the device, command, and actual effect separately; keep device identifiers and secrets in local records. The [2026-10-21 verification](specs/002-ble-command-execution/hardware-verification.md) ran all command cases in separate filtered invocations with user confirmations; it did not run the whole sequence uninterrupted. Brightness changes were compared visually, without calibrated measurements. Importing the native package may request macOS Bluetooth permission. If Warp aborts with a missing `NSBluetoothAlwaysUsageDescription`, run the test from Terminal.app, which succeeded in this session. Hardware tests are excluded from normal tests, race checks, `task check`, and CI; compilation or a skipped test is not hardware-verification evidence.
+
+The [CI workflow](.github/workflows/ci.yml) runs tests, the core race checks, vet, and build on Linux with Go 1.25.x and the current stable Go release. A separate macOS job compiles the CoreBluetooth backend with CGO; it does not run the controller or BLE tests. Neither these tests nor a successful macOS build validate a physical lamp. Physical evidence comes from the separate local verification described above.
 
 If the BLE backend reports that the process must be restarted, stop the server and start it again. Repeated commands cannot recover a native adapter marked unusable after an uncertain operation.
 

@@ -201,6 +201,64 @@ physical device evidence. None is represented as a checked-off fix.
 No constitution violation or new dependency is proposed. Coverage gaps and
 platform limits are explicit rather than resolved by altering the migrated code.
 
+### Bugfix Verification Design
+
+The preceding reconstruction is historical context. The follow-up patch uses
+the completed T027-T031 testing-policy migration as its baseline: Adapter,
+Address, Device, Service, and Characteristic already have generated mocks;
+the successful connect/reuse/Inspect/write/close test already exists. Do not
+rebuild that seam or mark existing implementation tasks falsely complete.
+
+- **BUG-001 / SC-010-SC-013**: Extend internal/ble/backend_test.go using the
+  existing generated transport mocks. Add connection/GATT failure and
+  inter-stage cancellation matrices, scan startup/stop/match races with owned
+  stopper joining, copied/synchronous/uncertain-write results, and reusable
+  close/drain/failed-cleanup cases. Exercise discoveryErrorLocked through
+  controlled discovery errors, including permission and missing-result text;
+  sticky timeout expectations are Darwin-specific. Use channels to coordinate
+  started operations and completion; do not introduce detached native work.
+- **BUG-002 / SC-014-SC-015**: Add constructor and early-Write tables in
+  internal/ble/backend_test.go. Generated mocks with no operation expectations
+  establish zero adapter work. Assert errors.Is and unchanged readiness for
+  competing invalid-length/context/fatal/link conditions. Test length-gate
+  acceptance with a missing link, without issuing native writes.
+- **BUG-003 / SC-016**: Extract the existing typed-error retry decision into a
+  native-free production helper in internal/ble/retry.go; keep
+  cmd/sunset/main.go::lampLink.CanRetry as a delegate to that helper. Test that
+  shared helper in internal/ble/retry_test.go with direct/wrapped/joined errors.
+  Preserve every existing exclusion and keep internal/controller independent
+  of concrete BLE errors. Do not copy the classifier only into tests or import
+  cmd/sunset or internal/ble/native into a unit-test binary.
+- **BUG-003 / SC-017-SC-019**: Extend internal/controller/controller_test.go
+  with generated Link outcomes and ordered expectations for Connect retries,
+  failed cleanup, later-packet replay, and cancellation during retry waiting.
+  Verify the existing 200ms retry pause and default 80ms completion-relative
+  packet gap, including failed writes and action boundaries. Use a minimal
+  injectable clock only if bounded timing observations cannot establish these
+  contracts reliably. Coordinate blocked operations and Close through channels;
+  test both successful gate acquisition and expired waits followed by cleanup.
+
+New complexity is in verification of callback/gate ordering and competing error
+states. Preserve wrapped causes with errors.Is, retain the distinction between
+reusable Backend.Close and terminal Controller.Close, and avoid new timing SLOs.
+Testify and pinned mockgen-generated GoMock remain mandatory. Regenerate mocks
+only if an interface changes; no new dependency is planned.
+
+Validate with gofmt, task test:core, task test:race, task vet, and task build.
+Confirm core/race test imports exclude TinyGo, cbgo, and internal/ble/native.
+Keep existing hardware-tagged tests in the separate local-only task; compilation
+or mocked lifecycle success does not close H01. The bug reports become Patched
+when these artifacts are updated, not when the remaining tests are implemented.
+
+**Bugfix**: 2026-10-20 — BUG-001 Updated from bugfix patch: controlled lifecycle,
+write uncertainty, discovery classification, and cleanup verification design.
+
+**Bugfix**: 2026-10-20 — BUG-002 Updated from bugfix patch: input boundary and
+early-error precedence matrices.
+
+**Bugfix**: 2026-10-20 — BUG-003 Updated from bugfix patch: shared native-free
+production retry helper, recovery failures, pacing, and contended Close tests.
+
 ## Testing Policy Alignment (2026-10-20)
 
 New(Config, Adapter) makes the native dependency explicit. transport.go defines
@@ -215,3 +273,29 @@ case connects/discovers without lamp writes; hardware evidence remains pending.
 Historical counts and compile-only evidence above describe the earlier snapshot,
 not the current unit-test execution boundary. Remaining G01-G03 work is still
 tracked by BUG-001 through BUG-003; this migration does not close those reports.
+
+## Bugfix Implementation Result (2026-10-21)
+
+The planned tests were implemented using the existing generated transport/Link
+mocks and Testify. The only production change extracts the unchanged retry
+classifier into internal/ble/retry.go and delegates lampLink.CanRetry to it.
+Monotonic elapsed-time lower-bound assertions verified the existing 80ms/200ms
+contracts without a new clock seam or latency SLO. Targeted tests, full core/race
+checks, task vet, and task build passed. Companion contains executable evidence;
+H01 remains pending and no hardware-tagged test was run.
+
+## Subsequent Hardware Verification (2026-10-21)
+
+The local-only hardware test now covers inspection plus real command execution
+through protocol.Resolve, Controller.Execute, the shared production retry policy,
+and native BLE. It includes a white/full-brightness baseline, OFF/ON, RGB primary
+colors, brightness 0/50/100%, sorted local presets, and final OFF, with two-second
+observation pauses. The task timeout is 15 minutes; native cancellation remains
+cooperative. Hardware tags and CI/default-suite exclusions are unchanged.
+
+After the automated bugfix phase above, sixteen filtered hardware invocations
+passed on one LT-06 through Terminal.app and the user confirmed all visible
+effects. H01 is verified within the limits in
+[hardware-verification.md](hardware-verification.md); full uninterrupted execution,
+HTTP/Stream Deck, Linux, and other lamps were not tested by this session. Detailed
+identifiers and logs remain local, and runtime physical-state flags remain false.

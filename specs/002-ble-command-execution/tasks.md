@@ -113,11 +113,13 @@ T013-T017; FR-015-FR-020 to T018-T022/T024; FR-021-FR-024 to T017/T023-T026.
 | G02 | Invalid identities, timeout defaults/bounds, invalid packet lengths and early-error precedence | Table-driven backend constructor/Write validation tests |
 | G03 | Production CanRetry typing, Connect/Close failures, default gap, Close under load/canceled wait | Extend controller tests and add production classifier tests with a fake boundary |
 
-**H01**: Physical Go-path/RGB/brightness verification is pending. ON/OFF packet
-verification in the README is not upgraded into device evidence for this code.
+**H01**: Verified on one LT-06 in the subsequent 2026-10-21 local hardware
+session; see [hardware-verification.md](hardware-verification.md). The original
+migration's ON/OFF packet evidence alone did not establish Go-path verification.
 
 All 26 historical tasks are checked because their code/test/doc artifacts exist.
-G01-G03 and H01 remain unresolved; no checked item represents fixing them.
+At that migration snapshot, G01-G03 and H01 remained unresolved; no historical
+checked item represents fixing them. Later results are recorded below.
 
 ## Verification Record
 
@@ -143,3 +145,102 @@ executed. No scan, connection, lamp command, source/configuration change, featur
 
 These tasks align Constitution V-VI. The existing G01-G03 reports and H01 stay
 open; successful mock-backed lifecycle coverage is not native/device evidence.
+
+## Phase 7: Bugfix Verification
+
+The completed T027-T031 migration is a prerequisite, including generated mocks
+and the successful adapter lifecycle test. Existing checked tasks remain valid;
+no false completion has been established. Task status below is materialized
+from the Companion finish journal.
+
+### BUG-001 - Remaining Controlled Lifecycle Coverage
+
+- [x] T032 [US2] Add connection/GATT failure, readiness-loss, empty/wrong-device,
+  missing/duplicate FFF0/FFF3, and inter-stage cancellation tables in
+  internal/ble/backend_test.go per SC-010 and FR-008/FR-010/FR-021 (BUG-001;
+  depends on T027-T029); retain the existing success/reuse/Info-copy baseline.
+- [x] T033 [US2] Add controlled first-match, startup/stop/match cancellation race,
+  StopScan retry/join, scan-only expiry, and parent/native error-precedence
+  tests in internal/ble/backend_test.go per SC-011 and FR-009/FR-010 (BUG-001;
+  depends on T027-T028).
+- [x] T034 [US3] Add packet-copy/readiness, synchronous canceled-write completion,
+  short/uncertain write, and native-error precedence tests with errors.Is in
+  internal/ble/backend_test.go per SC-012 and FR-011/FR-012/FR-017 (BUG-001;
+  depends on T027-T028).
+- [x] T035 [US5] Add backend close/drain, invalidated write handle, tolerated
+  already-disconnected result, retained failed-disconnect handle, and later
+  cleanup tests in internal/ble/backend_test.go per SC-013 and FR-019 (BUG-001;
+  depends on T027-T028).
+- [x] T036 [US4] Inject discovery failures and verify permission/incompatibility
+  classification and Darwin timeout installation/persistence of ErrNeedsRestart
+  across Close in internal/ble/backend_test.go per SC-013 and FR-020 (BUG-001;
+  depends on T027-T028); keep platform-specific expectations explicit.
+
+### BUG-002 - Constructor and Early-Write Boundaries
+
+- [x] T037 [US2] Add malformed identity/normalization and zero/default/negative/
+  lower/upper timeout boundary tables with zero adapter work in
+  internal/ble/backend_test.go per SC-014 and FR-005 (BUG-002;
+  depends on T027-T028).
+- [x] T038 [US3] Add 0/1/20/21-byte length and combined canceled/fatal/missing-link
+  error-precedence tables; assert errors.Is, zero adapter work, and unchanged
+  readiness in internal/ble/backend_test.go per SC-015 and FR-011 (BUG-002;
+  depends on T027-T028).
+
+### BUG-003 - Production Retry, Pacing, and Close
+
+- [x] T039 [US4] Extract the existing production retry classifier into
+  internal/ble/retry.go and delegate lampLink.CanRetry to it from
+  cmd/sunset/main.go, preserving every existing typed exclusion and package
+  boundary per SC-016 and FR-016 (BUG-003; depends on T027).
+- [x] T040 [US4] Test the actual shared production retry helper with direct,
+  wrapped, and joined permanent/context errors and retryable ordinary errors
+  in internal/ble/retry_test.go per SC-016 and FR-016 (BUG-003;
+  depends on T028/T039); do not import native Bluetooth or duplicate the policy.
+- [x] T041 [US4] Add ordered transient/persistent Connect retry, at-most-two
+  attempts, 200ms retry pause, later-packet whole-action replay, joined cleanup
+  errors without reconnect, and canceled retry-wait cases in
+  internal/controller/controller_test.go per SC-017 and FR-015/FR-017 (BUG-003;
+  depends on T028).
+- [x] T042 [US3] Verify the default 80ms completion-relative gap after successful
+  and failed writes and across actions in internal/controller/controller_test.go
+  per SC-018 and FR-014 (BUG-003; depends on T028); add a minimal controllable
+  clock seam in controller.go only if needed for reliable timing observations.
+- [x] T043 [US5] Add blocked-operation Close tests for terminal state before gate
+  acquisition, exclusive cleanup, post-Close Connect/Execute rejection,
+  expired wait, and later cleanup without abandoning a writer in
+  internal/controller/controller_test.go per SC-019 and FR-013/FR-017/FR-018
+  (BUG-003; depends on T028).
+
+### Shared Validation
+
+- [x] T044 [US5] Validate SC-010-SC-019 with gofmt, task test:core, task test:race,
+  task vet, and task build; confirm core/race imports exclude TinyGo/cbgo/native
+  and check reproducible generation if mocks change. Record automated results
+  separately from hardware evidence; keep hardware execution local and opt-in
+  and H01 pending (BUG-001/BUG-002/BUG-003; depends on T032-T043).
+
+T032-T038 and T039/T041-T043 can proceed independently after their completed
+migration prerequisites; T040 follows T039 and T044 follows all new tasks.
+No Wave DAG existed to regenerate. Shared validation does not require equipment.
+
+**Bugfix**: 2026-10-20 — BUG-001 Updated from bugfix patch: added T032-T036
+and shared T044, tracing to SC-010-SC-013; no tasks reopened.
+
+**Bugfix**: 2026-10-20 — BUG-002 Updated from bugfix patch: added T037-T038
+and shared T044, tracing to SC-014-SC-015; no tasks reopened.
+
+**Bugfix**: 2026-10-20 — BUG-003 Updated from bugfix patch: added T039-T043
+and shared T044, tracing to SC-016-SC-019; no tasks reopened.
+
+## Subsequent Hardware Verification Record (2026-10-21)
+
+The hardware command test and bilingual instructions were extended after the
+automated bugfix tasks. Hardware-test compilation, tagged vet, task vet, and task
+build passed. Sixteen filtered real-device invocations then passed, transmitting
+seventeen actions with user-confirmed effects for white, OFF/ON, RGB, brightness
+0/50/100%, all six local presets, and final OFF. H01 is verified for that device
+and environment; [hardware-verification.md](hardware-verification.md) records the
+scope and limits. Earlier pending H01 statements describe prior phases. No
+hardware run was part of T044's automated checks, and no historical task status
+was reopened or changed.

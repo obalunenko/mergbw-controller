@@ -41,14 +41,14 @@ tasks:
       - '{{.GO}} test -race {{.CORE_PACKAGES}}'
 
   test:hardware:
-    desc: Locally inspect the real lamp (requires MERGBW_DATA_DIR; never runs in CI).
+    desc: Locally inspect and send lighting commands to the real lamp (requires MERGBW_DATA_DIR; never runs in CI).
     preconditions:
       - sh: 'test -z "$CI"'
         msg: Hardware integration tests run only locally, outside CI.
       - sh: 'test -n "$MERGBW_DATA_DIR"'
         msg: Set MERGBW_DATA_DIR to the existing lamp configuration directory.
     cmds:
-      - '{{.GO}} test -count=1 -tags=hardware -timeout=90s -v ./internal/ble/native'
+      - '{{.GO}} test -count=1 -tags=hardware -timeout=15m -v ./internal/ble/native'
 
   mocks:generate:
     desc: Regenerate unit-test mocks using the pinned mockgen tool module.

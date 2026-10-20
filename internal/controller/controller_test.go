@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"slices"
@@ -312,6 +313,229 @@ func TestRetryOnceAndRespectNonRetryableErrors(t *testing.T) {
 				assert.Equal(t, "WARN", records[1]["level"])
 				assert.Equal(t, float64(2), records[2]["attempt"])
 			}
+		})
+	}
+}
+
+func TestRetryConnectFailuresAndPause(t *testing.T) {
+	fault := errors.New("temporary connect failure")
+	for _, persistent := range []bool{false, true} {
+		t.Run(fmt.Sprintf("persistent_%t", persistent), func(t *testing.T) {
+			ctx := t.Context()
+			link := NewMockLink(gomock.NewController(t))
+			var closedAt time.Time
+			var calls []any
+			calls = append(calls,
+				link.EXPECT().Connect(ctx).Return(fault),
+				link.EXPECT().CanRetry(fault).Return(true),
+				link.EXPECT().Close().DoAndReturn(func() error { closedAt = time.Now(); return nil }),
+				link.EXPECT().Connect(ctx).DoAndReturn(func(context.Context) error {
+					assert.GreaterOrEqual(t, time.Since(closedAt), 200*time.Millisecond)
+					if persistent {
+						return fault
+					}
+					return nil
+				}),
+			)
+			if !persistent {
+				calls = append(calls, link.EXPECT().Write(ctx, []byte{1}).Return(nil), link.EXPECT().Write(ctx, []byte{2}).Return(nil))
+			}
+			gomock.InOrder(calls...)
+			c := New(link)
+			c.gap = 0
+			err := c.Execute(ctx, testAction(1, 2))
+			if persistent {
+				assert.ErrorIs(t, err, fault)
+			} else {
+				require.NoError(t, err)
+			}
+			// Exact expectations reject a third Connect or an extra policy query.
+		})
+	}
+}
+
+func TestRetryCleanupFailurePreservesBothCauses(t *testing.T) {
+	fault, closeFault := errors.New("transport failure"), errors.New("disconnect failure")
+	for _, stage := range []string{"connect", "write"} {
+		t.Run(stage, func(t *testing.T) {
+			ctx := t.Context()
+			link := NewMockLink(gomock.NewController(t))
+			var calls []any
+			if stage == "connect" {
+				calls = append(calls, link.EXPECT().Connect(ctx).Return(fault))
+			} else {
+				calls = append(calls, link.EXPECT().Connect(ctx).Return(nil), link.EXPECT().Write(ctx, []byte{1}).Return(fault))
+			}
+			calls = append(calls, link.EXPECT().CanRetry(fault).Return(true), link.EXPECT().Close().Return(closeFault))
+			gomock.InOrder(calls...)
+			c := New(link)
+			c.gap = 0
+			err := c.Execute(ctx, testAction(1, 2))
+			assert.ErrorIs(t, err, fault)
+			assert.ErrorIs(t, err, closeFault)
+			// No reconnect or replay is permitted after cleanup failed.
+		})
+	}
+}
+
+func TestRetryReplaysFromFirstPacketAfterLaterFailure(t *testing.T) {
+	ctx := t.Context()
+	fault := errors.New("second packet failed")
+	link := NewMockLink(gomock.NewController(t))
+	gomock.InOrder(
+		link.EXPECT().Connect(ctx).Return(nil),
+		link.EXPECT().Write(ctx, []byte{1}).Return(nil),
+		link.EXPECT().Write(ctx, []byte{2}).Return(fault),
+		link.EXPECT().CanRetry(fault).Return(true),
+		link.EXPECT().Close().Return(nil),
+		link.EXPECT().Connect(ctx).Return(nil),
+		link.EXPECT().Write(ctx, []byte{1}).Return(nil),
+		link.EXPECT().Write(ctx, []byte{2}).Return(nil),
+		link.EXPECT().Write(ctx, []byte{3}).Return(nil),
+	)
+	c := New(link)
+	c.gap = 0
+	require.NoError(t, c.Execute(ctx, testAction(1, 2, 3)))
+}
+
+func TestRetryWaitCancellationStopsReconnect(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	fault := errors.New("temporary connect failure")
+	closed := make(chan struct{})
+	link := NewMockLink(gomock.NewController(t))
+	gomock.InOrder(
+		link.EXPECT().Connect(ctx).Return(fault),
+		link.EXPECT().CanRetry(fault).Return(true),
+		link.EXPECT().Close().DoAndReturn(func() error { close(closed); return nil }),
+	)
+	c := New(link)
+	done := make(chan error, 1)
+	go func() { done <- c.Execute(ctx, testAction(1)) }()
+	awaitSignal(t, closed)
+	select {
+	case err := <-done:
+		require.FailNow(t, "retry did not wait", "%v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	cancel()
+	assert.ErrorIs(t, awaitResult(t, done), context.Canceled)
+}
+
+func TestDefaultPacketGapFollowsWriteCompletion(t *testing.T) {
+	for _, test := range []struct {
+		name                     string
+		acrossActions, failFirst bool
+	}{
+		{"within_action", false, false},
+		{"across_successful_actions", true, false},
+		{"after_failed_write", true, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := t.Context()
+			fault := errors.New("first write failed")
+			link := NewMockLink(gomock.NewController(t))
+			var completedAt time.Time
+			var calls []any
+			calls = append(calls, link.EXPECT().Connect(ctx).Return(nil),
+				link.EXPECT().Write(ctx, []byte{1}).DoAndReturn(func(context.Context, []byte) error {
+					time.Sleep(25 * time.Millisecond)
+					completedAt = time.Now()
+					if test.failFirst {
+						return fault
+					}
+					return nil
+				}))
+			if test.failFirst {
+				calls = append(calls, link.EXPECT().CanRetry(fault).Return(false))
+			}
+			if test.acrossActions {
+				calls = append(calls, link.EXPECT().Connect(ctx).Return(nil))
+			}
+			calls = append(calls, link.EXPECT().Write(ctx, []byte{2}).DoAndReturn(func(context.Context, []byte) error {
+				assert.GreaterOrEqual(t, time.Since(completedAt), 80*time.Millisecond, "gap is measured from Write completion")
+				return nil
+			}))
+			gomock.InOrder(calls...)
+			c := New(link) // Keep the default gap in this test.
+			assert.Equal(t, 80*time.Millisecond, c.gap)
+			if test.acrossActions {
+				err := c.Execute(ctx, testAction(1))
+				if test.failFirst {
+					require.ErrorIs(t, err, fault)
+				} else {
+					require.NoError(t, err)
+				}
+				require.NoError(t, c.Execute(ctx, testAction(2)))
+			} else {
+				require.NoError(t, c.Execute(ctx, testAction(1, 2)))
+			}
+		})
+	}
+}
+
+func TestCloseDuringStartedWriteIsTerminalAndExclusive(t *testing.T) {
+	for _, expires := range []bool{false, true} {
+		t.Run(fmt.Sprintf("close_wait_expires_%t", expires), func(t *testing.T) {
+			ctx := t.Context()
+			entered, release := make(chan struct{}), make(chan struct{})
+			unblock := sync.OnceFunc(func() { close(release) })
+			defer unblock()
+			var nativeReturned atomic.Bool
+			link := NewMockLink(gomock.NewController(t))
+			link.EXPECT().Connect(ctx).Return(nil)
+			link.EXPECT().Write(ctx, []byte{1}).DoAndReturn(func(context.Context, []byte) error {
+				close(entered)
+				<-release
+				nativeReturned.Store(true)
+				return nil
+			})
+			c := New(link)
+			active := make(chan error, 1)
+			go func() { active <- c.Execute(ctx, testAction(1)) }()
+			awaitSignal(t, entered)
+			closeCtx := ctx
+			if expires {
+				var cancel context.CancelFunc
+				closeCtx, cancel = context.WithTimeout(ctx, 30*time.Millisecond)
+				defer cancel()
+			} else {
+				link.EXPECT().Close().DoAndReturn(func() error { assert.True(t, nativeReturned.Load()); return nil })
+			}
+			closing := make(chan error, 1)
+			go func() { closing <- c.Close(closeCtx) }()
+			require.Eventually(t, c.closed.Load, time.Second, time.Millisecond, "Close must mark terminal state before acquiring the busy gate")
+			connecting, executing := make(chan error, 1), make(chan error, 1)
+			go func() { connecting <- c.Connect(ctx) }()
+			go func() { executing <- c.Execute(ctx, testAction(2)) }()
+			if expires {
+				require.ErrorIs(t, awaitResult(t, closing), context.DeadlineExceeded)
+				assert.True(t, c.closed.Load())
+			} else {
+				select {
+				case err := <-closing:
+					require.FailNow(t, "Close ran before the write returned", "%v", err)
+				case <-time.After(20 * time.Millisecond):
+				}
+			}
+			select {
+			case err := <-active:
+				require.FailNow(t, "started writer was abandoned", "%v", err)
+			default:
+			}
+			unblock()
+			require.NoError(t, awaitResult(t, active))
+			require.ErrorContains(t, awaitResult(t, connecting), "контроллер остановлен")
+			require.ErrorContains(t, awaitResult(t, executing), "контроллер остановлен")
+			if expires {
+				link.EXPECT().Close().DoAndReturn(func() error { assert.True(t, nativeReturned.Load()); return nil })
+				require.NoError(t, c.Close(ctx))
+			} else {
+				require.NoError(t, awaitResult(t, closing))
+			}
+			// Terminal state survives cleanup, and neither method may call Link.
+			require.ErrorContains(t, c.Connect(ctx), "контроллер остановлен")
+			require.ErrorContains(t, c.Execute(ctx, testAction(3)), "контроллер остановлен")
 		})
 	}
 }

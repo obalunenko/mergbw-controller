@@ -36,6 +36,7 @@ go.work.sum
 /sunset
 /settings.json
 /streamdeck-buttons.txt
+/.hardware-verification/
 /bin/
 /dist/
 *.log

@@ -319,6 +319,78 @@ hardware evidence.
   target's state clears and logs once even while the command mutex is held
   (inspected/compiled; FR-022).
 
+### Bugfix Verification Criteria (Implemented)
+
+These criteria cover the remaining untested flows after the testing-policy
+migration. They do not claim execution or add new lighting behavior. The
+no-source-change sentence in FR-024 describes the original documentation-only
+migration; these follow-up fixes may add tests and the scoped seams described
+in plan.md while preserving the HTTP contract and package boundaries.
+
+- **SC-010** (BUG-001; US2/US5; FR-008, FR-010, FR-021): Generated adapter
+  mocks cover empty/wrong-device results, lost readiness, missing/duplicate
+  FFF0/FFF3, native-stage failures, and cancellation between connection/discovery
+  stages. Invalid results never leave a usable write handle. Existing
+  TestConnectInspectAndWriteThroughAdapter remains the successful reuse/Inspect
+  and copied-metadata baseline; it need not be reimplemented.
+- **SC-011** (BUG-001; US2; FR-009, FR-010): Controlled scan callbacks verify
+  first-match selection, cancellation racing scan startup or a match, StopScan
+  retry after not-scanning errors, and stopper joining before return. Parent
+  cancellation, scan-only expiry, and native errors retain their specified
+  precedence; no hard native deadline is inferred.
+- **SC-012** (BUG-001; US3/US4; FR-011, FR-012, FR-017): Controlled writes verify
+  packet copying, readiness checks, synchronous completion after cancellation,
+  and errors.Is membership for context error, ErrWriteUncertain, native error,
+  and io.ErrShortWrite as applicable. Error-free short writes are uncertain;
+  an ordinary native error keeps its existing precedence over the short-write
+  check. No mock result verifies physical lamp state.
+- **SC-013** (BUG-001; US4/US5; FR-019, FR-020): Controlled cleanup and discovery
+  failures verify readiness/write-handle invalidation, the remaining 80ms drain,
+  tolerated already-disconnected results, retained failed-disconnect handles
+  and later cleanup, permission/incompatibility classification, and Darwin
+  discovery-timeout installation of sticky ErrNeedsRestart across Close.
+- **SC-014** (BUG-002; US2; FR-005): Constructor tables verify malformed identity
+  shapes/non-HEX bytes, uppercase normalization, both zero-to-12s defaults,
+  scan timeout below/at 1ms, and connect timeout below/at 1ms and at/above 40s,
+  including negative durations. There is no newly imposed scan upper bound;
+  rejected construction performs no adapter operations.
+- **SC-015** (BUG-002; US3; FR-011): Write tables cover 0/21-byte rejection and
+  1/20-byte passage through the length gate without native writes. Combined
+  conditions retain the order invalid length, canceled context, fatal state,
+  then missing link handles; rejected work performs no adapter operations and
+  leaves connection state unchanged.
+- **SC-016** (BUG-003; US4; FR-016): Tests exercise the actual production retry
+  classifier used by lampLink.CanRetry, without native imports. Direct, wrapped,
+  and joined cancellation/deadline, ErrIncompatible, ErrPermission,
+  ErrNeedsRestart, ErrWriteUncertain, and ErrInvalidPacket prevent retry;
+  ordinary retryable errors remain eligible. A test-only duplicate classifier
+  does not satisfy this criterion.
+- **SC-017** (BUG-003; US4; FR-015, FR-017): Generated Link mocks cover transient
+  and persistent Connect failures, at most two attempts, the 200ms retry pause,
+  and whole-action replay after a later-packet failure. If retry cleanup fails,
+  both causes remain discoverable with errors.Is and no reconnect/replay occurs.
+  Cancellation during retry waiting prevents the next attempt.
+- **SC-018** (BUG-003; US3; FR-014): Default-controller tests verify at least
+  80ms between the previous Write completion and the next packet start after
+  successful and failed writes, including across actions. Timing checks use a
+  controlled clock or bounded observations and impose no new latency SLO.
+- **SC-019** (BUG-003; US5; FR-013, FR-017, FR-018): With a blocked started
+  operation, Close marks the controller terminal before waiting, obtains
+  exclusive cleanup only after the operation returns, and rejects subsequent
+  Connect/Execute without transport work. An expired Close wait leaves terminal
+  state intact and does not abandon the active writer; a later Close can clean
+  up after that operation completes.
+
+**Bugfix**: 2026-10-20 — BUG-001 Added SC-010 through SC-013 for remaining
+controlled lifecycle coverage; completed T027-T031 are the baseline and H01
+remains separate pending device evidence.
+
+**Bugfix**: 2026-10-20 — BUG-002 Added SC-014 and SC-015 for constructor and
+early-Write boundaries and error precedence.
+
+**Bugfix**: 2026-10-20 — BUG-003 Added SC-016 through SC-019 for production
+retry policy, recovery failures, default pacing, and terminal Close.
+
 ## Assumptions and Verification Limits
 
 One Backend is used per process because DefaultAdapter and callback registration
@@ -332,12 +404,17 @@ Neither controller cancellation nor scan timeout provides a hard bound on a
 native call. Public upstream APIs do not expose characteristic properties used
 for runtime property validation.
 
-**H01 - Physical evidence remains pending**: README records ON/OFF packet
-verification using nRF Connect. It does not establish successful Go BLE execution,
-RGB, or brightness on the device. Migration sends no lamp commands and does not
-upgrade this evidence to verified status.
+**H01 - Verified on one LT-06 (2026-10-21)**: The subsequent local hardware
+session exercised the Go protocol/controller/native BLE path, with user-confirmed
+ON/OFF, white/RGB, brightness changes, and six presets. See
+[hardware-verification.md](hardware-verification.md) for commands, observations,
+and limits. The original migration itself sent no lamp commands; older pending
+statements below describe the evidence available at those earlier phases.
 
 ## Identified Gaps
+
+These entries record the original audit. Current automated coverage is recorded
+in Bugfix Implementation Evidence below; H01 remains separate.
 
 - **G01 - Native lifecycle coverage**: Existing BLE tests cover matching, empty
   identity, early canceled/sticky failures, and a synthetic disconnect callback.
@@ -377,3 +454,35 @@ exercises connect, reuse/Inspect, copied Info, write, and close through the adap
 A separate hardware-tagged native integration test inspects the actual lamp;
 it has not been executed and does not verify physical lighting effects.
 G01-G03 and H01 remain open for their remaining coverage/device evidence.
+
+## Bugfix Implementation Evidence (2026-10-21)
+
+| Bug | Criteria implemented | Executed coverage |
+|-----|----------------------|-------------------|
+| BUG-001 / G01 | SC-010-SC-013 | backend_test.go connection/GATT failure matrices, scan-stop races/joining, copied and uncertain writes, close/drain/cleanup, discovery classification and Darwin sticky timeout |
+| BUG-002 / G02 | SC-014-SC-015 | backend_test.go constructor identity/timeout tables and combined packet-length/context/fatal/link precedence matrix |
+| BUG-003 / G03 | SC-016-SC-019 | retry_test.go production policy with wrapped/joined errors; controller_test.go Connect retries, cleanup causes, whole replay, default pacing and contended terminal Close |
+
+Targeted tests and the complete core/race suites passed, as did task vet and
+task build. Companion records actual commands, exit codes, per-task finishes,
+and the requirement-to-test map in .spec-context.json. Production changes only
+extract the existing retry policy into ble.CanRetry and delegate lampLink's
+method to it. No transport ordering, packet, HTTP, or retry-rule change was needed.
+
+G01-G03 controlled regression coverage is implemented. No lamp operation was
+performed; native wrapper/device behavior and physical Go-path/RGB/brightness
+verification remain subject to H01. Hardware tests remain local and opt-in.
+
+## Hardware Verification Result (2026-10-21)
+
+H01 is verified for the single LT-06 and macOS environment recorded in
+[hardware-verification.md](hardware-verification.md). Sixteen filtered
+hardware-test invocations passed and sent seventeen actions; the user confirmed
+every step's visible effect, including final OFF. Detailed identifiers and logs
+remain in the private local record. Tests used Terminal.app after macOS rejected
+Bluetooth authorization attributed to Warp.
+
+This result supersedes the earlier pending H01 evidence. It does not establish
+Linux/other-device compatibility, HTTP/Stream Deck end-to-end behavior, calibrated
+brightness/color accuracy, or uninterrupted full-sequence execution. No runtime
+state-readback capability or verification flag changed.
