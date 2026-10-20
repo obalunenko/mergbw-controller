@@ -1,5 +1,5 @@
 GO ?= go
-CORE_PACKAGES := ./internal/protocol ./internal/config ./internal/controller ./internal/bridge
+CORE_PACKAGES := ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge
 
 .DEFAULT_GOAL := build
 .PHONY: build test test-core test-race vet check

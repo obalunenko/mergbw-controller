@@ -8,7 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -23,6 +23,7 @@ import (
 	"github.com/obalunenko/mergbw-controller/internal/bridge"
 	"github.com/obalunenko/mergbw-controller/internal/config"
 	"github.com/obalunenko/mergbw-controller/internal/controller"
+	"github.com/obalunenko/mergbw-controller/internal/logging"
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
 )
 
@@ -64,11 +65,17 @@ send использует уже работающий HTTP-сервис. Пер�
 }
 
 func main() {
-	log.SetFlags(log.Ltime)
+	configureLogging()
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "Ошибка:", err)
+		slog.Error("application.failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+func configureLogging(secrets ...string) {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelInfo, ReplaceAttr: logging.RedactSecrets(secrets...),
+	})))
 }
 
 func run(args []string) error {
@@ -143,6 +150,7 @@ func run(args []string) error {
 	if err != nil {
 		return err
 	}
+	configureLogging(settings.AccessToken)
 	switch command {
 	case "init", "urls":
 		path, err := config.WriteURLs(*directory, settings, presets)
@@ -192,7 +200,22 @@ func newBackend(settings config.Settings) (*ble.Backend, error) {
 	})
 }
 
-func send(settings config.Settings, action protocol.Action) error {
+func send(settings config.Settings, action protocol.Action) (result error) {
+	started := time.Now()
+	logger := slog.Default().With("component", "cli", "command", action.Route, "address", settings.Address())
+	logger.Info("http.command.sending")
+	var requestID string
+	defer func() {
+		fields := []any{"duration_ms", time.Since(started).Milliseconds()}
+		if requestID != "" {
+			fields = append(fields, "request_id", requestID)
+		}
+		if result != nil {
+			logger.Error("http.command.failed", append(fields, "error", result)...)
+		} else {
+			logger.Info("http.command.completed", fields...)
+		}
+	}()
 	client := &http.Client{
 		Timeout:       75 * time.Second,
 		Transport:     &http.Transport{Proxy: nil},
@@ -209,6 +232,7 @@ func send(settings config.Settings, action protocol.Action) error {
 		return fmt.Errorf("HTTP-контроллер недоступен: %w; запустите run.command", err)
 	}
 	defer response.Body.Close()
+	requestID = response.Header.Get("X-Request-ID")
 	body, err := io.ReadAll(io.LimitReader(response.Body, 64*1024))
 	if err != nil {
 		return err
@@ -239,26 +263,26 @@ func serve(settings config.Settings, presets map[string]protocol.Preset) error {
 		ReadTimeout: 10 * time.Second, WriteTimeout: 75 * time.Second, IdleTimeout: 60 * time.Second,
 		MaxHeaderBytes: 8 * 1024,
 		BaseContext:    func(net.Listener) context.Context { return ctx },
+		ErrorLog:       slog.NewLogLogger(slog.Default().With("component", "http").Handler(), slog.LevelError),
 	}
 	serverErrors := make(chan error, 1)
 	go func() { serverErrors <- server.Serve(listener) }()
-	log.Printf("Сервис: http://%s; URL кнопок — в streamdeck-buttons.txt", settings.Address())
-	log.Print("Отключите nRF Connect и закройте MeRGBW на телефоне. Для остановки — Ctrl+C.")
+	slog.Info("service.started", "address", settings.Address(), "identity", settings.DeviceIdentity, "version", bridge.Version)
+	slog.Info("service.instructions", "hint", "URL кнопок — в streamdeck-buttons.txt. Отключите nRF Connect и закройте MeRGBW на телефоне. Для остановки — Ctrl+C.")
 	// Preconnect through the same gate used by HTTP commands. No light commands.
 	go func() {
 		connectCtx, cancel := context.WithTimeout(ctx, bridge.RequestTimeout)
 		defer cancel()
 		if err := lamp.Connect(connectCtx); err != nil {
 			if ctx.Err() == nil {
+				hint := "Следующая команда попробует подключиться."
 				if errors.Is(err, ble.ErrNeedsRestart) {
-					log.Printf("Bluetooth: %v. Остановите и снова запустите run.command.", err)
-				} else {
-					log.Printf("Bluetooth пока не готов: %v. Следующая команда попробует подключиться.", err)
+					hint = "Остановите и снова запустите run.command."
 				}
+				slog.Warn("bluetooth.unavailable", "identity", settings.DeviceIdentity, "error", err, "hint", hint)
 			}
 			return
 		}
-		log.Print("Лампа подключена; команды готовы.")
 	}()
 	var serveErr error
 	select {
@@ -266,10 +290,14 @@ func serve(settings config.Settings, presets map[string]protocol.Preset) error {
 	case serveErr = <-serverErrors:
 		stop()
 	}
+	slog.Info("service.stopping")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		_ = server.Close()
+		slog.Warn("http.shutdown.failed", "error", err)
+		if err := server.Close(); err != nil {
+			slog.Error("http.close.failed", "error", err)
+		}
 	}
 	// The native library may wait for OS callbacks; bound process shutdown, not
 	// command execution. Exiting the process releases any remaining BLE session.
@@ -280,13 +308,14 @@ func serve(settings config.Settings, presets map[string]protocol.Preset) error {
 	select {
 	case err := <-closed:
 		if err != nil {
-			log.Printf("Завершение Bluetooth: %v", err)
+			slog.Error("bluetooth.shutdown.failed", "error", err)
 		}
 	case <-closeCtx.Done():
-		log.Print("Завершаю процесс: Bluetooth ещё ожидает ответ macOS.")
+		slog.Warn("bluetooth.shutdown.timeout", "error", closeCtx.Err(), "hint", "Завершаю процесс: Bluetooth ещё ожидает ответ ОС.")
 	}
 	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
 		return serveErr
 	}
+	slog.Info("service.stopped")
 	return nil
 }

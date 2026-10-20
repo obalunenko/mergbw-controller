@@ -7,12 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/obalunenko/mergbw-controller/internal/config"
+	"github.com/obalunenko/mergbw-controller/internal/logging"
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
 )
 
@@ -28,15 +31,17 @@ type Handler struct {
 	settings   config.Settings
 	presets    map[string]protocol.Preset
 	controller Controller
+	requestID  atomic.Uint64
 }
 
 func New(settings config.Settings, presets map[string]protocol.Preset, controller Controller) *Handler {
 	return &Handler{settings: settings, presets: presets, controller: controller}
 }
 
-func respond(w http.ResponseWriter, r *http.Request, status int, payload any) {
+func respond(w http.ResponseWriter, r *http.Request, status int, payload any) error {
 	data, err := json.Marshal(payload)
 	if err != nil {
+		logging.FromContext(r.Context()).ErrorContext(r.Context(), "http.response.failed", "component", "http", "error", err)
 		status = http.StatusInternalServerError
 		data = []byte(`{"error":"JSON encoding failed"}`)
 	}
@@ -47,12 +52,34 @@ func respond(w http.ResponseWriter, r *http.Request, status int, payload any) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 	w.WriteHeader(status)
 	if r.Method != http.MethodHead {
-		_, _ = w.Write(data)
+		if _, writeErr := w.Write(data); writeErr != nil {
+			logging.FromContext(r.Context()).ErrorContext(r.Context(), "http.response.failed", "component", "http", "http_status", status, "error", writeErr)
+			return errors.Join(err, writeErr)
+		}
 	}
+	return err
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	started := time.Now()
+	requestID := h.requestID.Add(1)
+	requestLogger := logging.FromContext(r.Context()).With("request_id", requestID)
+	r = r.WithContext(logging.WithLogger(r.Context(), requestLogger))
+	w.Header().Set("X-Request-ID", strconv.FormatUint(requestID, 10))
+	logger := requestLogger.With("component", "http")
+	var command string
 	fail := func(status int, message string) {
+		level, event := slog.LevelWarn, "http.request.rejected"
+		if status >= 500 {
+			level, event = slog.LevelError, "http.request.failed"
+		}
+		fields := []any{"http_status", status, "error", message, "duration_ms", time.Since(started).Milliseconds()}
+		if command != "" {
+			fields = append(fields, "command", command)
+		}
+		// Never log the raw path, query, Host or rejected parameters: the URL
+		// contains the access token and untrusted values can repeat it elsewhere.
+		logger.Log(r.Context(), level, event, fields...)
 		respond(w, r, status, map[string]any{"error": message, "physical_state_verified": false})
 	}
 	host := strings.ToLower(r.Host)
@@ -99,6 +126,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusBadRequest, err.Error())
 		return
 	}
+	command = action.Route
+	logger.InfoContext(r.Context(), "command.received", "command", command, "method", r.Method, "packet_count", len(action.Packets), "identity", h.settings.DeviceIdentity)
 	ctx, cancel := context.WithTimeout(r.Context(), RequestTimeout)
 	defer cancel()
 	// Do not detach the native BLE write on timeout: it may still be in progress.
@@ -110,7 +139,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(status, err.Error())
 		return
 	}
-	respond(w, r, http.StatusOK, map[string]any{
+	if err := respond(w, r, http.StatusOK, map[string]any{
 		"sent": true, "action": action.Route, "physical_state_verified": false,
-	})
+	}); err != nil {
+		return
+	}
+	logger.InfoContext(r.Context(), "http.request.completed", "command", command, "http_status", http.StatusOK, "duration_ms", time.Since(started).Milliseconds())
 }

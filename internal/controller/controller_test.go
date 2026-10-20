@@ -1,26 +1,33 @@
 package controller
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/obalunenko/mergbw-controller/internal/logging"
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
 )
 
 type fakeLink struct {
-	mu        sync.Mutex
-	connected bool
-	connects  int
-	closes    int
-	writes    []byte
-	active    int
-	maxActive int
-	write     func(context.Context, []byte) error
-	retry     bool
+	mu         sync.Mutex
+	connected  bool
+	connects   int
+	closes     int
+	writes     []byte
+	active     int
+	maxActive  int
+	write      func(context.Context, []byte) error
+	retry      bool
+	connectErr error
 }
 
 func (l *fakeLink) Connect(ctx context.Context) error {
@@ -30,6 +37,9 @@ func (l *fakeLink) Connect(ctx context.Context) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.connects++
+	if l.connectErr != nil {
+		return l.connectErr
+	}
 	l.connected = true
 	return nil
 }
@@ -88,6 +98,119 @@ func awaitResult(t *testing.T, ch <-chan error) error {
 	}
 }
 
+func captureLogs(parent context.Context) (context.Context, *bytes.Buffer) {
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil)).With("request_id", "controller-test")
+	return logging.WithLogger(parent, logger), &output
+}
+
+func readRecords(t *testing.T, output *bytes.Buffer) []map[string]any {
+	t.Helper()
+	decoder := json.NewDecoder(bytes.NewReader(output.Bytes()))
+	var records []map[string]any
+	for {
+		var record map[string]any
+		if err := decoder.Decode(&record); errors.Is(err, io.EOF) {
+			return records
+		} else if err != nil {
+			t.Fatalf("invalid JSON log: %v", err)
+		}
+		records = append(records, record)
+	}
+}
+
+func assertEvents(t *testing.T, output *bytes.Buffer, command string, events ...string) []map[string]any {
+	t.Helper()
+	records := readRecords(t, output)
+	var got []string
+	for _, record := range records {
+		event, ok := record["msg"].(string)
+		if !ok {
+			t.Fatalf("missing event name: %v", record)
+		}
+		got = append(got, event)
+		if record["component"] != "controller" || record["command"] != command || record["request_id"] != "controller-test" {
+			t.Fatalf("missing command/context fields: %v", record)
+		}
+		if event == "command.sent" || event == "command.failed" {
+			if duration, ok := record["duration_ms"].(float64); !ok || duration < 0 {
+				t.Fatalf("missing nonnegative command duration: %v", record)
+			}
+		}
+		if strings.HasSuffix(event, ".failed") && (record["level"] != "ERROR" || record["error"] == nil) {
+			t.Fatalf("missing error details: %v", record)
+		}
+	}
+	if !reflect.DeepEqual(got, events) {
+		t.Fatalf("log events=%v, want %v", got, events)
+	}
+	return records
+}
+
+func TestLogsPacketsOnlyAfterSuccessfulWrites(t *testing.T) {
+	ctx, output := captureLogs(context.Background())
+	action, err := protocol.Resolve([]string{"preset", "sunset"}, map[string]protocol.Preset{
+		"sunset": {Label: "Закат", RGB: []int{255, 80, 0}, Brightness: 50},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writes := 0
+	link := &fakeLink{write: func(context.Context, []byte) error {
+		// A packet must not appear as sent while its Write is still running.
+		records := readRecords(t, output)
+		if len(records) != writes {
+			t.Fatalf("premature packet/command log before Write %d: %v", writes+1, records)
+		}
+		writes++
+		return nil
+	}}
+	c := New(link)
+	c.gap = 0
+	if err := c.Execute(ctx, action); err != nil {
+		t.Fatal(err)
+	}
+	records := assertEvents(t, output, "preset/sunset", "packet.sent", "packet.sent", "packet.sent", "command.sent")
+	for i, wantHex := range []string{"5501FF0601A2", "5503FF08FF50004F", "5505FF06326D"} {
+		record := records[i]
+		if record["packet_hex"] != wantHex || record["packet_index"] != float64(i+1) || record["packet_count"] != float64(3) || record["attempt"] != float64(1) || record["level"] != "INFO" {
+			t.Fatalf("incorrect packet metadata: %v", record)
+		}
+	}
+}
+
+func TestLogsFailuresBeforeAnyPacket(t *testing.T) {
+	for _, name := range []string{"empty", "canceled", "closed", "connect"} {
+		t.Run(name, func(t *testing.T) {
+			ctx, output := captureLogs(context.Background())
+			link := &fakeLink{}
+			c := New(link)
+			action := testAction(1)
+			switch name {
+			case "empty":
+				action.Packets = nil
+			case "canceled":
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			case "closed":
+				if err := c.Close(ctx); err != nil {
+					t.Fatal(err)
+				}
+			case "connect":
+				link.connectErr = errors.New("connection failed")
+			}
+			if err := c.Execute(ctx, action); err == nil {
+				t.Fatal("expected command failure")
+			}
+			assertEvents(t, output, "test", "command.failed")
+			if len(link.writes) != 0 {
+				t.Fatalf("unexpected writes: %v", link.writes)
+			}
+		})
+	}
+}
+
 func TestConcurrentCommandsKeepWholeSequencesTogether(t *testing.T) {
 	link := &fakeLink{write: func(context.Context, []byte) error {
 		time.Sleep(time.Millisecond)
@@ -142,12 +265,14 @@ func TestCanceledQueuedCommandNeverTouchesLink(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	ctx, output := captureLogs(ctx)
 	queued := make(chan error, 1)
 	go func() { queued <- c.Execute(ctx, testAction(2)) }()
 	cancel()
 	if err := awaitResult(t, queued); !errors.Is(err, context.Canceled) {
 		t.Fatalf("queued result = %v", err)
 	}
+	assertEvents(t, output, "test", "command.failed")
 	link.mu.Lock()
 	connects := link.connects
 	writes := append([]byte(nil), link.writes...)
@@ -164,6 +289,7 @@ func TestCanceledQueuedCommandNeverTouchesLink(t *testing.T) {
 func TestCancellationWaitsForStartedWriteAndStopsRemainingPackets(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	ctx, output := captureLogs(ctx)
 	entered := make(chan struct{})
 	release := make(chan struct{})
 	link := &fakeLink{retry: true, write: func(context.Context, []byte) error {
@@ -195,6 +321,7 @@ func TestCancellationWaitsForStartedWriteAndStopsRemainingPackets(t *testing.T) 
 	if !reflect.DeepEqual(link.writes, []byte{1}) || link.connects != 1 || link.closes != 0 {
 		t.Fatalf("canceled sequence continued or retried: %+v", link)
 	}
+	assertEvents(t, output, "test", "packet.sent", "command.failed")
 }
 
 func TestRetryOnceAndRespectNonRetryableErrors(t *testing.T) {
@@ -206,12 +333,14 @@ func TestRetryOnceAndRespectNonRetryableErrors(t *testing.T) {
 		wantWrites  []byte
 		wantConnect int
 		wantError   bool
+		wantEvents  []string
 	}{
-		{"transient", true, 1, []byte{1, 1, 2}, 2, false},
-		{"persistent", true, 2, []byte{1, 1}, 2, true},
-		{"incompatible_or_uncertain", false, 1, []byte{1}, 1, true},
+		{"transient", true, 1, []byte{1, 1, 2}, 2, false, []string{"packet.failed", "command.retry", "packet.sent", "packet.sent", "command.sent"}},
+		{"persistent", true, 2, []byte{1, 1}, 2, true, []string{"packet.failed", "command.retry", "packet.failed", "command.failed"}},
+		{"incompatible_or_uncertain", false, 1, []byte{1}, 1, true, []string{"packet.failed", "command.failed"}},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			ctx, output := captureLogs(context.Background())
 			failures := test.failures
 			link := &fakeLink{retry: test.retry, write: func(context.Context, []byte) error {
 				if failures > 0 {
@@ -222,12 +351,24 @@ func TestRetryOnceAndRespectNonRetryableErrors(t *testing.T) {
 			}}
 			c := New(link)
 			c.gap = 0
-			err := c.Execute(context.Background(), testAction(1, 2))
+			err := c.Execute(ctx, testAction(1, 2))
 			if (err != nil) != test.wantError {
 				t.Fatalf("unexpected error: %v", err)
 			}
 			if !reflect.DeepEqual(link.writes, test.wantWrites) || link.connects != test.wantConnect || link.closes != test.wantConnect-1 {
 				t.Fatalf("writes=%v connects=%d closes=%d", link.writes, link.connects, link.closes)
+			}
+			records := assertEvents(t, output, "test", test.wantEvents...)
+			if records[0]["packet_hex"] != "01" || records[0]["attempt"] != float64(1) || records[0]["packet_index"] != float64(1) || records[0]["packet_count"] != float64(2) || records[0]["error"] != fault.Error() {
+				t.Fatalf("incorrect failed packet: %v", records[0])
+			}
+			if test.retry {
+				if records[1]["attempt"] != float64(2) || records[1]["reason"] != fault.Error() || records[1]["level"] != "WARN" {
+					t.Fatalf("incorrect retry event: %v", records[1])
+				}
+				if records[2]["attempt"] != float64(2) {
+					t.Fatalf("retry packet has wrong attempt: %v", records[2])
+				}
 			}
 		})
 	}

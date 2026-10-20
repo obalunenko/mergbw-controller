@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"runtime"
 	"sort"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/obalunenko/mergbw-controller/internal/logging"
 	"tinygo.org/x/bluetooth"
 )
 
@@ -143,6 +145,12 @@ func (b *Backend) Connect(ctx context.Context) (Info, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err := b.connectLocked(ctx); err != nil {
+		level := slog.LevelError
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			level = slog.LevelWarn
+		}
+		logging.FromContext(ctx).LogAttrs(ctx, level, "bluetooth.connect_failed",
+			slog.String("identity", b.config.Identity), slog.Any("error", err))
 		return Info{}, err
 	}
 	return b.infoLocked(), nil
@@ -174,7 +182,7 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
-	if err := b.closeLocked(); err != nil {
+	if err := b.closeLocked(ctx); err != nil {
 		return fmt.Errorf("освобождение прежнего соединения: %w", err)
 	}
 	if !b.enabled {
@@ -184,11 +192,7 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 		b.enabled = true
 		// Never take b.mu in a native callback: Connect and discovery may be
 		// waiting for that same serial callback queue while holding the mutex.
-		b.adapter.SetConnectHandler(func(device bluetooth.Device, connected bool) {
-			if !connected && device.Address.String() == b.target.Load().(string) {
-				b.connected.Store(false)
-			}
-		})
+		b.adapter.SetConnectHandler(b.handleConnect)
 	}
 	if err := ctx.Err(); err != nil {
 		return err
@@ -214,6 +218,8 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 	}
 	// Deliberately synchronous. A goroutine + select(ctx.Done()) would leave
 	// a native connection operation alive after its caller had returned.
+	logging.FromContext(ctx).LogAttrs(ctx, slog.LevelInfo, "bluetooth.connecting",
+		append(deviceLogAttrs(match.info), slog.Int64("connect_timeout_ms", timeout.Milliseconds()))...)
 	device, err := b.adapter.Connect(match.address, bluetooth.ConnectionParams{
 		ConnectionTimeout: bluetooth.NewDuration(timeout),
 	})
@@ -227,12 +233,12 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 	}
 	b.device, b.hasDevice = device, true
 	if err := ctx.Err(); err != nil {
-		_ = b.closeLocked()
+		_ = b.closeLocked(ctx)
 		return err
 	}
 	connected, err := device.Connected()
 	if err != nil || !connected {
-		_ = b.closeLocked()
+		_ = b.closeLocked(ctx)
 		if err != nil {
 			return friendlyError("проверка соединения", err)
 		}
@@ -240,24 +246,24 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 	}
 	services, err := device.DiscoverServices([]bluetooth.UUID{lampService})
 	if err != nil {
-		return b.discoveryErrorLocked("поиск сервиса FFF0", err)
+		return b.discoveryErrorLocked(ctx, "поиск сервиса FFF0", err)
 	}
 	if err := ctx.Err(); err != nil {
-		_ = b.closeLocked()
+		_ = b.closeLocked(ctx)
 		return err
 	}
 	if len(services) != 1 || services[0].UUID() != lampService {
-		_ = b.closeLocked()
+		_ = b.closeLocked(ctx)
 		return fmt.Errorf("%w: сервис FFF0 не найден", ErrIncompatible)
 	}
 	// Discover all characteristics in this service so a duplicate FFF3 is
 	// rejected rather than silently selecting the first one.
 	characteristics, err := services[0].DiscoverCharacteristics(nil)
 	if err != nil {
-		return b.discoveryErrorLocked("поиск характеристики FFF3", err)
+		return b.discoveryErrorLocked(ctx, "поиск характеристики FFF3", err)
 	}
 	if err := ctx.Err(); err != nil {
-		_ = b.closeLocked()
+		_ = b.closeLocked(ctx)
 		return err
 	}
 	found := 0
@@ -270,12 +276,12 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 		}
 	}
 	if found != 1 {
-		_ = b.closeLocked()
+		_ = b.closeLocked(ctx)
 		return fmt.Errorf("%w: найдено характеристик FFF3: %d", ErrIncompatible, found)
 	}
 	connected, err = device.Connected()
 	if err != nil || !connected {
-		_ = b.closeLocked()
+		_ = b.closeLocked(ctx)
 		if err != nil {
 			return friendlyError("проверка соединения после GATT discovery", err)
 		}
@@ -287,7 +293,32 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 	b.info.ServiceUUID = ServiceUUID
 	b.info.WriteUUID = WriteUUID
 	b.info.WriteMode = "without_response"
+	logging.FromContext(ctx).LogAttrs(ctx, slog.LevelInfo, "bluetooth.connected",
+		append(deviceLogAttrs(b.info),
+			slog.String("service_uuid", b.info.ServiceUUID),
+			slog.String("write_uuid", b.info.WriteUUID),
+			slog.String("write_mode", b.info.WriteMode))...)
 	return ctx.Err()
+}
+
+// handleConnect runs on the native callback queue. It must not acquire b.mu,
+// read mutable b.info or retain a request logger after the request has ended.
+func (b *Backend) handleConnect(device bluetooth.Device, connected bool) {
+	address := device.Address.String()
+	if !connected && address == b.target.Load().(string) && b.connected.Swap(false) {
+		slog.Warn("bluetooth.disconnected", "identity", b.config.Identity,
+			"device_address", address, "reason", "link_lost")
+	}
+}
+
+func deviceLogAttrs(info Info) []slog.Attr {
+	return []slog.Attr{
+		slog.String("identity", info.Identity),
+		slog.String("device_name", info.Name),
+		slog.String("device_address", info.Address),
+		slog.String("model", info.Model),
+		slog.Int("rssi", int(info.RSSI)),
+	}
 }
 
 type scanMatch struct {
@@ -344,6 +375,9 @@ func (b *Backend) scanLocked(parent context.Context) (scanMatch, error) {
 	if err := ctx.Err(); err != nil {
 		return scanMatch{}, err
 	}
+	logging.FromContext(parent).InfoContext(parent, "bluetooth.scan_started",
+		"identity", b.config.Identity, "advertising_uuid", AdvertisingUUID,
+		"scan_timeout_ms", b.config.ScanTimeout.Milliseconds())
 	matches := make(chan scanMatch, 1)
 	stopRequest := make(chan struct{}, 1)
 	scanFinished := make(chan struct{})
@@ -405,14 +439,15 @@ func (b *Backend) scanLocked(parent context.Context) (scanMatch, error) {
 	}
 	select {
 	case match := <-matches:
+		logging.FromContext(parent).LogAttrs(parent, slog.LevelInfo, "bluetooth.device_found", deviceLogAttrs(match.info)...)
 		return match, nil
 	default:
 		return scanMatch{}, ErrNotFound
 	}
 }
 
-func (b *Backend) discoveryErrorLocked(stage string, cause error) error {
-	_ = b.closeLocked()
+func (b *Backend) discoveryErrorLocked(ctx context.Context, stage string, cause error) error {
+	_ = b.closeLocked(ctx)
 	if runtime.GOOS == "darwin" && strings.Contains(strings.ToLower(cause.Error()), "timeout") {
 		b.fatal = fmt.Errorf("%w: %s: %v; перезапусти сервер перед следующей попыткой", ErrNeedsRestart, stage, cause)
 		return b.fatal
@@ -473,11 +508,11 @@ func (b *Backend) Write(ctx context.Context, packet []byte) error {
 func (b *Backend) Close() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.closeLocked()
+	return b.closeLocked(context.Background())
 }
 
-func (b *Backend) closeLocked() error {
-	b.connected.Store(false)
+func (b *Backend) closeLocked(ctx context.Context) error {
+	wasConnected := b.connected.Swap(false)
 	b.hasWrite = false
 	b.write = bluetooth.DeviceCharacteristic{}
 	if !b.hasDevice {
@@ -493,17 +528,29 @@ func (b *Backend) closeLocked() error {
 	b.device = bluetooth.Device{}
 	err := device.Disconnect()
 	if err == nil {
+		if wasConnected {
+			// Darwin accepts a cancellation request here; the native callback
+			// may arrive later, so this is not a confirmed physical disconnect.
+			logging.FromContext(ctx).LogAttrs(ctx, slog.LevelInfo, "bluetooth.disconnect_requested",
+				append(deviceLogAttrs(b.info), slog.String("reason", "requested"))...)
+		}
 		return nil
 	}
 	// BlueZ may report NotConnected after the link disappeared on its own.
 	// That already satisfies Close; do not spend the caller's one retry on it.
 	if strings.Contains(strings.ToLower(err.Error()), "not connected") ||
 		strings.Contains(strings.ToLower(err.Error()), "notconnected") {
+		if wasConnected {
+			logging.FromContext(ctx).LogAttrs(ctx, slog.LevelInfo, "bluetooth.disconnected",
+				append(deviceLogAttrs(b.info), slog.String("reason", "already_disconnected"))...)
+		}
 		return nil
 	}
 	// Retain the handle if cancellation itself failed, so a subsequent Close
 	// can still release it. No write characteristic remains usable.
 	b.device, b.hasDevice = device, true
+	logging.FromContext(ctx).LogAttrs(ctx, slog.LevelError, "bluetooth.disconnect_failed",
+		append(deviceLogAttrs(b.info), slog.Any("error", err))...)
 	return err
 }
 

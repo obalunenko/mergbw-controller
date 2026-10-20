@@ -3,11 +3,17 @@
 package ble
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"io"
+	"log/slog"
 	"testing"
+	"time"
 
+	"github.com/obalunenko/mergbw-controller/internal/logging"
 	"tinygo.org/x/bluetooth"
 )
 
@@ -86,12 +92,14 @@ func TestNewRequiresExplicitIdentity(t *testing.T) {
 	}
 }
 
-func TestCancelledOperationsDoNotStartBLE(t *testing.T) {
+func TestCancelledOperationsLogWithoutStartingBLE(t *testing.T) {
 	b, err := New(Config{Identity: testIdentity})
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil)).With("request_id", "cancelled-ble-test")
+	ctx, cancel := context.WithCancel(logging.WithLogger(context.Background(), logger))
 	cancel()
 	if _, err := b.Connect(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Connect: %v", err)
@@ -107,5 +115,121 @@ func TestCancelledOperationsDoNotStartBLE(t *testing.T) {
 	}
 	if err := b.Close(); err != nil {
 		t.Fatal(err)
+	}
+	entries := decodeBLELogs(t, &output)
+	if len(entries) != 2 {
+		t.Fatalf("expected only two failed connection events, got %v", entries)
+	}
+	for _, entry := range entries {
+		if entry["msg"] != "bluetooth.connect_failed" || entry["level"] != "WARN" ||
+			entry["identity"] != testIdentity || entry["request_id"] != "cancelled-ble-test" ||
+			entry["error"] != context.Canceled.Error() {
+			t.Fatalf("unexpected cancellation event: %v", entry)
+		}
+	}
+}
+
+func TestStickyConnectionFailureLogsErrorWithRequestContext(t *testing.T) {
+	b, err := New(Config{Identity: testIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.fatal = ErrNeedsRestart
+	var output bytes.Buffer
+	logger := slog.New(slog.NewJSONHandler(&output, nil)).With("request_id", "failed-ble-test")
+	_, err = b.Connect(logging.WithLogger(context.Background(), logger))
+	if !errors.Is(err, ErrNeedsRestart) {
+		t.Fatalf("Connect error = %v, want ErrNeedsRestart", err)
+	}
+	if b.enabled || b.hasDevice || b.Connected() {
+		t.Fatal("sticky failure started a connection")
+	}
+	entries := decodeBLELogs(t, &output)
+	if len(entries) != 1 {
+		t.Fatalf("expected one connection failure event, got %v", entries)
+	}
+	entry := entries[0]
+	if entry["msg"] != "bluetooth.connect_failed" || entry["level"] != "ERROR" ||
+		entry["identity"] != testIdentity || entry["request_id"] != "failed-ble-test" ||
+		entry["error"] != ErrNeedsRestart.Error() {
+		t.Fatalf("unexpected connection failure event: %v", entry)
+	}
+}
+
+func TestDisconnectCallbackLogsOnceWithoutCommandMutex(t *testing.T) {
+	b, err := New(Config{Identity: testIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&output, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	// Only Address.String is used by the callback; no native device is needed.
+	device := bluetooth.Device{}
+	address := device.Address.String()
+	b.target.Store("unrelated-device")
+	b.connected.Store(true)
+	b.handleConnect(device, false)
+	if !b.Connected() {
+		t.Fatal("an unrelated device changed the target's connection state")
+	}
+	b.target.Store(address)
+	b.handleConnect(device, true)
+	if output.Len() != 0 {
+		t.Fatalf("callback logged before a ready connection was lost: %s", output.Bytes())
+	}
+
+	b.mu.Lock()
+	done := make(chan struct{})
+	go func() {
+		b.handleConnect(device, false)
+		b.handleConnect(device, false)
+		close(done)
+	}()
+	select {
+	case <-done:
+		b.mu.Unlock()
+	case <-time.After(time.Second):
+		b.mu.Unlock()
+		<-done
+		t.Fatal("native callback waited for the command mutex")
+	}
+	if b.Connected() {
+		t.Fatal("disconnect callback left the connection marked ready")
+	}
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+	entries := decodeBLELogs(t, &output)
+	if len(entries) != 1 {
+		t.Fatalf("expected one link-loss event, got %v", entries)
+	}
+	entry := entries[0]
+	if entry["msg"] != "bluetooth.disconnected" || entry["level"] != "WARN" ||
+		entry["identity"] != testIdentity || entry["device_address"] != address ||
+		entry["reason"] != "link_lost" {
+		t.Fatalf("unexpected link-loss event: %v", entry)
+	}
+	if _, ok := entry["request_id"]; ok {
+		t.Fatal("callback retained a request ID")
+	}
+}
+
+func decodeBLELogs(t *testing.T, output *bytes.Buffer) []map[string]any {
+	t.Helper()
+	decoder := json.NewDecoder(output)
+	var entries []map[string]any
+	for {
+		var entry map[string]any
+		err := decoder.Decode(&entry)
+		if errors.Is(err, io.EOF) {
+			return entries
+		}
+		if err != nil {
+			t.Fatalf("decode log event: %v", err)
+		}
+		entries = append(entries, entry)
 	}
 }

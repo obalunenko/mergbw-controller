@@ -113,6 +113,26 @@ Use the generated URLs instead of manually copying the token. Color, brightness,
 
 Successful command responses contain `sent: true` and `physical_state_verified: false`. `/health` reports `bluetooth_connected`; it does **not** confirm that the lamp is illuminated or has reached the requested color. Native BLE operations may wait for library timeouts; an HTTP timeout does not guarantee immediate cancellation of an in-progress write.
 
+## Logging
+
+The controller writes structured text logs through Go's `log/slog` to **stderr**, with timestamps and levels. Command logs include the route in `command` and a `request_id`; BLE logs include packet bytes in `packet_hex`, results, retries, errors, and `duration_ms`. Follow a request from `command.received` through `packet.sent` to `command.sent`; failures and retries appear as `command.failed` and `command.retry`.
+
+`bluetooth.connected` identifies the actual connected lamp with `identity`, `device_name`, `device_address`, `service_uuid`, and `write_uuid`. The identity in `service.started` is only the configured target. Neither event confirms the lamp's physical power or color.
+
+Illustrative connection log; the identifiers below are examples:
+
+```text
+time=2026-01-01T12:00:00.000Z level=INFO msg=bluetooth.connected identity=AA:BB:CC:DD:EE:FF device_name=LT-06 device_address=00000000-0000-0000-0000-000000000000 service_uuid=0000fff0-0000-1000-8000-00805f9b34fb write_uuid=0000fff3-0000-1000-8000-00805f9b34fb
+```
+
+Successful `/health` requests are quiet. Access tokens and complete command URLs are excluded from logs. Logs normally stay in Terminal; to also append them to a file, run from the project directory:
+
+```bash
+bash run.command 2>&1 | tee -a sunset.log
+```
+
+`*.log` is ignored by Git. The file contains device identifiers and command history. Logging does not change macOS Bluetooth permission requirements.
+
 ## Configuration and presets
 
 `settings.json` contains `device_identity`, `port`, and `access_token`. Change settings with the server stopped. `presets.json` maps stable slugs to `label`, `rgb` (three integers, 0–255), and `brightness` (0–100).
