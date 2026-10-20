@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/obalunenko/mergbw-controller/internal/ble"
+	"github.com/obalunenko/mergbw-controller/internal/ble/native"
 	"github.com/obalunenko/mergbw-controller/internal/bridge"
 	"github.com/obalunenko/mergbw-controller/internal/config"
 	"github.com/obalunenko/mergbw-controller/internal/controller"
@@ -197,7 +198,7 @@ func run(args []string) error {
 func newBackend(settings config.Settings) (*ble.Backend, error) {
 	return ble.New(ble.Config{
 		Identity: settings.DeviceIdentity, ScanTimeout: 12 * time.Second, ConnectTimeout: 12 * time.Second,
-	})
+	}, native.DefaultAdapter())
 }
 
 func send(settings config.Settings, action protocol.Action) (result error) {

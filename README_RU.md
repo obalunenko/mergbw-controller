@@ -157,7 +157,7 @@ bash run.command 2>&1 | tee -a sunset.log
 
 ## Разработка и проверка
 
-CLI находится в `cmd/sunset`, протокол — в `internal/protocol`, Bluetooth — в `internal/ble`, очередь команд — в `internal/controller`, HTTP — в `internal/bridge`, настройки — в `internal/config`.
+CLI находится в `cmd/sunset`, протокол — в `internal/protocol`, Bluetooth-логика с синхронными интерфейсами — в `internal/ble`, адаптер TinyGo — в `internal/ble/native`, очередь команд — в `internal/controller`, HTTP — в `internal/bridge`, настройки — в `internal/config`. Импорт `internal/ble/native` может инициализировать CoreBluetooth.
 
 Установите закреплённые инструменты разработки и используйте команды проекта:
 
@@ -169,7 +169,19 @@ task test:core
 task test:race
 ```
 
-`make tools` устанавливает инструменты из `tools/*/go.mod` командой `go install tool`. Task 3.54.0 закреплён в `tools/task/go.mod`, зависимости — в `tools/task/go.sum`. При необходимости добавьте `$(go env GOPATH)/bin` в `PATH` либо запускайте `go tool -modfile=tools/task/go.mod task --list` напрямую. Модуль инструментов требует Go 1.27.0; Go автоматически загрузит нужный toolchain, если не задан `GOTOOLCHAIN=local`. Требование контроллера остаётся Go 1.25.0+.
+`make tools` устанавливает инструменты из `tools/*/go.mod` командой `go install tool`. Task 3.54.0 закреплён в `tools/task/go.mod`, зависимости — в `tools/task/go.sum`. При необходимости добавьте `$(go env GOPATH)/bin` в `PATH` либо запускайте `go tool -modfile=tools/task/go.mod task --list` напрямую. Модуль инструмента Task требует Go 1.27.0; Go автоматически загрузит нужный toolchain, если не задан `GOTOOLCHAIN=local`. Требование контроллера остаётся Go 1.25.0+.
+
+Go-тесты используют проверки Testify 1.11.1 и моки интерфейсов Uber Mock 0.6.0. Тестовые библиотеки находятся в корневом `go.mod`, генератор закреплён отдельно в `tools/mockgen/go.mod` (Go 1.25.0). После изменения интерфейсов выполните `task mocks:generate` и добавьте сгенерированные `mock_*_test.go` в коммит. Генерация использует закреплённый модуль и не зависит от глобальной версии mockgen.
+
+`task test:core` и `task test:race` включают BLE-backend со сгенерированными моками адаптера и устройства. Они не импортируют native-адаптер и не требуют оборудования или разрешений Bluetooth. Обычная команда `task test` также исключает аппаратные тесты.
+
+Интеграционные тесты реального оборудования требуют build tag `hardware` и запускаются только локально отдельной командой. Остановите `serve`, отключите другие клиенты и укажите существующую папку локальных настроек:
+
+```bash
+MERGBW_DATA_DIR=/absolute/path/to/lamp-config task test:hardware
+```
+
+Команда запрещает запуск в CI и требует указания папки настроек. Текущий тест подключается и проверяет FFF0/FFF3 без отправки команд освещения; физические ON/OFF, RGB и яркость он не проверяет. Импорт native-пакета может запросить разрешение Bluetooth на macOS. Аппаратные тесты исключены из обычных тестов, race-проверок, `task check` и CI; компиляция или пропущенный тест не подтверждают проверку оборудования.
 
 [CI workflow](.github/workflows/ci.yml) выполняет тесты, проверки гонок основной логики, vet и сборку на Linux с Go 1.25.x и текущей стабильной версией Go. Отдельная задача macOS компилирует CoreBluetooth-backend с CGO; она не запускает контроллер или BLE-тесты. Ни эти проверки, ни успешная сборка на Mac не проверяют реальную лампу. Физическая проверка ограничена указанными выше пакетами ON/OFF.
 

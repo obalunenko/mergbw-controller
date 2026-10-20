@@ -113,3 +113,13 @@ The BLE test binary compiled to a temporary path and was not executed. No
 CLI/server/native operation was run; no runtime token files were inspected.
 Migration previews live outside the repository until approval, with source
 snapshot hashes and an add-only diff for review.
+
+## Phase 5: Testing Policy Migration
+
+- [x] T024 Migrate existing helper, HTTP, controller, and BLE log assertions to
+  Testify and generated interface mocks, retaining event order/metadata,
+  request IDs, redaction, response-write failure, and callback-isolation cases.
+- [x] T025 Execute BLE log unit tests through the native-free adapter boundary
+  in core/race workflows; document the separate local hardware-test path.
+
+These tasks align Constitution V-VI; G01-G03 remain open.

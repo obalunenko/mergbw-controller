@@ -9,24 +9,19 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/obalunenko/mergbw-controller/internal/bridge"
 	"github.com/obalunenko/mergbw-controller/internal/controller"
 	"github.com/obalunenko/mergbw-controller/internal/logging"
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
 )
-
-type loggingLink struct{}
-
-func (*loggingLink) Connect(context.Context) error       { return nil }
-func (*loggingLink) Write(context.Context, []byte) error { return nil }
-func (*loggingLink) Connected() bool                     { return true }
-func (*loggingLink) Close() error                        { return nil }
-func (*loggingLink) CanRetry(error) bool                 { return false }
 
 func captureRequest(request *http.Request, output *bytes.Buffer, secret string) *http.Request {
 	logger := slog.New(slog.NewJSONHandler(output, &slog.HandlerOptions{ReplaceAttr: logging.RedactSecrets(secret)}))
@@ -41,16 +36,19 @@ func readLogRecords(t *testing.T, output *bytes.Buffer) []map[string]any {
 		var record map[string]any
 		if err := decoder.Decode(&record); errors.Is(err, io.EOF) {
 			return records
-		} else if err != nil {
-			t.Fatal(err)
+		} else {
+			require.NoError(t, err)
 		}
 		records = append(records, record)
 	}
 }
 
 func TestRequestIDConnectsReceivedCommandPacketsAndResult(t *testing.T) {
-	_, _, settings := testHandler()
-	lamp := controller.New(&loggingLink{})
+	_, _, settings := testHandler(t)
+	link := NewMockLink(gomock.NewController(t))
+	link.EXPECT().Connect(gomock.Any()).Return(nil).Times(2)
+	link.EXPECT().Write(gomock.Any(), gomock.Any()).Return(nil).Times(4)
+	lamp := controller.New(link)
 	handler := bridge.New(settings, map[string]protocol.Preset{
 		"sunset": {RGB: []int{255, 80, 0}, Brightness: 60},
 	}, lamp)
@@ -58,71 +56,60 @@ func TestRequestIDConnectsReceivedCommandPacketsAndResult(t *testing.T) {
 	request := captureRequest(httptest.NewRequest("GET", settings.BaseURL()+"/preset/sunset", nil), &output, settings.AccessToken)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("HTTP %d: %s", recorder.Code, recorder.Body.String())
-	}
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	requestID, err := strconv.ParseUint(recorder.Header().Get("X-Request-ID"), 10, 64)
-	if err != nil || requestID == 0 {
-		t.Fatalf("missing request ID: %v", recorder.Header())
-	}
+	require.NoError(t, err)
+	require.NotZero(t, requestID)
 	records := readLogRecords(t, &output)
 	var events, packets []string
 	for _, record := range records {
 		events = append(events, record["msg"].(string))
-		if record["request_id"] != float64(requestID) || record["command"] != "preset/sunset" {
-			t.Fatalf("request correlation/command lost: %v", record)
-		}
+		assert.Equal(t, float64(requestID), record["request_id"])
+		assert.Equal(t, "preset/sunset", record["command"])
 		if record["msg"] == "packet.sent" {
 			packets = append(packets, record["packet_hex"].(string))
 		}
 	}
-	if want := []string{"command.received", "packet.sent", "packet.sent", "packet.sent", "command.sent", "http.request.completed"}; !reflect.DeepEqual(events, want) {
-		t.Fatalf("event order = %v, want %v", events, want)
-	}
-	if want := []string{"5501FF0601A2", "5503FF08FF50004F", "5505FF063C63"}; !reflect.DeepEqual(packets, want) {
-		t.Fatalf("logged packets = %v, want %v", packets, want)
-	}
-	if records[0]["identity"] != settings.DeviceIdentity || records[0]["packet_count"] != float64(3) {
-		t.Fatalf("received command lacks target or packet count: %v", records[0])
-	}
+	require.Equal(t, []string{"command.received", "packet.sent", "packet.sent", "packet.sent", "command.sent", "http.request.completed"}, events)
+	assert.Equal(t, []string{"5501FF0601A2", "5503FF08FF50004F", "5505FF063C63"}, packets)
+	assert.Equal(t, settings.DeviceIdentity, records[0]["identity"])
+	assert.Equal(t, float64(3), records[0]["packet_count"])
 	last := records[len(records)-1]
-	if last["http_status"] != float64(200) || last["duration_ms"] == nil {
-		t.Fatalf("completion lacks status/duration: %v", last)
-	}
-	if strings.Contains(output.String(), settings.AccessToken) || strings.Contains(output.String(), settings.BaseURL()) {
-		t.Fatal("command logs contain the secret URL")
-	}
+	assert.Equal(t, float64(200), last["http_status"])
+	assert.NotNil(t, last["duration_ms"])
+	assert.NotContains(t, output.String(), settings.AccessToken)
+	assert.NotContains(t, output.String(), settings.BaseURL())
 	// A later command must be distinguishable even when it uses the same route.
 	output.Reset()
 	recorder = httptest.NewRecorder()
 	handler.ServeHTTP(recorder, captureRequest(httptest.NewRequest("GET", settings.BaseURL()+"/off", nil), &output, settings.AccessToken))
-	if recorder.Header().Get("X-Request-ID") == strconv.FormatUint(requestID, 10) {
-		t.Fatal("two requests reused the same ID")
-	}
+	assert.NotEqual(t, strconv.FormatUint(requestID, 10), recorder.Header().Get("X-Request-ID"))
 }
 
 func TestRequestFailureLogsStatusErrorAndDuration(t *testing.T) {
 	for _, status := range []int{http.StatusServiceUnavailable, http.StatusGatewayTimeout} {
 		t.Run(strconv.Itoa(status), func(t *testing.T) {
-			handler, lamp, settings := testHandler()
-			lamp.err = errors.New("BLE unavailable: " + settings.AccessToken)
+			handler, lamp, settings := testHandler(t)
+			fault := errors.New("BLE unavailable: " + settings.AccessToken)
 			if status == http.StatusGatewayTimeout {
-				lamp.err = context.DeadlineExceeded
+				fault = context.DeadlineExceeded
 			}
+			lamp.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(fault)
 			var output bytes.Buffer
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, captureRequest(httptest.NewRequest("GET", settings.BaseURL()+"/off", nil), &output, settings.AccessToken))
 			records := readLogRecords(t, &output)
-			if recorder.Code != status || len(records) != 2 || records[0]["msg"] != "command.received" {
-				t.Fatalf("unexpected response/logs: HTTP %d, %v", recorder.Code, records)
-			}
+			assert.Equal(t, status, recorder.Code)
+			require.Len(t, records, 2)
+			assert.Equal(t, "command.received", records[0]["msg"])
 			failure := records[1]
-			if failure["msg"] != "http.request.failed" || failure["level"] != "ERROR" || failure["http_status"] != float64(status) || failure["error"] == nil || failure["duration_ms"] == nil || failure["command"] != "off" {
-				t.Fatalf("incomplete failure log: %v", failure)
-			}
-			if strings.Contains(output.String(), settings.AccessToken) {
-				t.Fatal("error text exposed access token")
-			}
+			assert.Equal(t, "http.request.failed", failure["msg"])
+			assert.Equal(t, "ERROR", failure["level"])
+			assert.Equal(t, float64(status), failure["http_status"])
+			assert.NotNil(t, failure["error"])
+			assert.NotNil(t, failure["duration_ms"])
+			assert.Equal(t, "off", failure["command"])
+			assert.NotContains(t, output.String(), settings.AccessToken)
 		})
 	}
 }
@@ -130,39 +117,39 @@ func TestRequestFailureLogsStatusErrorAndDuration(t *testing.T) {
 func TestRejectedRequestsDoNotLogSecretURLOrRawParameters(t *testing.T) {
 	for _, route := range []string{"/TOKEN/color/PRIVATE_VALUE", "/TOKEN/off?secret=PRIVATE_VALUE", "/PRIVATE_VALUE/off", "/TOKEN/off/extra/path"} {
 		t.Run(route, func(t *testing.T) {
-			handler, lamp, settings := testHandler()
+			handler, _, settings := testHandler(t)
 			path := strings.ReplaceAll(route, "TOKEN", settings.AccessToken)
 			var output bytes.Buffer
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, captureRequest(httptest.NewRequest("GET", "http://"+settings.Address()+path, nil), &output, settings.AccessToken))
 			records := readLogRecords(t, &output)
-			if len(lamp.actions) != 0 || len(records) != 1 || records[0]["msg"] != "http.request.rejected" || records[0]["level"] != "WARN" || records[0]["http_status"] != float64(recorder.Code) {
-				t.Fatalf("rejected request logs = %v; calls = %d", records, len(lamp.actions))
-			}
+			require.Len(t, records, 1)
+			assert.Equal(t, "http.request.rejected", records[0]["msg"])
+			assert.Equal(t, "WARN", records[0]["level"])
+			assert.Equal(t, float64(recorder.Code), records[0]["http_status"])
 			for _, sensitive := range []string{settings.AccessToken, "PRIVATE_VALUE", "http://"} {
-				if strings.Contains(output.String(), sensitive) {
-					t.Fatalf("rejected request exposed %q", sensitive)
-				}
+				assert.NotContains(t, output.String(), sensitive)
 			}
 		})
 	}
 }
 
-type failedResponseWriter struct{ *httptest.ResponseRecorder }
-
-func (failedResponseWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
-
 func TestHealthIsQuietButResponseWriteFailuresAreLogged(t *testing.T) {
-	handler, _, settings := testHandler()
+	handler, lamp, settings := testHandler(t)
+	lamp.EXPECT().Connected().Return(true).Times(2)
 	var output bytes.Buffer
 	request := captureRequest(httptest.NewRequest("GET", "http://"+settings.Address()+"/health", nil), &output, settings.AccessToken)
 	handler.ServeHTTP(httptest.NewRecorder(), request)
-	if output.Len() != 0 {
-		t.Fatalf("successful health check produced noise: %s", output.String())
-	}
-	handler.ServeHTTP(failedResponseWriter{httptest.NewRecorder()}, request)
+	assert.Empty(t, output.String())
+
+	writer := NewMockResponseWriter(gomock.NewController(t))
+	writer.EXPECT().Header().Return(make(http.Header)).AnyTimes()
+	writer.EXPECT().WriteHeader(http.StatusOK)
+	writer.EXPECT().Write(gomock.Any()).Return(0, io.ErrClosedPipe)
+	handler.ServeHTTP(writer, request)
 	records := readLogRecords(t, &output)
-	if len(records) != 1 || records[0]["msg"] != "http.response.failed" || records[0]["level"] != "ERROR" || records[0]["error"] != io.ErrClosedPipe.Error() {
-		t.Fatalf("response write error was not logged: %v", records)
-	}
+	require.Len(t, records, 1)
+	assert.Equal(t, "http.response.failed", records[0]["msg"])
+	assert.Equal(t, "ERROR", records[0]["level"])
+	assert.Equal(t, io.ErrClosedPipe.Error(), records[0]["error"])
 }

@@ -273,3 +273,12 @@ These gaps remain open. Overlap with [HTTP](../001-streamdeck-http-bridge/spec.m
 [BLE execution](../002-ble-command-execution/spec.md), and
 [CLI/configuration](../003-config-presets-cli/spec.md) is cross-cutting logging
 coverage, not a replacement of those contracts or a claim that gaps were fixed.
+
+## Testing Policy Alignment (2026-10-20)
+
+Existing helper and HTTP/controller/BLE log tests now use Testify assertions
+and generated interface mocks. Their request correlation, packet-event order,
+retry/failure, redaction, quiet-health, and callback-isolation checks are retained.
+BLE log tests now execute without importing the native adapter; the native
+wrapper is separately imported by the CLI and hardware-tagged tests. G01-G03
+remain open for the additional helper, lifecycle, and CLI cases they enumerate.

@@ -189,3 +189,12 @@ than silently inserted during migration.
 
 No constitution exception is proposed. Existing nontransactional behavior and
 incomplete test coverage are stated explicitly; migration does not repair them.
+
+## Testing Policy Alignment (2026-10-20)
+
+Existing config test assertions are migrated to Testify. Root go.mod/go.sum
+own test libraries; mockgen generation is owned by tools/mockgen and the
+Taskfile mocks:generate task. The executable now supplies native.DefaultAdapter
+to ble.New; CLI commands and wrappers retain their existing behavior. README.md
+and README_RU.md describe the new test/tooling workflows. The earlier scope
+metrics and validation record remain historical migration evidence.

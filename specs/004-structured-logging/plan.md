@@ -206,3 +206,12 @@ observed device metadata. No new dependency, schema, frontend, or collector exis
 G01 covers helper/text-output edges; G02 native lifecycle coverage; G03
 CLI/process integration. These remain open, with no coverage percentage or
 unverified hardware success inferred from compilation or checked tasks.
+
+## Testing Policy Alignment (2026-10-20)
+
+Existing log assertions use Testify; HTTP/controller/BLE collaborators and the
+failed response writer use mockgen-generated GoMock interfaces. Taskfile core
+and race checks include the native-free BLE backend. Native hardware execution
+is isolated behind the hardware tag and a local-only task; no native log or
+physical-state verification is inferred from the migration. Earlier source
+counts and compile-only BLE evidence describe the historical snapshot.

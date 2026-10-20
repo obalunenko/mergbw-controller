@@ -289,3 +289,12 @@ those earlier runs are contextual evidence, not new hardware verification.
 
 These are observed coverage gaps, not evidence that the implemented behavior
 is incorrect. Hardware verification remains a separately stated limitation.
+
+## Testing Policy Alignment (2026-10-20)
+
+Existing HTTP contracts remain unchanged. The seven bridge test functions now
+use Testify assertions and mockgen-generated Controller, Link, and ResponseWriter
+mocks. Rejection tests install no Execute expectation; any unexpected dispatch
+fails the mock. Cross-layer logging tests still exercise the real controller
+with a mocked Link. G01-G03 remain open; this migration adds no CLI/server or
+new route coverage.

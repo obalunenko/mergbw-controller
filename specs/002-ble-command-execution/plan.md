@@ -200,3 +200,18 @@ physical device evidence. None is represented as a checked-off fix.
 
 No constitution violation or new dependency is proposed. Coverage gaps and
 platform limits are explicit rather than resolved by altering the migrated code.
+
+## Testing Policy Alignment (2026-10-20)
+
+New(Config, Adapter) makes the native dependency explicit. transport.go defines
+the synchronous interfaces; native/adapter.go owns DefaultAdapter and translates
+native handles/results without changing operation ordering or detaching work.
+Unit tests use Testify and generated GoMock implementations, including BLE in
+Taskfile core/race packages. task mocks:generate uses pinned tools/mockgen.
+
+native/hardware_test.go is guarded by hardware plus platform tags. The separate
+local task test:hardware requires MERGBW_DATA_DIR and rejects CI. Its Inspect
+case connects/discovers without lamp writes; hardware evidence remains pending.
+Historical counts and compile-only evidence above describe the earlier snapshot,
+not the current unit-test execution boundary. Remaining G01-G03 work is still
+tracked by BUG-001 through BUG-003; this migration does not close those reports.

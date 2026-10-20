@@ -104,3 +104,13 @@ the evidence documented in the README; migration performs no lamp operation.
 `go test ./internal/bridge` passed during preparation on 2026-10-20. The scope
 contains seven existing Test functions in two files. No tests, application
 source, configuration, CI jobs, or branch are modified by this migration.
+
+## Phase 7: Testing Policy Migration
+
+- [x] T021 Migrate the existing HTTP and logging test assertions to Testify
+  while preserving all seven Test functions and their existing cases.
+- [x] T022 Replace handwritten Controller, Link, and failed ResponseWriter
+  doubles with mockgen-generated mocks and explicit call expectations; preserve
+  zero-dispatch rejection checks and cross-layer log correlation.
+
+These tasks align Constitution V without closing G01-G03.

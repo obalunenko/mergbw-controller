@@ -125,3 +125,21 @@ G01-G03 and H01 remain unresolved; no checked item represents fixing them.
 2026-10-20. The BLE test binary compiled into a temporary directory and was not
 executed. No scan, connection, lamp command, source/configuration change, feature
 001 edit, or branch creation is part of migration.
+
+## Phase 6: Testing Policy Migration
+
+- [x] T027 Extract synchronous Adapter/Address/Device/Service/Characteristic
+  interfaces and advertisement snapshots in internal/ble/transport.go; move
+  TinyGo wrapping to internal/ble/native/adapter.go and inject it in cmd/sunset.
+- [x] T028 Migrate existing protocol/controller/BLE tests to Testify and
+  generated GoMock collaborators, retaining the prior Test functions and cases.
+- [x] T029 Add TestConnectInspectAndWriteThroughAdapter to verify the extracted
+  boundary with generated mocks, including cached inspection and copied Info.
+- [x] T030 Include BLE unit tests in core/race workflows; add a separate
+  hardware-tagged, local-only Inspect test and task without claiming execution
+  or physical-effect verification.
+- [x] T031 Pin Testify/GoMock test libraries in the root module and mockgen in
+  tools/mockgen; add task mocks:generate and bilingual workflow documentation.
+
+These tasks align Constitution V-VI. The existing G01-G03 reports and H01 stay
+open; successful mock-backed lifecycle coverage is not native/device evidence.

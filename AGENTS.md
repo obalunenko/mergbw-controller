@@ -1,8 +1,8 @@
 # Project Instructions
 
 Read `.specify/memory/constitution.md` for the project's architecture and
-behavioral contracts. This repository contains one Go controller and a separate
-Go module for development tooling.
+behavioral contracts. This repository contains one Go controller and separate
+Go modules for Task and mockgen development tooling.
 
 ## Work Boundaries
 
@@ -10,7 +10,7 @@ Go module for development tooling.
   `cmd/sunset` is the composition root; keep protocol validation, HTTP handling,
   command sequencing, native BLE transport, config, and logging in their
   existing packages.
-- Tooling work: `tools/task/`, `Makefile`, `Taskfile.yml`, `scripts/`,
+- Tooling work: `tools/task/`, `tools/mockgen/`, `Makefile`, `Taskfile.yml`, `scripts/`,
   `setup.command`, and `run.command`.
   Tool dependencies belong in their separate module. `make tools` installs
   tools; Taskfile owns the project workflows.
@@ -31,8 +31,12 @@ require spawning agents or assigning unrelated changes to this task.
 - Format changed Go files with `gofmt`; use `task vet` and `task build` where
   applicable.
 - On macOS, use `task test:core` and `task test:race` for tests that avoid native
-  Bluetooth initialization. Full tests and CLI execution may initialize
-  CoreBluetooth. Do not substitute a build for device verification.
+  Bluetooth initialization; both include the mocked BLE backend. Unit tests use
+  Testify and mockgen-generated GoMock interfaces; regenerate mocks through
+  `task mocks:generate`. CLI execution imports `internal/ble/native` and may
+  initialize CoreBluetooth. Hardware integration tests require the `hardware`
+  build tag and run only locally through `task test:hardware`, outside CI and
+  default checks. Do not substitute a build for device verification.
 - `task check` is the Linux full suite: tests, race, vet, and build.
 - Spec Kit checks are local tasks; keep them out of CI and `task check`.
 

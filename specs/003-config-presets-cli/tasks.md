@@ -110,3 +110,13 @@ migration does not change that contract or verify physical device behavior.
 Bash syntax checking. Public presets.json matched all six Go defaults. No actual
 runtime settings/button file was read or changed; no CLI/server/wrapper/lamp
 operation or branch creation was performed.
+
+## Phase 6: Testing Policy Migration
+
+- [x] T025 Migrate all three existing configuration Test functions to Testify
+  while preserving first-init validation, exact-byte settings/preset retention,
+  stable tokens/URLs, link count, and invalid-preset cases.
+- [x] T026 Document Testify/GoMock dependencies, pinned mockgen generation,
+  native adapter ownership, and local hardware-test usage in both READMEs.
+
+These tasks align Constitution V-VI without closing G01-G03 or adding CLI tests.

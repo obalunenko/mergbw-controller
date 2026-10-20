@@ -169,3 +169,11 @@ factors. No new module, storage system, or framework is introduced.
 
 No constitution violations or architecture exceptions are proposed. G01-G03
 are follow-up verification work and are not completed historical tasks.
+
+## Testing Policy Alignment (2026-10-20)
+
+Use Testify 1.11.1 and GoMock 0.6.0 in existing bridge tests. Generated mocks are
+colocated as mock_*_test.go and regenerated with task mocks:generate using the
+separate tools/mockgen module. Response-write failure injection now uses a
+mockgen-generated http.ResponseWriter. The earlier implementation descriptions
+and scope metrics record the historical migration snapshot.

@@ -327,3 +327,12 @@ RGB/brightness; no new device verification was performed.
 These are verification gaps, not evidence that every untested path is faulty.
 The current nontransactional init behavior is stated explicitly rather than
 silently replaced with stronger guarantees.
+
+## Testing Policy Alignment (2026-10-20)
+
+The three configuration test functions now use Testify assertions while
+retaining their existing temporary-file, preservation, URL, and invalid-preset
+cases. The root module owns test-library dependencies. tools/mockgen is a new
+separate pinned tool module; make tools discovers it alongside tools/task.
+The CLI still imports native Bluetooth through internal/ble/native, so the
+existing import-time permission caveat remains. G01-G03 remain open.

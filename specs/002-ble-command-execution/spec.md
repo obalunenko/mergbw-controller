@@ -349,9 +349,10 @@ upgrade this evidence to verified status.
   identities, timeout defaults/bounds, 0/21-byte packets, or the precedence of
   invalid packet/context/fatal state. Follow-up: add table-driven constructor and
   early-write validation tests in internal/ble/backend_test.go.
-- **G03 - Retry, pacing, and shutdown coverage**: Current fake Link cannot return
-  a Close failure, the retry test injects write failures rather than a retryable
-  Connect failure, and timing tests disable the default packet gap. Production
+- **G03 - Retry, pacing, and shutdown coverage**: Generated Link mocks can now
+  return a Close failure, but no test exercises that outcome. The retry test
+  still injects write failures rather than a retryable Connect failure, and
+  timing tests disable the default packet gap. Production
   lampLink.CanRetry classification and Controller.Close during a blocked action
   or expired wait lack focused tests. Follow-up: extend controller tests and add
   a production classifier test with explicit typed/wrapped-error cases; assert
@@ -359,3 +360,20 @@ upgrade this evidence to verified status.
 
 These are observed verification gaps, not completed fixes or proof of a runtime
 fault. H01 is a separate hardware verification limit.
+
+## Testing Policy Alignment (2026-10-20)
+
+The backend now receives a synchronous Adapter through New(Config, Adapter).
+Adapter, Address, Device, Service, and Characteristic interfaces and value-only
+advertisement snapshots live in internal/ble/transport.go. The TinyGo wrapper
+lives in internal/ble/native; cmd/sunset injects native.DefaultAdapter. Existing
+native calls, cancellation ownership, address types, advertisement service
+matching, and packet semantics are preserved.
+
+All previous protocol/controller/BLE test functions are retained with Testify
+assertions and generated GoMock collaborators. BLE unit tests now run on macOS
+without importing TinyGo or initializing CoreBluetooth. A new controlled test
+exercises connect, reuse/Inspect, copied Info, write, and close through the adapter.
+A separate hardware-tagged native integration test inspects the actual lamp;
+it has not been executed and does not verify physical lighting effects.
+G01-G03 and H01 remain open for their remaining coverage/device evidence.

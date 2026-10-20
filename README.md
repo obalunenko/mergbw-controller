@@ -149,7 +149,8 @@ Stop the Python server, copy its `settings.json` and `presets.json` beside the G
 |---|---|
 | `cmd/sunset` | CLI and server lifecycle |
 | `internal/protocol` | Packet encoding and validation |
-| `internal/ble` | Discovery, GATT, and BLE writes |
+| `internal/ble` | Discovery, GATT, and BLE writes through synchronous interfaces |
+| `internal/ble/native` | TinyGo Bluetooth adapter; importing it may initialize CoreBluetooth |
 | `internal/controller` | Command serialization and reconnect handling |
 | `internal/bridge` | Local HTTP API |
 | `internal/config` | Settings, presets, and button URLs |
@@ -164,7 +165,19 @@ task test:core
 task test:race
 ```
 
-`make tools` installs the tools declared in `tools/*/go.mod` with `go install tool`. Task 3.54.0 is pinned in `tools/task/go.mod` with its dependencies locked in `tools/task/go.sum`. Add `$(go env GOPATH)/bin` to `PATH` if needed, or run `go tool -modfile=tools/task/go.mod task --list` directly. The tools module requires Go 1.27.0; Go downloads the required toolchain automatically unless `GOTOOLCHAIN=local` is set. The controller still requires Go 1.25.0+.
+`make tools` installs the tools declared in `tools/*/go.mod` with `go install tool`. Task 3.54.0 is pinned in `tools/task/go.mod` with its dependencies locked in `tools/task/go.sum`. Add `$(go env GOPATH)/bin` to `PATH` if needed, or run `go tool -modfile=tools/task/go.mod task --list` directly. The Task tool module requires Go 1.27.0; Go downloads the required toolchain automatically unless `GOTOOLCHAIN=local` is set. The controller still requires Go 1.25.0+.
+
+Go tests use Testify 1.11.1 assertions and Uber Mock 0.6.0 interface mocks. The test libraries belong to root `go.mod`; the generator is pinned separately in `tools/mockgen/go.mod` (Go 1.25.0). Run `task mocks:generate` after changing an interface and commit the generated `mock_*_test.go` files. Generation uses the pinned module directly, without relying on a global mockgen version.
+
+`task test:core` and `task test:race` include the BLE backend with generated adapter/device mocks. They do not import the native Bluetooth adapter or require equipment/permissions. Default `task test` also excludes hardware tests.
+
+Real-equipment integration tests require the `hardware` build tag and run only locally through a separate opt-in task. Stop `serve`, disconnect other clients, and point to an existing local configuration directory:
+
+```bash
+MERGBW_DATA_DIR=/absolute/path/to/lamp-config task test:hardware
+```
+
+The task rejects CI execution and requires the data-directory setting. Its current test connects and inspects FFF0/FFF3 without sending lighting commands; it does not verify physical power, RGB, or brightness. Importing the native package may request macOS Bluetooth permission. Hardware tests are excluded from normal tests, race checks, `task check`, and CI; compilation or a skipped test is not hardware-verification evidence.
 
 The [CI workflow](.github/workflows/ci.yml) runs tests, the core race checks, vet, and build on Linux with Go 1.25.x and the current stable Go release. A separate macOS job compiles the CoreBluetooth backend with CGO; it does not run the controller or BLE tests. Neither these tests nor a successful macOS build validate a physical lamp. Hardware verification remains limited to the power packets described above.
 
