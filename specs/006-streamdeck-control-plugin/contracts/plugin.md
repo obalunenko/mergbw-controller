@@ -35,6 +35,8 @@ Transport: SDPI streamDeckClient.send("sendToPlugin", envelope), SDK onSendToPlu
 
 Envelope: {v:1, sessionId:string, requestId:string, type:string, payload:object}. session/request IDs are short generated opaque identifiers, not credentials. Only types below are accepted; malformed version/type/context returns a safe local error. Replies match v/sessionId/requestId and type result, without original secret input.
 
+Replies include complete:true for the request's final acknowledgement and complete:false for status publications. The inspector queues explicit requests until the preceding acknowledgement, retaining the submitted values separately from newer editable drafts.
+
 | Type | Payload | Reply / side effect |
 | --- | --- | --- |
 | inspector.get | {} | sanitized snapshot of connection, assignment, check, catalog, operation and language |

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ws://localhost:*; img-src 'self' data:;"
+		/>
+		<title>MeRGBW</title>
+		<link rel="stylesheet" href="inspector.css" />
+		<script src="vendor/sdpi-components.js" defer></script>
+		<script src="inspector.js" defer></script>
+	</head>
+	<body>
+		<main>
+			<h1>MeRGBW</h1>
+			<label for="language" data-i18n="language">Language</label>
+			<select id="language">
+				<option value="en">English</option>
+				<option value="ru">Русский</option>
+			</select>
+			<fieldset>
+				<legend data-i18n="connection">Connection</legend>
+				<p id="connection-summary"></p>
+				<label for="import-url" data-i18n="import">Import link</label>
+				<input id="import-url" type="password" autocomplete="off" spellcheck="false" />
+				<button id="import" type="button" data-i18n="import">Import link</button>
+				<label for="port" data-i18n="port">Port</label>
+				<input id="port" type="number" min="1024" max="65535" value="18765" step="1" />
+				<label for="replacement-token" data-i18n="replacementToken">Replacement token (blank keeps saved token)</label>
+				<input id="replacement-token" type="password" autocomplete="new-password" spellcheck="false" />
+				<div class="buttons">
+					<button id="save" type="button" data-i18n="save">Save</button
+					><button id="check" type="button" data-i18n="check">Check connection</button>
+				</div>
+			</fieldset>
+			<fieldset id="assignment-controls" hidden>
+				<legend id="action-name"></legend>
+				<div id="color-controls" hidden>
+					<label for="color-picker" data-i18n="color">Color</label>
+					<input id="color-picker" type="color" value="#ff5000" />
+					<label for="rgb" data-i18n="rgb">RGB (six hex digits)</label>
+					<input id="rgb" type="text" value="FF5000" maxlength="7" spellcheck="false" />
+				</div>
+				<div id="brightness-controls" hidden>
+					<label for="percent-slider" data-i18n="brightness">Brightness</label>
+					<input id="percent-slider" type="range" min="0" max="100" step="1" value="50" />
+					<label for="percent" data-i18n="percent">Brightness (%)</label>
+					<input id="percent" type="number" min="0" max="100" step="1" value="50" />
+				</div>
+				<div id="preset-controls" hidden>
+					<label for="preset-select" data-i18n="preset">Preset</label>
+					<select id="preset-select"></select>
+					<button id="refresh" type="button" data-i18n="refresh">Refresh presets</button>
+					<p id="catalog-status" role="status"></p>
+				</div>
+				<p data-i18n="powersOn">This command also turns power on.</p>
+				<button id="assignment-save" type="button" data-i18n="save">Save</button>
+			</fieldset>
+			<dl aria-live="polite">
+				<dt data-i18n="serviceStatus">Service</dt>
+				<dd id="service-status">Unknown</dd>
+				<dt data-i18n="authorizationStatus">Authorization</dt>
+				<dd id="authorization-status">Unknown</dd>
+				<dt data-i18n="bluetoothStatus">Bluetooth</dt>
+				<dd id="bluetooth-status">Unknown</dd>
+			</dl>
+			<p id="message" role="status" aria-live="polite"></p>
+			<p id="operation" aria-live="polite"></p>
+		</main>
+	</body>
+</html>

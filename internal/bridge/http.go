@@ -91,6 +91,28 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusBadRequest, "используйте ссылку из streamdeck-buttons.txt без дополнительных параметров")
 		return
 	}
+	// Catalog dispatch precedes legacy command method handling. It never calls
+	// the controller, including its connection-status accessor.
+	catalogPath := strings.Split(r.URL.Path, "/")
+	if len(catalogPath) == 3 && catalogPath[0] == "" && catalogPath[2] == "presets" {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			fail(http.StatusMethodNotAllowed, "каталог принимает только GET")
+			return
+		}
+		if r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
+			fail(http.StatusBadRequest, "каталог не принимает тело запроса")
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(catalogPath[1]), []byte(h.settings.AccessToken)) != 1 {
+			fail(http.StatusForbidden, "неверная ссылка; используйте streamdeck-buttons.txt")
+			return
+		}
+		if err := respond(w, r, http.StatusOK, presetCatalog(h.presets)); err == nil {
+			logger.InfoContext(r.Context(), "http.presets.completed", "http_status", http.StatusOK, "duration_ms", time.Since(started).Milliseconds())
+		}
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPost && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, POST")
 		fail(http.StatusMethodNotAllowed, "команды принимают GET или POST")

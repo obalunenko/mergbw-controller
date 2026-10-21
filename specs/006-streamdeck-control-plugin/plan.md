@@ -28,7 +28,7 @@ Setup-plan возвращает логическое имя feature `006-streamd
 
 **Project Type**: Go CLI/loopback HTTP service плюс отдельный Stream Deck host-managed Node plugin; это не второй контроллер BLE.
 
-**Performance Goals**: SC-001/002: настройка питания за 5 минут и новой кнопки за 60 секунд для >=4/5 участников. Busy feedback <=300 мс, результат <=1 секунды после ответа в 95/100 измерений. Command deadline 45 секунд полностью от нажатия до чтения ответа; read-only requests по 5 секунд. Эти лимиты не гарантируют длительность нативной записи.
+**Performance Goals**: Приёмка SC-001/002/005 выполняется владельцем: настройка пяти действий, точные команды и заметная индикация обработки/результата. По решению владельца от 2026-10-21 исследование с пятью участниками, 100 ручных замеров и их временные/процентильные пороги исключены. Автоматическая серия из 100 команд SC-003 сохраняется. Command deadline 45 секунд полностью от нажатия до чтения ответа; read-only requests по 5 секунд. Эти лимиты не гарантируют длительность нативной записи.
 
 **Constraints**: Только canonical 127.0.0.1, family 4; импорт принимает literal localhost/127.0.0.1 с действующим портом и токеном. Redirect/retry отсутствуют. Одна команда на onKeyDown, busy guard по контексту, снимок назначения/подключения на начало. Никаких physical-state claims, token/URL logs, автоматического запуска/повтора или изменений конфигурации контроллера.
 
@@ -175,7 +175,9 @@ README/README_RU получают одинаковые шаги подготов
 - **Catalog boundary**: custom/sorted/renamed/duplicate labels, empty array, missing/wrong token, Host/query/ForceQuery/encoded path, content-length/chunked body, GET/POST/HEAD/PUT, empty HEAD response, request ID/cache/security headers; strict MockController доказывает отсутствие Execute/Connected; прежние маршруты и redaction не регрессируют.
 - **Plugin automatic**: validation/import, exact POST route, response schema and action matching, 100 individual activations, busy overlap and per-context isolation, stale result after config/profile changes, offline/auth/catalog legacy/errors/503/504/malformed/oversized/truncated response, 45-second total deadline controlled clock, no automatic replay, token echo/old token redaction, export-safe settings and RU/EN dictionary parity.
 - **Workflow/package**: task workflows:test; task plugin:check; task plugin:package; inspect runtime and installer content. SDK/module imports do not execute connect from unit tests. New Node CI is hardware-free.
-- **Host manual**: installer, five drag/drop actions, copy/edit isolation, restart/profile retention, custom icons/titles plus visible attention feedback, exported profile without token, separate service/auth/Bluetooth and recovery. User timing sample 5 people; 100 response/feedback samples and 10 assignments over 3 restarts, per SC-001–SC-007.
+- **Host manual**: owner checks installer, five actions, copy/edit isolation, restart/profile retention, custom icons/titles plus visible attention feedback, exported profile without token, separate service/auth/Bluetooth and recovery; ten assignments over three restarts. Five-participant and 100-visible-timing studies are excluded by the owner's personal-use acceptance update; no numeric visible latency is claimed.
+- **Owner acceptance update, 2026-10-21**: Manual import into another installation with empty global settings is excluded from required acceptance for personal use, per the owner's explicit decision. Existing-host import and actual export inspection remain required and passed. The no-connection runtime contract and automated isolation tests are retained. Apply this acceptance override to T044 and its host follow-ups T069/T076; do not describe the omitted manual case as executed.
+- **Owner measurement update, 2026-10-21**: The owner also excluded the five-participant and 100-manual-visible-timing studies as unnecessary for personal use. Apply revised SC-001/002/005 to T060/T071/T078 instead of their historical measurement wording. Close those tasks as excluded studies with existing owner/automatic evidence, not as collected measurements. Keep the automated 100-command series, runtime deadlines and physical LT-06 observations required.
 - **Device manual**: подготовленная LT-06, явные on/off, RGB, brightness 25 и 75, preset sunset. Записать для каждого ожидаемый и наблюдённый эффект, platform, защищённую локальную ссылку на device context и pending/observed. Не добавлять hardware tag в обычные задачи. Existing task test:hardware остаётся отдельной опцией и не заменяет наблюдение из Stream Deck.
 - **Spec Kit**: его исходники/скрипты не меняются; speckit:update:test и installer checks для этой функции не требуются и в CI не добавляются.
 
@@ -190,9 +192,13 @@ README/README_RU получают одинаковые шаги подготов
 | FR-010–FR-012 | Busy map, total deadline, outcome taxonomy | Controlled interleavings, 100 presses, SC-003/005/006 |
 | FR-013 | Secret-safe storage/messages/logging | Echo/rotation/export checks, SC-007 |
 | FR-014 | Default feedback plus preserved custom appearance | Host custom-appearance gate, SC-004/005 |
-| FR-015 | Existing controller contracts | Go regression + separate hardware observations, SC-008 |
+| FR-015 | Existing controller contracts | Go regression + separate plugin hardware observations, SC-008; manual Website acceptance excluded by owner |
 | FR-016–FR-017 | Safe diagnostics, RU/EN and paired README | Dictionary/docs review and recovery scenarios, SC-001/006 |
 
 ## Complexity Tracking
 
 Отклонений от конституции нет; таблица исключений не требуется. Принятые ограничения SDK по русскому языку и busy-индикации учтены в дизайне и ручной приёмке, а не скрыты неподдерживаемыми обещаниями.
+
+## Owner acceptance update, 2026-10-22
+
+Manual acceptance of existing Website buttons is excluded by the owner as unnecessary. This overrides that historical condition in T061/T072/T079 and dependent final reconciliation. It was not performed and is not a pass. GET/POST compatibility, configuration preservation, automated regression and all five plugin action kinds remain required. Actual On/Off, RGB FF5000, brightness 25/75 and sunset observations are recorded in hardware-verification.md.

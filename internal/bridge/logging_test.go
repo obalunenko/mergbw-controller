@@ -153,3 +153,18 @@ func TestHealthIsQuietButResponseWriteFailuresAreLogged(t *testing.T) {
 	assert.Equal(t, "ERROR", records[0]["level"])
 	assert.Equal(t, io.ErrClosedPipe.Error(), records[0]["error"])
 }
+
+func TestPresetCatalogLogsNoCommandOrPrivateInputs(t *testing.T) {
+	handler, _, settings := testHandler(t)
+	var output bytes.Buffer
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, captureRequest(httptest.NewRequest(http.MethodGet, settings.BaseURL()+"/presets", nil), &output, settings.AccessToken))
+	require.Equal(t, http.StatusOK, recorder.Code)
+	records := readLogRecords(t, &output)
+	require.Len(t, records, 1)
+	assert.Equal(t, "http.presets.completed", records[0]["msg"])
+	assert.NotNil(t, records[0]["duration_ms"])
+	for _, sensitive := range []string{settings.AccessToken, settings.BaseURL(), settings.DeviceIdentity, "command.sent", "command.received", "rgb", "brightness", "label"} {
+		assert.NotContains(t, output.String(), sensitive)
+	}
+}

@@ -169,3 +169,77 @@ tasks:
       - task: test:race
       - task: vet
       - task: build
+
+  plugin:deps:
+    desc: Install locked local Stream Deck dependencies (Node 24).
+    dir: streamdeck
+    cmds:
+      - npm ci
+
+  plugin:lint:
+    desc: Check plugin lint and formatting without modifying files.
+    dir: streamdeck
+    cmds:
+      - npm run lint
+      - npm run format:check
+
+  plugin:typecheck:
+    desc: Type-check the plugin backend and inspector.
+    dir: streamdeck
+    cmds:
+      - npm run typecheck
+
+  plugin:test:
+    desc: Test the plugin with facades and synthetic loopback fixtures.
+    dir: streamdeck
+    cmds:
+      - npm test
+
+  plugin:build:
+    desc: Bundle the plugin and inspector without launching Stream Deck.
+    dir: streamdeck
+    cmds:
+      - npm run build
+
+  plugin:validate:
+    desc: Validate the built plugin with the pinned local CLI.
+    dir: streamdeck
+    cmds:
+      - npm run validate
+
+  plugin:check:
+    desc: Run ordered plugin checks without installing or launching software.
+    dir: streamdeck
+    cmds:
+      - task: plugin:lint
+      - task: plugin:typecheck
+      - task: plugin:test
+      - task: plugin:build
+      - task: plugin:validate
+      - npm run check:package
+
+  plugin:package:
+    desc: Check then pack the plugin into root dist (replaces generated installer).
+    dir: streamdeck
+    cmds:
+      - task: plugin:check
+      - npm run package
+
+  plugin:link:
+    desc: Explicitly build and link the plugin to the local macOS Stream Deck host.
+    dir: streamdeck
+    cmds:
+      - task: plugin:build
+      - npm run link
+
+  plugin:watch:
+    desc: Explicitly watch builds and restart an already linked plugin.
+    dir: streamdeck
+    cmds:
+      - npm run watch
+
+  plugin:mock:
+    desc: Explicitly start the synthetic controller on 127.0.0.1:18766 (no BLE).
+    dir: streamdeck
+    cmds:
+      - 'node scripts/mock-bridge.mjs {{.CLI_ARGS}}'

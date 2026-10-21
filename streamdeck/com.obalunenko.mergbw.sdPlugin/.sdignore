@@ -1,0 +1,15 @@
+logs/
+*.log
+*.map
+settings.json
+presets.json
+streamdeck-buttons.txt
+.env
+node_modules/
+.test-build/
+tests/
+src/
+scripts/
+fixtures/
+*.streamDeckProfile
+.DS_Store

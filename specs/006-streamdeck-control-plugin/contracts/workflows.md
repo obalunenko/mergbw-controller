@@ -32,6 +32,8 @@ validate script: streamdeck validate com.obalunenko.mergbw.sdPlugin --no-update-
 link script: streamdeck link com.obalunenko.mergbw.sdPlugin.
 watch script uses Rollup watch and pinned streamdeck restart com.obalunenko.mergbw on completed build, following official scaffold. It requires an explicitly linked plugin and never becomes a dependency of a check.
 
+Linked development requires explicitly enabled Stream Deck developer mode (`streamdeck dev`). The CLI can report success after sending a restart URI that the host rejects with developer mode disabled; action visibility and a runtime `plugin.ready` event confirm loading. Normal installer acceptance removes an existing developer symlink with `streamdeck unlink com.obalunenko.mergbw` without `--delete` before opening the package, preserving repository files.
+
 Local scripts are available from T001 and operate on the currently implemented manifest. T027 uses the explicit npm build/validate/package sequence in quickstart section 0 for the internal On/Off MVP; these scripts have no lifecycle hook requiring the later five-action check:package. The final plugin:package workflow from T055 still requires plugin:check and its five-action content gate before packing.
 
 test script compiles tsconfig.test.json into ignored .test-build and invokes Node test runner on emitted tests. Pure services use injected clock/transport/SDK facades; bootstrap plugin.ts is not imported in tests. Tests with HTTP bind only temporary IPv4 loopback servers. They must not connect to port 18765 or use local controller files.

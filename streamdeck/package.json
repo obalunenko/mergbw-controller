@@ -1,0 +1,42 @@
+{
+    "name": "mergbw-streamdeck",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": "24.x"
+    },
+    "scripts": {
+        "build": "rollup -c",
+        "typecheck": "tsc --noEmit && tsc -p tsconfig.ui.json --noEmit",
+        "test": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js",
+        "lint": "eslint src tests --max-warnings 0",
+        "format:check": "prettier --check src tests scripts *.json *.mjs com.obalunenko.mergbw.sdPlugin/manifest.json com.obalunenko.mergbw.sdPlugin/ui/index.html com.obalunenko.mergbw.sdPlugin/ui/inspector.css",
+        "validate": "streamdeck validate com.obalunenko.mergbw.sdPlugin --no-update-check",
+        "package": "streamdeck pack com.obalunenko.mergbw.sdPlugin --output ../dist --force --no-update-check",
+        "link": "streamdeck link com.obalunenko.mergbw.sdPlugin",
+        "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.obalunenko.mergbw\"",
+        "check:package": "node scripts/check-package.mjs"
+    },
+    "prettier": "@elgato/prettier-config",
+    "dependencies": {
+        "@elgato/streamdeck": "3.0.3"
+    },
+    "devDependencies": {
+        "@elgato/cli": "1.10.3",
+        "@elgato/eslint-config": "0.3.2",
+        "@elgato/prettier-config": "0.3.3",
+        "@eslint/js": "9.39.5",
+        "@rollup/plugin-commonjs": "29.0.3",
+        "@rollup/plugin-node-resolve": "16.0.3",
+        "@rollup/plugin-typescript": "12.3.0",
+        "@types/node": "24.19.2",
+        "eslint": "9.39.5",
+        "eslint-plugin-jsdoc": "54.7.0",
+        "prettier": "3.9.10",
+        "rollup": "4.64.12",
+        "tslib": "2.8.1",
+        "typescript": "5.9.3",
+        "typescript-eslint": "8.72.0"
+    }
+}

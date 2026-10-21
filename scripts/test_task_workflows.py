@@ -47,6 +47,23 @@ class TaskWorkflowsTest(unittest.TestCase):
         for key in ("CI", "MERGBW_DATA_DIR", "DATA_DIR", "GO", "WORKFLOW_CLI_EXIT"):
             self.environment.pop(key, None)
         self.environment.update(WORKFLOW_EVENTS=str(self.events), WORKFLOW_CLI=str(self.cli))
+        plugin = self.project / "streamdeck"
+        plugin.mkdir()
+        executables = self.directory / "executables"
+        executables.mkdir()
+        for name in ("npm", "node"):
+            recorder = executables / name
+            recorder.write_text(
+                "#!/usr/bin/env python3\n"
+                "import json,os,sys\n"
+                "from pathlib import Path\n"
+                "name=Path(sys.argv[0]).name\n"
+                "with open(os.environ['WORKFLOW_EVENTS'],'a') as f: "
+                "f.write(json.dumps([name,sys.argv[1:],os.getcwd()])+'\\n')\n"
+                "sys.exit(29 if name=='npm' and ' '.join(sys.argv[1:])==os.environ.get('WORKFLOW_NPM_FAIL') else 0)\n"
+            )
+            recorder.chmod(0o700)
+        self.environment["PATH"] = str(executables) + os.pathsep + self.environment["PATH"]
         installed = shutil.which("task")
         self.task = [installed] if installed else [
             "go", "tool", f"-modfile={REPOSITORY / 'tools/task/go.mod'}", "task"
@@ -144,6 +161,49 @@ class TaskWorkflowsTest(unittest.TestCase):
         self.assertNotIn("speckit", result.stderr)
         self.assertNotIn("workflows:test", result.stderr)
         self.assertEqual(events, [])
+
+
+    def plugin_events(self, commands):
+        return [["npm", command.split(), str((self.project / "streamdeck").resolve())] for command in commands]
+
+    def test_plugin_commands_run_in_package_directory(self):
+        for task, commands in {
+            "deps": ["ci"], "lint": ["run lint", "run format:check"],
+            "typecheck": ["run typecheck"], "test": ["test"],
+            "build": ["run build"], "validate": ["run validate"],
+            "link": ["run build", "run link"], "watch": ["run watch"],
+        }.items():
+            with self.subTest(task=task):
+                result, events = self.run_task("plugin:" + task)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(events, self.plugin_events(commands))
+
+    def test_plugin_check_and_package_are_ordered_without_host_effects(self):
+        checks = ["run lint", "run format:check", "run typecheck", "test",
+                  "run build", "run validate", "run check:package"]
+        for task, commands in (("check", checks), ("package", checks + ["run package"])):
+            result, events = self.run_task("plugin:" + task)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(events, self.plugin_events(commands))
+            self.assertNotIn("sunset", result.stderr)
+            self.assertNotIn("hardware", result.stderr)
+            self.assertNotIn("speckit", result.stderr)
+
+    def test_plugin_failure_stops_later_stages(self):
+        checks = ["run lint", "run format:check", "run typecheck", "test",
+                  "run build", "run validate", "run check:package", "run package"]
+        for index, command in enumerate(checks):
+            with self.subTest(stage=command):
+                result, events = self.run_task("plugin:package", environment={"WORKFLOW_NPM_FAIL": command})
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(events, self.plugin_events(checks[:index + 1]))
+
+    def test_plugin_mock_forwards_literal_arguments_without_install_or_launch(self):
+        value = "catalog with ' quotes $HOME"
+        result, events = self.run_task("plugin:mock", "--", "--catalog", value)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(events, [["node", ["scripts/mock-bridge.mjs", "--catalog", value],
+                                   str((self.project / "streamdeck").resolve())]])
 
 
 if __name__ == "__main__":

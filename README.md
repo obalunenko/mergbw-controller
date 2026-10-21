@@ -63,6 +63,60 @@ Allow Bluetooth access for Terminal, or the terminal application launching `suns
 
 Check ON/OFF first, then verify RGB and brightness. URLs contain the generated access token: keep `settings.json` and `streamdeck-buttons.txt` private. Both are ignored by Git. Normal restarts preserve the token and button URLs.
 
+## Native Stream Deck plugin
+
+Version **0.1.0.0** provides five MeRGBW Keypad actions with one shared Property Inspector. Requirements: macOS **13.5+**, Stream Deck **7.1+**, and a prepared, running local `sunset` controller from the setup above. Building from source requires **Node 24**, npm and the repository Task tools. The plugin uses the local HTTP bridge; it never starts the controller or opens another BLE connection. Existing Website buttons continue to work without migration.
+
+Build an installer from the repository root:
+
+```sh
+make tools
+task plugin:deps
+task plugin:package
+```
+
+Open `dist/com.obalunenko.mergbw.streamDeckPlugin` in Stream Deck, then drag **MeRGBW → On** and **Off** onto keys. In either key's inspector, select EN or RU and import one existing link from your private `streamdeck-buttons.txt`. Import extracts the local port and token without executing the linked command; it does not assign the imported command to the selected key. The standard port is 18765. Port/token are shared across keys; leave the replacement-token field blank to keep the saved token. Imported/password fields clear after submission and the saved token is never echoed.
+
+After manually editing the port or replacement token, click the connection **Save** next to **Check connection**. Check uses the saved connection; a blank replacement token retains the previous one.
+
+Use **Check connection** to see service availability, authorization and Bluetooth separately. Health alone does not verify the token; the authenticated preset catalog does. Bluetooth disconnected does not mean lamp off. Checks and preset refreshes send no lighting commands. All plugin HTTP requests stay on `127.0.0.1`, without redirects, proxies or automatic retries; packaged UI assets work offline.
+
+If a check or preset refresh times out, check `sunset` and the port, then retry that check or refresh. This read-only timeout does not imply a lighting command. You can keep editing during a save; save errors remain visible until the affected setting is saved successfully.
+
+| Action | Assignment |
+| --- | --- |
+| On / Off | One explicit power command |
+| Color | Visual picker or six HEX digits, with optional `#`; default FF5000 |
+| Brightness | Integer 0–100, slider or number field; default 50 |
+| Preset | Select the current controller label; the stable ID is saved |
+
+Color, brightness and presets also turn power on. Save each key's assignment separately. Duplicates can be edited independently; connection details stay outside exported action settings. A profile imported into another installation needs its own shared connection. Custom titles and images retain host precedence over plugin defaults.
+
+After editing controller presets, restart `sunset` and choose **Refresh presets**. Rename preserves the selected ID; duplicate labels include IDs. A known deleted preset blocks its key and asks for a new selection. A failed/unsupported catalog never substitutes a preset; an existing valid ID can still be submitted consciously. An older controller without the catalog needs updating for the list, while compatible power/color/brightness commands remain usable.
+
+A brief standard attention overlay at activation means processing; the inspector says **Executing**. Repeated presses on that pending key add no command. Success means **Command sent**, with lamp state unverified. Rejections show a safe explanation and next step in the inspector. An unknown result or the 45-second observation deadline can have a late physical effect: inspect the lamp before one deliberate new press. The deadline does not promise native BLE cancellation. No command is replayed after restart, settings changes or errors.
+
+Plugin diagnostics are inside `logs/` in the installed plugin directory, or `streamdeck/com.obalunenko.mergbw.sdPlugin/logs/` for a linked development copy. Look for action kind, outcome/category, duration and decimal request ID. INFO is set before SDK connection; do not enable TRACE or payload logging. Tokens, complete command URLs and raw service errors are excluded. For service failure start `sunset` and check the port; for denied access replace the shared token; for backend errors inspect the controller/Bluetooth before retrying.
+
+| Local workflow | Purpose |
+| --- | --- |
+| `task plugin:deps` | Install locked npm dependencies |
+| `task plugin:lint` | Lint and formatting checks |
+| `task plugin:typecheck` | Backend and inspector type checks |
+| `task plugin:test` | Synthetic tests, no host or Bluetooth |
+| `task plugin:build` | Bundle runtime and inspector |
+| `task plugin:validate` | Validate the built plugin |
+| `task plugin:check` | Ordered lint, types, tests, build, validation and content gate |
+| `task plugin:package` | Run check, then replace the generated installer in root dist |
+| `task plugin:link` | Explicit local build/link alternative to installation |
+| `task plugin:watch` | Explicit rebuild/restart of an already linked plugin |
+| `task plugin:mock -- --catalog renamed` | Explicit synthetic service on port 18766 |
+| `task workflows:test` | Verify Task ordering with fake executables |
+
+Checks do not install/link the plugin, start a service or send hardware commands. Do not install and link the same UUID simultaneously. `make tools` and the existing Linux Go `task check` retain their roles. The [plugin quickstart](specs/006-streamdeck-control-plugin/quickstart.md) describes synthetic catalog/failure modes, host acceptance and separate equipment checks. See [validation](specs/006-streamdeck-control-plugin/validation.md) and [physical verification](specs/006-streamdeck-control-plugin/hardware-verification.md) for observed results and explicit acceptance exclusions. On one LT-06, the owner verified plugin On/Off, RGB FF5000, brightness 25/75 and sunset on macOS 27.0.1 with Stream Deck 7.6.0; this does not add machine state readback. Builds and simulated responses do not verify the lamp.
+
+Linked development requires Stream Deck developer mode, enabled explicitly with `streamdeck/node_modules/.bin/streamdeck dev` before using `task plugin:link` or `task plugin:watch`. A successful CLI restart alone does not prove loading: confirm the five MeRGBW actions and `plugin.ready` in the log. To switch a linked copy to the normal installer, run `streamdeck/node_modules/.bin/streamdeck unlink com.obalunenko.mergbw` without `--delete`, then open the installer. Unlinking preserves the repository files.
+
 ## Task commands
 
 Task builds the controller before each application command. Pass arguments after `--`. Runtime and hardware tasks use the repository root for settings by default; override it with `MERGBW_DATA_DIR` or the Task variable `DATA_DIR`.
@@ -105,6 +159,7 @@ The service binds to IPv4 loopback. Command URLs accept **GET or POST**, with no
 | Path | Operation |
 |---|---|
 | `/health` | Service and BLE connection status; no token required |
+| `/<token>/presets` | GET-only authenticated ID/label catalog; no BLE calls |
 | `/<token>/on` | Power on |
 | `/<token>/off` | Power off |
 | `/<token>/color/FF5000` | Set six-digit RGB color |
