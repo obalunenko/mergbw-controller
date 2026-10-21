@@ -1,0 +1,161 @@
+name: Release
+
+"on":
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GOTOOLCHAIN: local
+  GOFLAGS: -mod=readonly
+  CGO_ENABLED: "1"
+
+jobs:
+  checks:
+    uses: ./.github/workflows/ci.yml
+
+  controller:
+    name: Controller / ${{ matrix.os }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15, os: darwin, arch: arm64 }
+          - { runner: macos-15-intel, os: darwin, arch: amd64 }
+          - { runner: ubuntu-24.04, os: linux, arch: amd64 }
+          - { runner: ubuntu-24.04-arm, os: linux, arch: arm64 }
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      GOOS: ${{ matrix.os }}
+      GOARCH: ${{ matrix.arch }}
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go for tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/task/go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/task/go.sum
+            tools/mockgen/go.sum
+      - name: Install pinned repository tools
+        run: make tools
+      - name: Set up application Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          # Both setups share the same Go cache directories; restore only once.
+          cache: false
+      # Compile/link on each native platform; never execute the BLE binary.
+      - name: Build and archive controller
+        run: task release:archive
+      - name: Upload controller archive
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: release-controller-${{ matrix.os }}-${{ matrix.arch }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  plugin:
+    name: Stream Deck installer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go for tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/task/go.mod
+          cache-dependency-path: tools/task/go.sum
+      - name: Install pinned repository tools
+        run: make tools
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: streamdeck/package-lock.json
+      - name: Install locked plugin dependencies
+        run: task plugin:deps
+      - name: Check and pack plugin without Stream Deck or Bluetooth
+        run: task plugin:package
+      - name: Verify installer contents
+        run: node streamdeck/scripts/check-package.mjs --archive dist/com.obalunenko.mergbw.streamDeckPlugin
+      - name: Upload plugin installer
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: release-plugin
+          path: dist/*.streamDeckPlugin
+          if-no-files-found: error
+
+  publish:
+    name: Publish release with all assets
+    needs: [checks, controller, plugin]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out complete history for release notes
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download release assets
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Verify complete asset set and write checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          for platform in darwin_arm64 darwin_amd64 linux_amd64 linux_arm64; do
+            test -s "dist/sunset_${RELEASE_TAG}_${platform}.tar.gz"
+          done
+          test -s dist/com.obalunenko.mergbw.streamDeckPlugin
+          cd dist
+          sha256sum ./*.tar.gz ./*.streamDeckPlugin > SHA256SUMS
+          sha256sum --check SHA256SUMS
+      - name: Generate release notes including direct commits
+        run: python3 scripts/release.py notes --tag "$RELEASE_TAG" --repository "$GH_REPO" --output release-notes.md
+      - name: Publish complete release
+        shell: bash
+        run: |
+          set -euo pipefail
+          flags=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            flags+=(--prerelease --latest=false)
+          fi
+          # gh stages assets in a draft before publishing. A failed upload
+          # leaves a draft that a rerun can complete, never a partial release.
+          if release=$(gh release view "$RELEASE_TAG" --json isDraft); then
+            if [[ $(jq -r .isDraft <<< "$release") != true ]]; then
+              echo "Release is already published; leaving it unchanged."
+              exit 0
+            fi
+            gh release upload "$RELEASE_TAG" dist/*.tar.gz dist/*.streamDeckPlugin dist/SHA256SUMS --clobber
+            gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file release-notes.md --draft=false "${flags[@]}"
+          else
+            gh release create "$RELEASE_TAG" dist/*.tar.gz dist/*.streamDeckPlugin dist/SHA256SUMS \
+              --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
+          fi

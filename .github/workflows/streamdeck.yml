@@ -1,0 +1,41 @@
+name: Stream Deck
+
+"on":
+  push:
+    tags-ignore: ["**"] # Tag packaging and checks run in release.yml.
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plugin:
+    name: Linux / Node 24
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go for repository tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/task/go.mod
+          cache-dependency-path: tools/task/go.sum
+      - name: Install pinned repository tools
+        run: make tools
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: streamdeck/package-lock.json
+      - name: Install locked plugin dependencies
+        run: task plugin:deps
+      - name: Check plugin without Stream Deck or Bluetooth
+        run: task plugin:check

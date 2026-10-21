@@ -1,0 +1,123 @@
+{
+    "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+    "UUID": "com.obalunenko.mergbw",
+    "Version": "0.1.0.0",
+    "Name": "MeRGBW",
+    "Category": "MeRGBW",
+    "CategoryIcon": "imgs/plugin",
+    "Icon": "imgs/plugin",
+    "Author": "Oleg Balunenko",
+    "Description": "Local MeRGBW lighting commands / Локальные команды MeRGBW",
+    "SDKVersion": 3,
+    "Nodejs": {
+        "Version": "24"
+    },
+    "Software": {
+        "MinimumVersion": "7.1"
+    },
+    "OS": [
+        {
+            "Platform": "mac",
+            "MinimumVersion": "13.5"
+        }
+    ],
+    "CodePath": "bin/plugin.js",
+    "PropertyInspectorPath": "ui/index.html",
+    "Actions": [
+        {
+            "UUID": "com.obalunenko.mergbw.on",
+            "Name": "On",
+            "Tooltip": "Turn power on / Включить",
+            "Icon": "imgs/on",
+            "Controllers": [
+                "Keypad"
+            ],
+            "SupportedInMultiActions": false,
+            "DisableAutomaticStates": true,
+            "States": [
+                {
+                    "Image": "imgs/on",
+                    "Title": "On",
+                    "TitleAlignment": "bottom",
+                    "FontSize": 13
+                }
+            ]
+        },
+        {
+            "UUID": "com.obalunenko.mergbw.off",
+            "Name": "Off",
+            "Tooltip": "Turn power off / Выключить",
+            "Icon": "imgs/off",
+            "Controllers": [
+                "Keypad"
+            ],
+            "SupportedInMultiActions": false,
+            "DisableAutomaticStates": true,
+            "States": [
+                {
+                    "Image": "imgs/off",
+                    "Title": "Off",
+                    "TitleAlignment": "bottom",
+                    "FontSize": 13
+                }
+            ]
+        },
+        {
+            "UUID": "com.obalunenko.mergbw.color",
+            "Name": "Color",
+            "Tooltip": "Set RGB and turn power on / Цвет и включение",
+            "Icon": "imgs/color",
+            "Controllers": [
+                "Keypad"
+            ],
+            "SupportedInMultiActions": false,
+            "DisableAutomaticStates": true,
+            "States": [
+                {
+                    "Image": "imgs/color",
+                    "Title": "FF5000",
+                    "TitleAlignment": "bottom",
+                    "FontSize": 13
+                }
+            ]
+        },
+        {
+            "UUID": "com.obalunenko.mergbw.brightness",
+            "Name": "Brightness",
+            "Tooltip": "Set brightness and turn power on / Яркость и включение",
+            "Icon": "imgs/brightness",
+            "Controllers": [
+                "Keypad"
+            ],
+            "SupportedInMultiActions": false,
+            "DisableAutomaticStates": true,
+            "States": [
+                {
+                    "Image": "imgs/brightness",
+                    "Title": "50%",
+                    "TitleAlignment": "bottom",
+                    "FontSize": 13
+                }
+            ]
+        },
+        {
+            "UUID": "com.obalunenko.mergbw.preset",
+            "Name": "Preset",
+            "Tooltip": "Apply preset and turn power on / Пресет и включение",
+            "Icon": "imgs/preset",
+            "Controllers": [
+                "Keypad"
+            ],
+            "SupportedInMultiActions": false,
+            "DisableAutomaticStates": true,
+            "States": [
+                {
+                    "Image": "imgs/preset",
+                    "Title": "Preset",
+                    "TitleAlignment": "bottom",
+                    "FontSize": 13
+                }
+            ]
+        }
+    ]
+}

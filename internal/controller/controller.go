@@ -99,7 +99,7 @@ func (c *Controller) Execute(ctx context.Context, action protocol.Action) (resul
 	if c.closed.Load() {
 		return fmt.Errorf("контроллер остановлен")
 	}
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := range 2 {
 		if err := ctx.Err(); err != nil {
 			return err
 		}

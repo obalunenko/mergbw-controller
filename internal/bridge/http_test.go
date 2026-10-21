@@ -7,32 +7,22 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/obalunenko/mergbw-controller/internal/bridge"
 	"github.com/obalunenko/mergbw-controller/internal/config"
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
 )
 
-type fakeController struct {
-	actions []protocol.Action
-	err     error
-}
-
-func (c *fakeController) Connected() bool { return true }
-func (c *fakeController) Execute(ctx context.Context, action protocol.Action) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	c.actions = append(c.actions, action)
-	return c.err
-}
-
-func testHandler() (*bridge.Handler, *fakeController, config.Settings) {
+func testHandler(t *testing.T) (*bridge.Handler, *MockController, config.Settings) {
+	t.Helper()
 	settings := config.Settings{DeviceIdentity: "AA:BB:CC:DD:EE:FF", Port: config.DefaultPort, AccessToken: "correct_access_token_1234567890123456"}
-	controller := &fakeController{}
+	controller := NewMockController(gomock.NewController(t))
 	presets := map[string]protocol.Preset{"sunset": {Label: "Закат", RGB: []int{255, 80, 0}, Brightness: 50}}
 	return bridge.New(settings, presets, controller), controller, settings
 }
@@ -48,26 +38,25 @@ func TestRoutesPassExpectedPackets(t *testing.T) {
 		{http.MethodGet, "preset/sunset", []string{"5501ff0601a2", "5503ff08ff50004f", "5505ff06326d"}},
 	} {
 		t.Run(test.route, func(t *testing.T) {
-			handler, controller, settings := testHandler()
+			handler, controller, settings := testHandler(t)
+			var action protocol.Action
+			controller.EXPECT().Execute(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, got protocol.Action) error {
+				action = got
+				return ctx.Err()
+			})
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, httptest.NewRequest(test.method, settings.BaseURL()+"/"+test.route, nil))
-			if recorder.Code != http.StatusOK || len(controller.actions) != 1 {
-				t.Fatalf("HTTP %d, calls=%d: %s", recorder.Code, len(controller.actions), recorder.Body.String())
-			}
-			got := make([]string, len(controller.actions[0].Packets))
-			for i, packet := range controller.actions[0].Packets {
+			require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+			got := make([]string, len(action.Packets))
+			for i, packet := range action.Packets {
 				got[i] = hex.EncodeToString(packet)
 			}
-			if !reflect.DeepEqual(got, test.packets) {
-				t.Fatalf("packets=%v, want %v", got, test.packets)
-			}
+			assert.Equal(t, test.packets, got)
 			var result map[string]any
-			if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
-				t.Fatal(err)
-			}
-			if result["physical_state_verified"] != false || result["sent"] != true || recorder.Header().Get("Cache-Control") != "no-store" {
-				t.Fatalf("incorrect status/cache metadata: %v", result)
-			}
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &result))
+			assert.Equal(t, false, result["physical_state_verified"])
+			assert.Equal(t, true, result["sent"])
+			assert.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
 		})
 	}
 }
@@ -97,7 +86,7 @@ func TestRejectedRequestsNeverExecute(t *testing.T) {
 		{"body", "POST", "/TOKEN/off", "", "ignored", 400},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			handler, controller, settings := testHandler()
+			handler, _, settings := testHandler(t)
 			path := strings.ReplaceAll(test.path, "TOKEN", settings.AccessToken)
 			request := httptest.NewRequest(test.method, "http://"+settings.Address()+path, strings.NewReader(test.body))
 			if test.host != "" {
@@ -105,32 +94,31 @@ func TestRejectedRequestsNeverExecute(t *testing.T) {
 			}
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, request)
-			if recorder.Code != test.status || len(controller.actions) != 0 {
-				t.Fatalf("HTTP %d (want %d), calls=%d: %s", recorder.Code, test.status, len(controller.actions), recorder.Body.String())
-			}
-			if test.method == "HEAD" && recorder.Body.Len() != 0 {
-				t.Fatal("HEAD returned a body")
+			assert.Equal(t, test.status, recorder.Code, recorder.Body.String())
+			// An unexpected Execute fails the generated mock's strict expectations.
+			if test.method == "HEAD" {
+				assert.Empty(t, recorder.Body.String())
 			}
 		})
 	}
 }
 
 func TestHealthAndErrorsDoNotClaimPhysicalState(t *testing.T) {
-	handler, controller, settings := testHandler()
+	handler, controller, settings := testHandler(t)
+	controller.EXPECT().Connected().Return(true)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, httptest.NewRequest("GET", "http://"+settings.Address()+"/health", nil))
-	if recorder.Code != 200 || len(controller.actions) != 0 || !strings.Contains(recorder.Body.String(), `"physical_state_verified":false`) {
-		t.Fatalf("unexpected health response: %s", recorder.Body.String())
-	}
+	assert.Equal(t, http.StatusOK, recorder.Code)
+	assert.Contains(t, recorder.Body.String(), `"physical_state_verified":false`)
 	for _, test := range []struct {
 		err    error
 		status int
 	}{{errors.New("BLE unavailable"), 503}, {context.DeadlineExceeded, 504}} {
-		controller.err = test.err
+		controller.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(test.err)
 		recorder = httptest.NewRecorder()
 		handler.ServeHTTP(recorder, httptest.NewRequest("GET", settings.BaseURL()+"/off", nil))
-		if recorder.Code != test.status || strings.Contains(recorder.Body.String(), `"sent":true`) || !strings.Contains(recorder.Body.String(), `"physical_state_verified":false`) {
-			t.Fatalf("incorrect failure response HTTP %d: %s", recorder.Code, recorder.Body.String())
-		}
+		assert.Equal(t, test.status, recorder.Code)
+		assert.NotContains(t, recorder.Body.String(), `"sent":true`)
+		assert.Contains(t, recorder.Body.String(), `"physical_state_verified":false`)
 	}
 }

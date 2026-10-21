@@ -7,13 +7,38 @@ A local Go controller for **MeRGBW LT-06 sunset lamps**, with Stream Deck button
 ## Compatibility and verification
 
 - Targets the LT-06 protocol: advertised service `3519`, GATT service `FFF0`, writes to `FFF3`.
-- **Power ON/OFF packets were verified on an LT-06 using nRF Connect.** RGB and brightness are derived from the protocol reference and still need physical verification.
-- The Go BLE implementation requires testing on a Mac with the actual lamp. Other devices using the MeRGBW app are not automatically compatible.
+- **The Go BLE path was verified on one LT-06 on macOS on 2026-10-21:** ON/OFF, white and RGB colors, brightness 0/50/100%, and all six local presets, with user-confirmed visual effects. See the [hardware verification record](specs/002-ble-command-execution/hardware-verification.md). Power packets were also previously verified using nRF Connect.
+- Verification applies to that device and environment. Other devices using the MeRGBW app are not automatically compatible.
 - There is no physical power/color readback, music synchronization, built-in animation control, or smooth transition support.
 
-## Quick start on macOS
+## Prebuilt releases
 
-Install **Go 1.25.0+** from [go.dev/dl](https://go.dev/dl/) and Apple's **Xcode Command Line Tools** if needed:
+[GitHub Releases](https://github.com/obalunenko/mergbw-controller/releases) provide `sunset_vX.Y.Z_darwin_arm64.tar.gz` (Apple Silicon), `darwin_amd64` (Intel Mac), `linux_amd64` and `linux_arm64` archives. Each includes the executable, both READMEs and the license. Download `SHA256SUMS` and verify the downloaded archive's SHA-256 (`shasum -a 256 <archive>` on macOS, `sha256sum <archive>` on Linux) against its entry before extracting it.
+
+Run from the extracted directory; replace the example identity with your lamp's identity:
+
+```sh
+./sunset --identity AA:BB:CC:DD:EE:FF init
+./sunset serve
+```
+
+Go, Node and Task are not needed to run prebuilt downloads. macOS still requires Bluetooth permission for the launching terminal. Linux requires BlueZ/D-Bus and a Bluetooth adapter. Download and open `com.obalunenko.mergbw.streamDeckPlugin` for the native macOS Stream Deck plugin; configure it as described below with the controller running.
+
+Pushing a `vX.Y.Z` or `vX.Y.Z-prerelease` tag starts the [release workflow](.github/workflows/release.yml). Publication waits for CI checks, all four native controller archives and a validated plugin installer. Releases include `SHA256SUMS`, categorized commit subjects and descriptions, authors, commit links and a full changelog from the nearest reachable release tag. The first release includes all history; direct commits are included without requiring PRs. Prerelease tags produce GitHub prereleases. Published releases remain unchanged on reruns; interrupted draft uploads can be retried.
+
+Local maintainer checks (release notes require the tag and complete Git history):
+
+```sh
+task release:test
+task release:archive RELEASE_TAG=v1.0.0
+task release:notes RELEASE_TAG=v1.0.0 RELEASE_REPOSITORY=obalunenko/mergbw-controller
+```
+
+Generated files are written to `dist/`; local commands do not publish a release. Product versions reported by the controller and plugin remain defined in their source and manifest independently of the repository release tag.
+
+## Quick start on macOS from source
+
+Install **Go 1.27.0+** from [go.dev/dl](https://go.dev/dl/) and Apple's **Xcode Command Line Tools** if needed:
 
 ```bash
 xcode-select --install
@@ -24,21 +49,21 @@ The project uses ordinary Go and `tinygo.org/x/bluetooth v0.16.0`; the TinyGo co
 ```bash
 git clone https://github.com/obalunenko/mergbw-controller.git
 cd mergbw-controller
-bash setup.command --identity AA:BB:CC:DD:EE:FF
-bash run.command
+go tool -modfile=tools/task/go.mod task tools
+task setup -- --identity AA:BB:CC:DD:EE:FF
+task run
 ```
 
-Replace the example identity with the lamp's identity described below. `setup.command` checks the tools, downloads Go modules, builds `sunset`, and initializes local settings. It does not install Go, Xcode, or a background service. On first setup without arguments, an interactive Terminal prompts for the identity. Existing settings are preserved on subsequent runs.
+Replace the example identity with the lamp's identity described below. `task setup` downloads application modules, builds `sunset`, and initializes missing settings. Existing settings are preserved. The controller and pinned development-tool modules require Go 1.27.0 or newer. Install Go and Xcode separately; no background service is installed.
 
-Setup prompts and CLI diagnostic messages are currently in Russian.
+CLI diagnostic messages are currently in Russian.
 
-Alternatively, build and initialize manually:
+Individual preparation steps are available separately:
 
 ```bash
-go mod download
-CGO_ENABLED=1 go build -buildvcs=false -o sunset ./cmd/sunset
-./sunset --identity AA:BB:CC:DD:EE:FF init
-./sunset serve
+task deps
+task build
+task init -- --identity AA:BB:CC:DD:EE:FF
 ```
 
 Disconnect the lamp in nRF Connect and close MeRGBW on the phone before starting the controller. Keep Terminal open or minimized, keep the Mac awake, and use Ctrl+C to stop the server.
@@ -51,11 +76,11 @@ This identity is not the macOS CoreBluetooth UUID. Do not substitute a scanner's
 
 ### macOS Bluetooth permission
 
-Allow Bluetooth access for Terminal, or the terminal application launching `sunset`, in **System Settings → Privacy & Security → Bluetooth**. The BLE dependency creates CoreBluetooth managers during package initialization, so even `init`, `--help`, `send`, or `dry-run` may trigger the permission prompt. This alone does not scan, connect, or send lamp commands. For an iTerm2 `abort: trap`, check its Bluetooth permission or try Apple's Terminal.
+Allow Bluetooth access for Terminal, or the terminal application launching `sunset`, in **System Settings → Privacy & Security → Bluetooth**. The BLE dependency creates CoreBluetooth managers during package initialization, so even `init`, `--help`, `send`, or `dry-run` may trigger the permission prompt. This alone does not scan, connect, or send lamp commands. Task retains the launching terminal's macOS permission context. Warp's missing `NSBluetoothAlwaysUsageDescription` can still cause an abort; Terminal.app worked in the recorded verification. No separate app runner is installed.
 
 ## Stream Deck setup
 
-1. Start `sunset serve` or `run.command` on the same Mac as Stream Deck.
+1. Start `task run` on the same Mac as Stream Deck.
 2. Open the generated **streamdeck-buttons.txt**.
 3. Add **System → Website** to a Stream Deck button.
 4. Paste the complete URL for the desired action.
@@ -63,26 +88,81 @@ Allow Bluetooth access for Terminal, or the terminal application launching `suns
 
 Check ON/OFF first, then verify RGB and brightness. URLs contain the generated access token: keep `settings.json` and `streamdeck-buttons.txt` private. Both are ignored by Git. Normal restarts preserve the token and button URLs.
 
-## CLI
+## Native Stream Deck plugin
 
-Global flags go **before** the subcommand. By default, data files live beside the `sunset` executable.
+Version **0.1.0.0** provides five MeRGBW Keypad actions with one shared Property Inspector. Requirements: macOS **13.5+**, Stream Deck **7.1+**, and a prepared, running local `sunset` controller from the setup above. Building from source requires **Node 24**, npm and the repository Task tools. The plugin uses the local HTTP bridge; it never starts the controller or opens another BLE connection. Existing Website buttons continue to work without migration.
+
+Build an installer from the repository root:
+
+```sh
+make tools
+task plugin:deps
+task plugin:package
+```
+
+Open `dist/com.obalunenko.mergbw.streamDeckPlugin` in Stream Deck, then drag **MeRGBW → On** and **Off** onto keys. In either key's inspector, select EN or RU and import one existing link from your private `streamdeck-buttons.txt`. Import extracts the local port and token without executing the linked command; it does not assign the imported command to the selected key. The standard port is 18765. Port/token are shared across keys; leave the replacement-token field blank to keep the saved token. Imported/password fields clear after submission and the saved token is never echoed.
+
+After manually editing the port or replacement token, click the connection **Save** next to **Check connection**. Check uses the saved connection; a blank replacement token retains the previous one.
+
+Use **Check connection** to see service availability, authorization and Bluetooth separately. Health alone does not verify the token; the authenticated preset catalog does. Bluetooth disconnected does not mean lamp off. Checks and preset refreshes send no lighting commands. All plugin HTTP requests stay on `127.0.0.1`, without redirects, proxies or automatic retries; packaged UI assets work offline.
+
+If a check or preset refresh times out, check `sunset` and the port, then retry that check or refresh. This read-only timeout does not imply a lighting command. You can keep editing during a save; save errors remain visible until the affected setting is saved successfully.
+
+| Action | Assignment |
+| --- | --- |
+| On / Off | One explicit power command |
+| Color | Visual picker or six HEX digits, with optional `#`; default FF5000 |
+| Brightness | Integer 0–100, slider or number field; default 50 |
+| Preset | Select the current controller label; the stable ID is saved |
+
+Color, brightness and presets also turn power on. Save each key's assignment separately. Duplicates can be edited independently; connection details stay outside exported action settings. A profile imported into another installation needs its own shared connection. Custom titles and images retain host precedence over plugin defaults.
+
+After editing controller presets, restart `sunset` and choose **Refresh presets**. Rename preserves the selected ID; duplicate labels include IDs. A known deleted preset blocks its key and asks for a new selection. A failed/unsupported catalog never substitutes a preset; an existing valid ID can still be submitted consciously. An older controller without the catalog needs updating for the list, while compatible power/color/brightness commands remain usable.
+
+A brief standard attention overlay at activation means processing; the inspector says **Executing**. Repeated presses on that pending key add no command. Success means **Command sent**, with lamp state unverified. Rejections show a safe explanation and next step in the inspector. An unknown result or the 45-second observation deadline can have a late physical effect: inspect the lamp before one deliberate new press. The deadline does not promise native BLE cancellation. No command is replayed after restart, settings changes or errors.
+
+Plugin diagnostics are inside `logs/` in the installed plugin directory, or `streamdeck/com.obalunenko.mergbw.sdPlugin/logs/` for a linked development copy. Look for action kind, outcome/category, duration and decimal request ID. INFO is set before SDK connection; do not enable TRACE or payload logging. Tokens, complete command URLs and raw service errors are excluded. For service failure start `sunset` and check the port; for denied access replace the shared token; for backend errors inspect the controller/Bluetooth before retrying.
+
+| Local workflow | Purpose |
+| --- | --- |
+| `task plugin:deps` | Install locked npm dependencies |
+| `task plugin:lint` | Lint and formatting checks |
+| `task plugin:typecheck` | Backend and inspector type checks |
+| `task plugin:test` | Synthetic tests, no host or Bluetooth |
+| `task plugin:build` | Bundle runtime and inspector |
+| `task plugin:validate` | Validate the built plugin |
+| `task plugin:check` | Ordered lint, types, tests, build, validation and content gate |
+| `task plugin:package` | Run check, then replace the generated installer in root dist |
+| `task plugin:link` | Explicit local build/link alternative to installation |
+| `task plugin:watch` | Explicit rebuild/restart of an already linked plugin |
+| `task plugin:mock -- --catalog renamed` | Explicit synthetic service on port 18766 |
+| `task workflows:test` | Verify Task ordering with fake executables |
+
+Checks do not install/link the plugin, start a service or send hardware commands. Do not install and link the same UUID simultaneously. `make tools` and the existing Linux Go `task check` retain their roles. The [plugin quickstart](specs/006-streamdeck-control-plugin/quickstart.md) describes synthetic catalog/failure modes, host acceptance and separate equipment checks. See [validation](specs/006-streamdeck-control-plugin/validation.md) and [physical verification](specs/006-streamdeck-control-plugin/hardware-verification.md) for observed results and explicit acceptance exclusions. On one LT-06, the owner verified plugin On/Off, RGB FF5000, brightness 25/75 and sunset on macOS 27.0.1 with Stream Deck 7.6.0; this does not add machine state readback. Builds and simulated responses do not verify the lamp.
+
+Linked development requires Stream Deck developer mode, enabled explicitly with `streamdeck/node_modules/.bin/streamdeck dev` before using `task plugin:link` or `task plugin:watch`. A successful CLI restart alone does not prove loading: confirm the five MeRGBW actions and `plugin.ready` in the log. To switch a linked copy to the normal installer, run `streamdeck/node_modules/.bin/streamdeck unlink com.obalunenko.mergbw` without `--delete`, then open the installer. Unlinking preserves the repository files.
+
+## Task commands
+
+Task builds the controller before each application command. Pass arguments after `--`. Runtime and hardware tasks use the repository root for settings by default; override it with `MERGBW_DATA_DIR` or the Task variable `DATA_DIR`.
 
 ```bash
-./sunset --identity AA:BB:CC:DD:EE:FF init
-./sunset serve
-./sunset urls
-./sunset send off
-./sunset send on
-./sunset send color FF5000
-./sunset send brightness 40
-./sunset send preset sunset
-./sunset dry-run on
-./sunset dry-run preset sunset
-./sunset inspect
+task init -- --identity AA:BB:CC:DD:EE:FF
+task run                         # alias: task serve
+task urls
+task send -- off
+task send -- on
+task send -- color FF5000
+task send -- brightness 40
+task send -- preset sunset
+task dry-run -- on
+task dry-run -- preset sunset
+task inspect
+task version
 ```
 
 - `init` creates missing files and retains existing settings/presets. A new configuration requires `--identity`; `serve` can also initialize with that flag. A different identity cannot silently replace an existing one: stop the server and edit `settings.json` explicitly to change lamps.
-- `send` is an HTTP client. Leave the server running and execute it from another Terminal.
+- `send` is an HTTP client. Leave `task run` running and execute `task send` from another terminal.
 - `inspect` discovers and connects to the configured lamp to show advertisement/GATT information, without writing control packets. Stop `serve` before using it.
 - `dry-run` prints packets without connecting to the lamp or sending commands.
 - `urls` regenerates and prints the current button URLs.
@@ -90,8 +170,9 @@ Global flags go **before** the subcommand. By default, data files live beside th
 For a separate data directory, use the same directory in each command:
 
 ```bash
-./sunset --data-dir ./local-data --identity AA:BB:CC:DD:EE:FF init
-./sunset --data-dir ./local-data serve
+export MERGBW_DATA_DIR="$HOME/.config/mergbw"
+task init -- --identity AA:BB:CC:DD:EE:FF
+task run
 ```
 
 Keep a custom data directory outside the repository or add it to your local Git exclusions.
@@ -103,6 +184,7 @@ The service binds to IPv4 loopback. Command URLs accept **GET or POST**, with no
 | Path | Operation |
 |---|---|
 | `/health` | Service and BLE connection status; no token required |
+| `/<token>/presets` | GET-only authenticated ID/label catalog; no BLE calls |
 | `/<token>/on` | Power on |
 | `/<token>/off` | Power off |
 | `/<token>/color/FF5000` | Set six-digit RGB color |
@@ -128,7 +210,7 @@ time=2026-01-01T12:00:00.000Z level=INFO msg=bluetooth.connected identity=AA:BB:
 Successful `/health` requests are quiet. Access tokens and complete command URLs are excluded from logs. Logs normally stay in Terminal; to also append them to a file, run from the project directory:
 
 ```bash
-bash run.command 2>&1 | tee -a sunset.log
+task run 2>&1 | tee -a sunset.log
 ```
 
 `*.log` is ignored by Git. The file contains device identifiers and command history. Logging does not change macOS Bluetooth permission requirements.
@@ -149,19 +231,60 @@ Stop the Python server, copy its `settings.json` and `presets.json` beside the G
 |---|---|
 | `cmd/sunset` | CLI and server lifecycle |
 | `internal/protocol` | Packet encoding and validation |
-| `internal/ble` | Discovery, GATT, and BLE writes |
+| `internal/ble` | Discovery, GATT, and BLE writes through synchronous interfaces |
+| `internal/ble/native` | TinyGo Bluetooth adapter; importing it may initialize CoreBluetooth |
 | `internal/controller` | Command serialization and reconnect handling |
 | `internal/bridge` | Local HTTP API |
 | `internal/config` | Settings, presets, and button URLs |
 
+Install the pinned development tools, then use the project workflows:
+
 ```bash
-go test ./internal/protocol ./internal/config ./internal/controller ./internal/bridge
-go test -race ./internal/controller ./internal/bridge
+task tools
+task --list
+task build
+task test:core
+task test:race
+task workflows:test
 ```
 
-The [CI workflow](.github/workflows/ci.yml) runs tests, the core race checks, vet, and build on Linux with Go 1.25.x and the current stable Go release. A separate macOS job compiles the CoreBluetooth backend with CGO; it does not run the controller or BLE tests. Neither these tests nor a successful macOS build validate a physical lamp. Hardware verification remains limited to the power packets described above.
+`task tools` delegates to the Make bootstrap, which installs tools declared in `tools/*/go.mod` with `go install tool`. If Task is not installed yet, use `go tool -modfile=tools/task/go.mod task tools`; `make tools` remains available for bootstrapping. Task 3.54.0 is pinned in `tools/task/go.mod` with its dependencies locked in `tools/task/go.sum`. Add `$(go env GOPATH)/bin` to `PATH` if needed, or run `go tool -modfile=tools/task/go.mod task --list` directly. The controller and both tool modules require Go 1.27.0 or newer. Go downloads the required toolchain automatically unless `GOTOOLCHAIN=local` is set.
+
+`task workflows:test` checks Task ordering, argument/data-directory forwarding, error propagation, and hardware prerequisites using recording executables without native Bluetooth.
+
+Go tests use Testify 1.11.1 assertions and Uber Mock 0.6.0 interface mocks. The test libraries belong to root `go.mod`; the generator is pinned separately in `tools/mockgen/go.mod` (Go 1.27.0). Run `task mocks:generate` after changing an interface and commit the generated `mock_*_test.go` files. Generation uses the pinned module directly, without relying on a global mockgen version.
+
+`task test:core` and `task test:race` include the BLE backend with generated adapter/device mocks. They do not import the native Bluetooth adapter or require equipment/permissions. Default `task test` also excludes hardware tests.
+
+Real-equipment integration tests require the `hardware` build tag and run only locally through a separate opt-in task. Stop `task run` and disconnect other clients. With settings in the repository root:
+
+```bash
+task test:hardware
+```
+
+The task rejects CI execution and requires settings.json and presets.json in the selected directory. For other settings, use `MERGBW_DATA_DIR=/absolute/path/to/lamp-config task test:hardware`. `TestHardwareLamp` inspects FFF0/FFF3, then resolves and sends real commands through the controller and native BLE backend on one persistent link. It establishes a white/100% baseline, checks OFF/ON transmission, red/green/blue, brightness 0/50/100%, every preset from local configuration in sorted order, and a final OFF. Each successful command pauses for two seconds and prints its expected visual effect. The sequence stops on the first failure and releases the connection; final OFF is reached only if preceding steps succeed. The task has a 15-minute overall timeout; individual operations use cooperative 35-second contexts.
+
+PASS confirms connection/GATT and command transmission, without physical state readback. Observe the lamp and record the device, command, and actual effect separately; keep device identifiers and secrets in local records. The [2026-10-21 verification](specs/002-ble-command-execution/hardware-verification.md) ran all command cases in separate filtered invocations with user confirmations; it did not run the whole sequence uninterrupted. Brightness changes were compared visually, without calibrated measurements. Importing the native package may request macOS Bluetooth permission. If Warp aborts with a missing `NSBluetoothAlwaysUsageDescription`, run the test from Terminal.app, which succeeded in this session. Hardware tests are excluded from normal tests, race checks, `task check`, and CI; compilation or a skipped test is not hardware-verification evidence.
+
+The [CI workflow](.github/workflows/ci.yml) runs tests, the core race checks, vet, and build on Linux with Go 1.27.x and the current stable Go release. A separate macOS job compiles the CoreBluetooth backend with CGO; it does not run the controller or BLE tests. Neither these tests nor a successful macOS build validate a physical lamp. Physical evidence comes from the separate local verification described above.
 
 If the BLE backend reports that the process must be restarted, stop the server and start it again. Repeated commands cannot recover a native adapter marked unusable after an uncertain operation.
+
+### Spec Kit
+
+Specification tooling requires Python 3.11+ and [uv](https://docs.astral.sh/uv/getting-started/installation/):
+
+```bash
+task speckit:install
+task speckit:update:check
+task speckit:update:test
+```
+
+The Taskfile.yml pins Spec Kit 1.1.3, Companion 0.25.0, Brownfield 1.0.0, Bugfix 1.1.0, and the local feature-numbering extension 1.0.0. Installation uses `uv tool install` for the Specify CLI and installs all four project extensions with Codex skills. Existing Spec Kit initialization is preserved; a fresh project is initialized for Codex automatically. Restart Codex after installation to reload the generated skills.
+
+New feature directories use `specs/NNN-feature-name`, starting at `001`. The mandatory `before_specify` hook selects the next number for both stock Specify and Companion; its source lives in `.speckit/feature-numbering/`.
+
+The update check reports installed versions, pin drift, and available upstream releases without installing updates. It also checks the Companion editor extension when the VS Code or Cursor CLI is available. Edit the Taskfile.yml pins and rerun `task speckit:install` to apply an update. `task speckit:update:test` runs the checker's regression tests locally without network access.
 
 ## Protocol references
 

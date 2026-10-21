@@ -1,0 +1,6 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": { "outDir": ".test-build", "rootDir": ".", "allowJs": true },
+    "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/*.mjs"],
+    "exclude": ["src/plugin.ts", "src/ui", "scripts/check-package.mjs"]
+}

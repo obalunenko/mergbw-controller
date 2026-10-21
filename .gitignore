@@ -36,7 +36,19 @@ go.work.sum
 /sunset
 /settings.json
 /streamdeck-buttons.txt
+/.hardware-verification/
 /bin/
 /dist/
 *.log
 .DS_Store
+
+# Python tooling caches
+__pycache__/
+*.pyc
+
+# Stream Deck development and generated runtime bundles
+/streamdeck/node_modules/
+/streamdeck/.test-build/
+/streamdeck/com.obalunenko.mergbw.sdPlugin/bin/
+/streamdeck/com.obalunenko.mergbw.sdPlugin/ui/inspector.js
+/streamdeck/com.obalunenko.mergbw.sdPlugin/logs/

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/obalunenko/mergbw-controller/internal/ble"
+	"github.com/obalunenko/mergbw-controller/internal/ble/native"
 	"github.com/obalunenko/mergbw-controller/internal/bridge"
 	"github.com/obalunenko/mergbw-controller/internal/config"
 	"github.com/obalunenko/mergbw-controller/internal/controller"
@@ -35,15 +36,7 @@ func (l lampLink) Connect(ctx context.Context) error {
 }
 
 func (l lampLink) CanRetry(err error) bool {
-	for _, permanent := range []error{
-		context.Canceled, context.DeadlineExceeded, ble.ErrIncompatible,
-		ble.ErrPermission, ble.ErrNeedsRestart, ble.ErrWriteUncertain, ble.ErrInvalidPacket,
-	} {
-		if errors.Is(err, permanent) {
-			return false
-		}
-	}
-	return true
+	return ble.CanRetry(err)
 }
 
 func usage() {
@@ -197,7 +190,7 @@ func run(args []string) error {
 func newBackend(settings config.Settings) (*ble.Backend, error) {
 	return ble.New(ble.Config{
 		Identity: settings.DeviceIdentity, ScanTimeout: 12 * time.Second, ConnectTimeout: 12 * time.Second,
-	})
+	}, native.DefaultAdapter())
 }
 
 func send(settings config.Settings, action protocol.Action) (result error) {
@@ -225,11 +218,10 @@ func send(settings config.Settings, action protocol.Action) (result error) {
 	response, err := client.Get(settings.BaseURL() + "/" + action.Route)
 	if err != nil {
 		// url.Error includes the local secret; show only its underlying error.
-		var urlErr *url.Error
-		if errors.As(err, &urlErr) {
+		if urlErr, ok := errors.AsType[*url.Error](err); ok {
 			err = urlErr.Err
 		}
-		return fmt.Errorf("HTTP-контроллер недоступен: %w; запустите run.command", err)
+		return fmt.Errorf("HTTP-контроллер недоступен: %w; запустите task run", err)
 	}
 	defer response.Body.Close()
 	requestID = response.Header.Get("X-Request-ID")
@@ -277,7 +269,7 @@ func serve(settings config.Settings, presets map[string]protocol.Preset) error {
 			if ctx.Err() == nil {
 				hint := "Следующая команда попробует подключиться."
 				if errors.Is(err, ble.ErrNeedsRestart) {
-					hint = "Остановите и снова запустите run.command."
+					hint = "Остановите и снова запустите task run."
 				}
 				slog.Warn("bluetooth.unavailable", "identity", settings.DeviceIdentity, "error", err, "hint", hint)
 			}
