@@ -45,14 +45,18 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: tools/task/go.mod
-          cache-dependency-path: tools/task/go.sum
+          cache-dependency-path: |
+            go.sum
+            tools/task/go.sum
+            tools/mockgen/go.sum
       - name: Install pinned repository tools
         run: make tools
       - name: Set up application Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          # Both setups share the same Go cache directories; restore only once.
+          cache: false
       # Compile/link on each native platform; never execute the BLE binary.
       - name: Build and archive controller
         run: task release:archive

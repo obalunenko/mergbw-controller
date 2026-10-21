@@ -37,14 +37,18 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: tools/task/go.mod
-          cache-dependency-path: tools/task/go.sum
+          cache-dependency-path: |
+            go.sum
+            tools/task/go.sum
+            tools/mockgen/go.sum
       - name: Install pinned repository tools
         run: make tools
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
-          cache-dependency-path: go.sum
+          # Both setups share the same Go cache directories; restore only once.
+          cache: false
       - name: Run all tests without Bluetooth hardware
         run: task test
       - name: Check core concurrency with the race detector
@@ -69,14 +73,18 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: tools/task/go.mod
-          cache-dependency-path: tools/task/go.sum
+          cache-dependency-path: |
+            go.sum
+            tools/task/go.sum
+            tools/mockgen/go.sum
       - name: Install pinned repository tools
         run: make tools
       - name: Set up minimum Go version
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          # Both setups share the same Go cache directories; restore only once.
+          cache: false
       # Importing the native BLE package at runtime can prompt for Bluetooth
       # access. Compile/link with CGO here; do not run the binary or BLE tests.
       - name: Build macOS controller with CGO
