@@ -14,8 +14,9 @@
 
 ## Technical Context
 
-**Language/Version**: Go 1.25.0+ for the controller; Go 1.27.0 for
-`tools/task/`. Python 3.11+ and Bash support local Spec Kit tooling.
+**Language/Version**: Go 1.27.0+ for the controller and the separate
+`tools/task/` and `tools/mockgen/` modules. Python 3.11+ and Bash support local
+Spec Kit tooling.
 
 **Primary Dependencies**: Standard library plus `tinygo.org/x/bluetooth v0.16.0`;
 Task 3.54.0 in the separate tools module. [List feature-specific changes.]

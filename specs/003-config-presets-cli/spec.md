@@ -302,7 +302,7 @@ into migrated artifacts. Existing fixture identities/tokens in tests are
 synthetic. Data files are intended to be edited while the server is stopped;
 custom directories must be consistently selected for each command.
 
-Runtime config/CLI dependencies remain Go 1.25.0+ and, on macOS, CGO/Xcode and
+Runtime config/CLI dependencies require Go 1.27.0+ and, on macOS, CGO/Xcode and
 Bluetooth permission. Task/Spec Kit developer-tool installation is a separate
 feature, not a prerequisite introduced into user setup by this migration.
 CLI import of ble may initialize CoreBluetooth even on help/dry-run. Existing

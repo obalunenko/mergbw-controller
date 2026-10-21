@@ -23,7 +23,7 @@ transport or to treat pending hardware verification as complete.
 
 ## Technical Context
 
-- **Language/Version**: Go 1.25.0+ application; Go 1.27.0 for separate tooling.
+- **Language/Version**: Go 1.27.0+ application and separate tooling modules.
 - **Primary dependency**: tinygo.org/x/bluetooth v0.16.0; standard-library
   context, synchronization, timers, errors, encoding, and log/slog.
 - **Storage**: In-memory connection/controller state and externally supplied

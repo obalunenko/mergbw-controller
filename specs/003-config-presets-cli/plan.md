@@ -21,7 +21,7 @@ specified dependencies. This is documentation of built work.
 
 ## Technical Context
 
-- **Language/Version**: Go 1.25.0+ application; Bash 3.2-compatible macOS wrappers.
+- **Language/Version**: Go 1.27.0+ application; Bash 3.2-compatible macOS wrappers.
   Development tools use a separate module and do not become runtime dependencies.
 - **Dependencies**: Standard-library JSON/filesystem/random/base64/flags/path
   handling; protocol.ValidatePresets/Resolve; native BLE/HTTP composition through

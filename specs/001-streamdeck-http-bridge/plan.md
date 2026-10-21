@@ -20,7 +20,7 @@ This is a record of built work, not a proposal to rebuild it.
 
 ## Technical Context
 
-- **Language/Version**: Go 1.25.0+ application; separate Go 1.27.0 tooling module.
+- **Language/Version**: Go 1.27.0+ application and separate tooling modules.
 - **Dependencies**: Handler uses net/http, context, encoding/json, crypto/subtle,
   log/slog, and sync/atomic, plus internal config/protocol/logging. Native
   Bluetooth is supplied at the composition root through tinygo.org/x/bluetooth

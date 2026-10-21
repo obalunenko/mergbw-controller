@@ -21,7 +21,7 @@ cross-cutting diagnostics for the already migrated [HTTP](../001-streamdeck-http
 
 ## Technical Context
 
-- **Language/Version**: Application Go 1.25.0+; standard-library context, slog,
+- **Language/Version**: Application Go 1.27.0+; standard-library context, slog,
   strings, atomic, time, net/http, and error handling. No logging library added.
 - **Integration**: Bridge and controller depend on logging, not each other’s
   concrete transports; main configures the process handler and composes native BLE.

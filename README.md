@@ -38,7 +38,7 @@ Generated files are written to `dist/`; local commands do not publish a release.
 
 ## Quick start on macOS from source
 
-Install **Go 1.25.0+** from [go.dev/dl](https://go.dev/dl/) and Apple's **Xcode Command Line Tools** if needed:
+Install **Go 1.27.0+** from [go.dev/dl](https://go.dev/dl/) and Apple's **Xcode Command Line Tools** if needed:
 
 ```bash
 xcode-select --install
@@ -54,7 +54,7 @@ task setup -- --identity AA:BB:CC:DD:EE:FF
 task run
 ```
 
-Replace the example identity with the lamp's identity described below. `task setup` downloads application modules, builds `sunset`, and initializes missing settings. Existing settings are preserved. The pinned Task module requires Go 1.27.0; Go downloads that toolchain automatically when needed. Install Go and Xcode separately; no background service is installed.
+Replace the example identity with the lamp's identity described below. `task setup` downloads application modules, builds `sunset`, and initializes missing settings. Existing settings are preserved. The controller and pinned development-tool modules require Go 1.27.0 or newer. Install Go and Xcode separately; no background service is installed.
 
 CLI diagnostic messages are currently in Russian.
 
@@ -248,11 +248,11 @@ task test:race
 task workflows:test
 ```
 
-`task tools` delegates to the Make bootstrap, which installs tools declared in `tools/*/go.mod` with `go install tool`. If Task is not installed yet, use `go tool -modfile=tools/task/go.mod task tools`; `make tools` remains available for bootstrapping. Task 3.54.0 is pinned in `tools/task/go.mod` with its dependencies locked in `tools/task/go.sum`. Add `$(go env GOPATH)/bin` to `PATH` if needed, or run `go tool -modfile=tools/task/go.mod task --list` directly. The Task tool module requires Go 1.27.0; Go downloads the required toolchain automatically unless `GOTOOLCHAIN=local` is set. The controller still requires Go 1.25.0+.
+`task tools` delegates to the Make bootstrap, which installs tools declared in `tools/*/go.mod` with `go install tool`. If Task is not installed yet, use `go tool -modfile=tools/task/go.mod task tools`; `make tools` remains available for bootstrapping. Task 3.54.0 is pinned in `tools/task/go.mod` with its dependencies locked in `tools/task/go.sum`. Add `$(go env GOPATH)/bin` to `PATH` if needed, or run `go tool -modfile=tools/task/go.mod task --list` directly. The controller and both tool modules require Go 1.27.0 or newer. Go downloads the required toolchain automatically unless `GOTOOLCHAIN=local` is set.
 
 `task workflows:test` checks Task ordering, argument/data-directory forwarding, error propagation, and hardware prerequisites using recording executables without native Bluetooth.
 
-Go tests use Testify 1.11.1 assertions and Uber Mock 0.6.0 interface mocks. The test libraries belong to root `go.mod`; the generator is pinned separately in `tools/mockgen/go.mod` (Go 1.25.0). Run `task mocks:generate` after changing an interface and commit the generated `mock_*_test.go` files. Generation uses the pinned module directly, without relying on a global mockgen version.
+Go tests use Testify 1.11.1 assertions and Uber Mock 0.6.0 interface mocks. The test libraries belong to root `go.mod`; the generator is pinned separately in `tools/mockgen/go.mod` (Go 1.27.0). Run `task mocks:generate` after changing an interface and commit the generated `mock_*_test.go` files. Generation uses the pinned module directly, without relying on a global mockgen version.
 
 `task test:core` and `task test:race` include the BLE backend with generated adapter/device mocks. They do not import the native Bluetooth adapter or require equipment/permissions. Default `task test` also excludes hardware tests.
 
@@ -266,7 +266,7 @@ The task rejects CI execution and requires settings.json and presets.json in the
 
 PASS confirms connection/GATT and command transmission, without physical state readback. Observe the lamp and record the device, command, and actual effect separately; keep device identifiers and secrets in local records. The [2026-10-21 verification](specs/002-ble-command-execution/hardware-verification.md) ran all command cases in separate filtered invocations with user confirmations; it did not run the whole sequence uninterrupted. Brightness changes were compared visually, without calibrated measurements. Importing the native package may request macOS Bluetooth permission. If Warp aborts with a missing `NSBluetoothAlwaysUsageDescription`, run the test from Terminal.app, which succeeded in this session. Hardware tests are excluded from normal tests, race checks, `task check`, and CI; compilation or a skipped test is not hardware-verification evidence.
 
-The [CI workflow](.github/workflows/ci.yml) runs tests, the core race checks, vet, and build on Linux with Go 1.25.x and the current stable Go release. A separate macOS job compiles the CoreBluetooth backend with CGO; it does not run the controller or BLE tests. Neither these tests nor a successful macOS build validate a physical lamp. Physical evidence comes from the separate local verification described above.
+The [CI workflow](.github/workflows/ci.yml) runs tests, the core race checks, vet, and build on Linux with Go 1.27.x and the current stable Go release. A separate macOS job compiles the CoreBluetooth backend with CGO; it does not run the controller or BLE tests. Neither these tests nor a successful macOS build validate a physical lamp. Physical evidence comes from the separate local verification described above.
 
 If the BLE backend reports that the process must be restarted, stop the server and start it again. Repeated commands cannot recover a native adapter marked unusable after an uncertain operation.
 

@@ -16,7 +16,7 @@ Setup-plan возвращает логическое имя feature `006-streamd
 
 ## Technical Context
 
-**Language/Version**: Go 1.25.0 для контроллера; TypeScript strict для плагина и UI; Node 24.x, target ES2022. Go 1.27.0 остаётся отдельной версией tools/task; tools/mockgen остаётся Go 1.25.0. Python/Bash используются только для существующих dev workflows.
+**Language/Version**: Go 1.27.0+ для контроллера; TypeScript strict для плагина и UI; Node 24.x, target ES2022. Отдельные модули tools/task и tools/mockgen также требуют Go 1.27.0+. Python/Bash используются только для существующих dev workflows.
 
 **Primary Dependencies**: Контроллер сохраняет stdlib, TinyGo Bluetooth v0.16.0, Testify v1.11.1 и GoMock v0.6.0 без новых Go-зависимостей. Плагин: @elgato/streamdeck 3.0.3; dev @elgato/cli 1.10.3, TypeScript, Rollup и его scaffold plugins, @types/node 24.x, Elgato ESLint/Prettier configurations и совместимые peer tools. Все npm зависимости локальны streamdeck/, точные версии и integrity фиксируются package-lock.json при реализации. SDPI Components v4 vendored с checksum и лицензией; runtime CDN нет.
 

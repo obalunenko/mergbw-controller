@@ -218,8 +218,7 @@ func send(settings config.Settings, action protocol.Action) (result error) {
 	response, err := client.Get(settings.BaseURL() + "/" + action.Route)
 	if err != nil {
 		// url.Error includes the local secret; show only its underlying error.
-		var urlErr *url.Error
-		if errors.As(err, &urlErr) {
+		if urlErr, ok := errors.AsType[*url.Error](err); ok {
 			err = urlErr.Err
 		}
 		return fmt.Errorf("HTTP-контроллер недоступен: %w; запустите task run", err)

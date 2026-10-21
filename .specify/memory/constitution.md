@@ -157,11 +157,12 @@ Evidence: source filenames and identifiers, Git history, READMEs, and
 - Use standard Go formatting for changed Go files and `task vet` for static
   analysis. No additional linter configuration is currently established.
 - `make tools` installs pinned tools from `tools/*/go.mod`; project workflows
-  live in `Taskfile.yml`. Application and tooling Go versions are declared
-  separately in their respective modules. This ownership also applies to the
+  live in `Taskfile.yml`. The controller and all development-tool modules MUST
+  require Go 1.27.0 or newer, with versions declared separately in their
+  respective modules. This ownership also applies to the
   pinned mockgen executable; application test libraries remain in root go.mod.
 - Linux CI runs `task test`, `task test:race`, `task vet`, and `task build` with
-  Go 1.25.x and stable. macOS CI builds the CoreBluetooth backend with CGO and
+  Go 1.27.x and stable. macOS CI builds the CoreBluetooth backend with CGO and
   does not execute BLE tests or lamp commands.
 - On macOS, use `task test:core` and `task test:race` for tests that do not
   initialize native Bluetooth. `task check` includes the full suite and is
@@ -195,4 +196,16 @@ exceptions. Keep code, feature artifacts, tooling, templates, and bilingual
 documentation consistent through the relevant scoped changes; constitution
 updates themselves modify only this document.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-20 | **Last Amended**: 2026-10-20
+### Amendment: Go 1.27 Baseline (2026-10-22)
+
+Rationale: align the controller and mockgen with the existing Task module's
+Go 1.27 requirement and use one minimum Go release across the project.
+Affected policy: Quality Gates and Development Tools; package boundaries and
+runtime contracts remain unchanged. Required migration: raise the controller
+and mockgen module directives to Go 1.27.0, update the Linux CI baseline to
+1.27.x, and align bilingual documentation, feature artifacts, and the plan
+template. Verify core tests, race checks, vet, and the native macOS build;
+Linux runs the full suite through CI. No hardware-verification claim follows
+from this toolchain migration.
+
+**Version**: 1.2.0 | **Ratified**: 2026-10-20 | **Last Amended**: 2026-10-22
