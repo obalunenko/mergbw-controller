@@ -2,7 +2,9 @@ name: CI
 
 "on":
   push:
+    tags-ignore: ["**"] # Tag checks are called by release.yml.
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -51,6 +53,8 @@ jobs:
         run: task vet
       - name: Build Linux controller
         run: task build
+      - name: Check release tooling without Bluetooth
+        run: task release:test
 
   macos:
     name: macOS / CoreBluetooth build

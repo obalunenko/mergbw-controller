@@ -11,7 +11,32 @@ A local Go controller for **MeRGBW LT-06 sunset lamps**, with Stream Deck button
 - Verification applies to that device and environment. Other devices using the MeRGBW app are not automatically compatible.
 - There is no physical power/color readback, music synchronization, built-in animation control, or smooth transition support.
 
-## Quick start on macOS
+## Prebuilt releases
+
+[GitHub Releases](https://github.com/obalunenko/mergbw-controller/releases) provide `sunset_vX.Y.Z_darwin_arm64.tar.gz` (Apple Silicon), `darwin_amd64` (Intel Mac), `linux_amd64` and `linux_arm64` archives. Each includes the executable, both READMEs and the license. Download `SHA256SUMS` and verify the downloaded archive's SHA-256 (`shasum -a 256 <archive>` on macOS, `sha256sum <archive>` on Linux) against its entry before extracting it.
+
+Run from the extracted directory; replace the example identity with your lamp's identity:
+
+```sh
+./sunset --identity AA:BB:CC:DD:EE:FF init
+./sunset serve
+```
+
+Go, Node and Task are not needed to run prebuilt downloads. macOS still requires Bluetooth permission for the launching terminal. Linux requires BlueZ/D-Bus and a Bluetooth adapter. Download and open `com.obalunenko.mergbw.streamDeckPlugin` for the native macOS Stream Deck plugin; configure it as described below with the controller running.
+
+Pushing a `vX.Y.Z` or `vX.Y.Z-prerelease` tag starts the [release workflow](.github/workflows/release.yml). Publication waits for CI checks, all four native controller archives and a validated plugin installer. Releases include `SHA256SUMS`, categorized commit subjects and descriptions, authors, commit links and a full changelog from the nearest reachable release tag. The first release includes all history; direct commits are included without requiring PRs. Prerelease tags produce GitHub prereleases. Published releases remain unchanged on reruns; interrupted draft uploads can be retried.
+
+Local maintainer checks (release notes require the tag and complete Git history):
+
+```sh
+task release:test
+task release:archive RELEASE_TAG=v1.0.0
+task release:notes RELEASE_TAG=v1.0.0 RELEASE_REPOSITORY=obalunenko/mergbw-controller
+```
+
+Generated files are written to `dist/`; local commands do not publish a release. Product versions reported by the controller and plugin remain defined in their source and manifest independently of the repository release tag.
+
+## Quick start on macOS from source
 
 Install **Go 1.25.0+** from [go.dev/dl](https://go.dev/dl/) and Apple's **Xcode Command Line Tools** if needed:
 

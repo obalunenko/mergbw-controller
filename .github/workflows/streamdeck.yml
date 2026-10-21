@@ -2,6 +2,7 @@ name: Stream Deck
 
 "on":
   push:
+    tags-ignore: ["**"] # Tag packaging and checks run in release.yml.
   pull_request:
 
 permissions:

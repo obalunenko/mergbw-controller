@@ -24,6 +24,26 @@ tasks:
     cmds:
       - '{{.GO}} build -trimpath -buildvcs=false -o sunset ./cmd/sunset'
 
+  release:archive:
+    desc: Build a native controller release archive in dist (requires RELEASE_TAG=vX.Y.Z).
+    requires:
+      vars: [RELEASE_TAG]
+    cmds:
+      - task: build
+      - '{{.PYTHON}} scripts/release.py archive --tag {{shellQuote .RELEASE_TAG}} --go {{shellQuote .GO}}'
+
+  release:notes:
+    desc: Generate release notes from local tags and history (requires RELEASE_TAG and RELEASE_REPOSITORY=owner/repo).
+    requires:
+      vars: [RELEASE_TAG, RELEASE_REPOSITORY]
+    cmds:
+      - '{{.PYTHON}} scripts/release.py notes --tag {{shellQuote .RELEASE_TAG}} --repository {{shellQuote .RELEASE_REPOSITORY}} --output dist/release-notes.md'
+
+  release:test:
+    desc: Check release history selection and archive contents without network or Bluetooth.
+    cmds:
+      - '{{.PYTHON}} scripts/test_release.py'
+
   tools:
     desc: Install pinned development tools through the Make bootstrap.
     cmds:
