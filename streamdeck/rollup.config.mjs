@@ -2,7 +2,10 @@ import commonjs from "@rollup/plugin-commonjs";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import typescript from "@rollup/plugin-typescript";
 
-const runtime = "com.obalunenko.mergbw.sdPlugin";
+const runtime =
+	process.env.MERGBW_PLUGIN_STAGE === "1"
+		? "../dist/plugin-stage/com.obalunenko.mergbw.sdPlugin"
+		: "com.obalunenko.mergbw.sdPlugin";
 export default [
 	{
 		input: "src/plugin.ts",

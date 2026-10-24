@@ -9,7 +9,7 @@ A local Go controller for **MeRGBW LT-06 sunset lamps**, with Stream Deck button
 - Targets the LT-06 protocol: advertised service `3519`, GATT service `FFF0`, writes to `FFF3`.
 - **The Go BLE path was verified on one LT-06 on macOS on 2026-10-21:** ON/OFF, white and RGB colors, brightness 0/50/100%, and all six local presets, with user-confirmed visual effects. See the [hardware verification record](specs/002-ble-command-execution/hardware-verification.md). Power packets were also previously verified using nRF Connect.
 - Verification applies to that device and environment. Other devices using the MeRGBW app are not automatically compatible.
-- There is no physical power/color readback, music synchronization, built-in animation control, or smooth transition support.
+- There is no physical power/color readback, music synchronization or built-in animation control. Software-driven RGB/brightness transitions and the owner-observed home-use results are described below.
 
 ## Prebuilt releases
 
@@ -22,9 +22,9 @@ Run from the extracted directory; replace the example identity with your lamp's 
 ./sunset serve
 ```
 
-Go, Node and Task are not needed to run prebuilt downloads. macOS still requires Bluetooth permission for the launching terminal. Linux requires BlueZ/D-Bus and a Bluetooth adapter. Download and open `com.obalunenko.mergbw.streamDeckPlugin` for the native macOS Stream Deck plugin; configure it as described below with the controller running.
+The standalone archives need no Go, Node or Task. On macOS, the standalone CLI needs Bluetooth permission for its launching terminal; Linux needs BlueZ/D-Bus and an adapter. The macOS Stream Deck plugin 0.2 installer, `com.obalunenko.mergbw.development.streamDeckPlugin`, contains its own controller and uses the in-panel setup below.
 
-Pushing a `vX.Y.Z` or `vX.Y.Z-prerelease` tag starts the [release workflow](.github/workflows/release.yml). Publication waits for CI checks, all four native controller archives and a validated plugin installer. Releases include `SHA256SUMS`, categorized commit subjects and descriptions, authors, commit links and a full changelog from the nearest reachable release tag. The first release includes all history; direct commits are included without requiring PRs. Prerelease tags produce GitHub prereleases. Published releases remain unchanged on reruns; interrupted draft uploads can be retried.
+Pushing a `vX.Y.Z` or `vX.Y.Z-prerelease` tag starts the [release workflow](.github/workflows/release.yml). Publication waits for CI checks, all four native controller archives and a two-architecture development plugin installer. The plugin job verifies extracted bytes, modes and local ad-hoc signatures without Developer ID or notarization credentials. Releases include `SHA256SUMS`, categorized commit subjects and descriptions, authors, commit links and a full changelog from the nearest reachable release tag. The first release includes all history; direct commits are included without requiring PRs. Prerelease tags produce GitHub prereleases. Published releases remain unchanged on reruns; interrupted draft uploads can be retried.
 
 Local maintainer checks (release notes require the tag and complete Git history):
 
@@ -76,7 +76,7 @@ This identity is not the macOS CoreBluetooth UUID. Do not substitute a scanner's
 
 ### macOS Bluetooth permission
 
-Allow Bluetooth access for Terminal, or the terminal application launching `sunset`, in **System Settings → Privacy & Security → Bluetooth**. The BLE dependency creates CoreBluetooth managers during package initialization, so even `init`, `--help`, `send`, or `dry-run` may trigger the permission prompt. This alone does not scan, connect, or send lamp commands. Task retains the launching terminal's macOS permission context. Warp's missing `NSBluetoothAlwaysUsageDescription` can still cause an abort; Terminal.app worked in the recorded verification. No separate app runner is installed.
+For the standalone CLI, allow Bluetooth access for Terminal, or the terminal application launching `sunset`, in **System Settings → Privacy & Security → Bluetooth**. The BLE dependency creates CoreBluetooth managers during package initialization, so even `init`, `--help`, `send`, or `dry-run` may trigger the permission prompt. This alone does not scan, connect, or send lamp commands. Task retains the launching terminal's macOS permission context. Warp's missing `NSBluetoothAlwaysUsageDescription` can still cause an abort; Terminal.app worked in the recorded verification. No separate app runner is installed.
 
 ## Stream Deck setup
 
@@ -90,57 +90,46 @@ Check ON/OFF first, then verify RGB and brightness. URLs contain the generated a
 
 ## Native Stream Deck plugin
 
-Version **0.1.0.0** provides five MeRGBW Keypad actions with one shared Property Inspector. Requirements: macOS **13.5+**, Stream Deck **7.1+**, and a prepared, running local `sunset` controller from the setup above. Building from source requires **Node 24**, npm and the repository Task tools. The plugin uses the local HTTP bridge; it never starts the controller or opens another BLE connection. Existing Website buttons continue to work without migration.
+Version **0.2.0.0** provides six MeRGBW Keypad actions with one shared setup panel on macOS **13.5+** and Stream Deck **7.1+**. The installer contains the controller for Apple Silicon and Intel. Using a prebuilt installer requires no Terminal, Go, Node.js or separately running server. You need your lamp's manufacturer-data identity; automatic discovery of that identity is outside this feature.
 
-Build an installer from the repository root:
+Open `com.obalunenko.mergbw.development.streamDeckPlugin`, add a MeRGBW action and open its panel. Choose EN or RU and one setup method:
 
-```sh
-make tools
-task plugin:deps
-task plugin:package
-```
+- **Manual identity:** enter six HEX bytes separated by colons, for example `AA:BB:CC:DD:EE:FF`. Use the first six manufacturer payload bytes after the Company ID, rather than a CoreBluetooth UUID. Review and apply. The plugin creates the secret and default presets.
+- **Import files:** select the existing `settings.json` and optionally `presets.json`, review the changes and confirm. Identity, port, secret and selected custom catalog are preserved. Source files remain unchanged. Omitting presets retains the whole current catalog, or initializes defaults when no catalog exists; missing stock keys are never merged into an imported catalog.
 
-Open `dist/com.obalunenko.mergbw.streamDeckPlugin` in Stream Deck, then drag **MeRGBW → On** and **Off** onto keys. In either key's inspector, select EN or RU and import one existing link from your private `streamdeck-buttons.txt`. Import extracts the local port and token without executing the linked command; it does not assign the imported command to the selected key. The standard port is 18765. Port/token are shared across keys; leave the replacement-token field blank to keep the saved token. Imported/password fields clear after submission and the saved token is never echoed.
+Stop the previous standalone `sunset` before applying. A command URL alone lacks the lamp identity. Existing v1 plugin settings can supply their valid port/secret after explicit manual identity entry, but never activate an external server. A port conflict does not authorize connecting to or stopping another process.
 
-After manually editing the port or replacement token, click the connection **Save** next to **Check connection**. Check uses the saved connection; a blank replacement token retains the previous one.
-
-Use **Check connection** to see service availability, authorization and Bluetooth separately. Health alone does not verify the token; the authenticated preset catalog does. Bluetooth disconnected does not mean lamp off. Checks and preset refreshes send no lighting commands. All plugin HTTP requests stay on `127.0.0.1`, without redirects, proxies or automatic retries; packaged UI assets work offline.
-
-If a check or preset refresh times out, check `sunset` and the port, then retry that check or refresh. This read-only timeout does not imply a lighting command. You can keep editing during a save; save errors remain visible until the affected setting is saved successfully.
+All keys share one owned controller and BLE connection. The plugin starts it after setup and blocks commands until its private readiness and authorization checks finish. Setup, checking and restarting send no lighting commands. Allow Bluetooth through macOS when requested; use **System Settings → Privacy & Security → Bluetooth** to re-enable the application actually shown by macOS. The bundled helper opens as **MeRGBW Controller** to request its own Bluetooth permission. Installed-host permission outcomes are recorded separately below.
 
 | Action | Assignment |
 | --- | --- |
 | On / Off | One explicit power command |
-| Color | Visual picker or six HEX digits, with optional `#`; default FF5000 |
-| Brightness | Integer 0–100, slider or number field; default 50 |
-| Preset | Select the current controller label; the stable ID is saved |
+| Color | Visual picker or six HEX digits, optional `#`; default FF5000 |
+| Brightness | Integer 0–100; default 50 |
+| Preset | Current controller label with a stable saved ID |
+| Transition | Explicit starting/ending RGB and brightness, integer duration 1–60 seconds |
 
-Color, brightness and presets also turn power on. Save each key's assignment separately. Duplicates can be edited independently; connection details stay outside exported action settings. A profile imported into another installation needs its own shared connection. Custom titles and images retain host precedence over plugin defaults.
+**Stream Deck+:** assign the existing **Brightness** action to a dial. Each clockwise tick adds one percentage point; counter-clockwise subtracts one, within 0–100%. The touch strip shows a prominent numeric percentage and a separate short status. This is the dial target, not measured lamp brightness. The initial target comes from the saved Brightness value (default 50%), not a lamp reading. Dial changes last for the current visible session; change the saved starting value in the panel. Fast turns combine into the latest target with at most one request in flight per dial. Failed or uncertain requests discard unsent changes. Hiding the dial, changing settings or losing readiness also clears unsent changes; recovery does not replay them. Pressing the dial sends **Off** and preserves its target percentage. A later turn applies that target and turns power on, including an outward turn at 100%. Touching the strip or releasing the dial sends no lighting command. Owner observations for the home-use version are recorded below.
 
-After editing controller presets, restart `sunset` and choose **Refresh presets**. Rename preserves the selected ID; duplicate labels include IDs. A known deleted preset blocks its key and asks for a new selection. A failed/unsupported catalog never substitutes a preset; an existing valid ID can still be submitted consciously. An older controller without the catalog needs updating for the list, while compatible power/color/brightness commands remain usable.
+**Smooth transition:** assign **Transition** to a key and save the starting RGB/brightness, ending RGB/brightness and duration (1–60 seconds). Defaults fade FF5000 from 100% to 0% over 30 seconds. The controller applies the explicit starting values, then interpolates to the endpoint. The initial state can change immediately; it is not read from the lamp. **Accepted** means the background transition was scheduled, not completed. The panel enables **Cancel current transition** after the start is accepted. **Check transition status** refreshes progress or the final result; it is not required before cancelling. Any new valid lighting command, including a brightness-dial turn, cancels the old transition before executing; an in-progress native write must return first. Cancellation sends no extra Off. An endpoint of 0% leaves the power command unchanged. Native operation latency can extend the nominal duration. Closing/restarting the plugin never resumes the transition.
 
-A brief standard attention overlay at activation means processing; the inspector says **Executing**. Repeated presses on that pending key add no command. Success means **Command sent**, with lamp state unverified. Rejections show a safe explanation and next step in the inspector. An unknown result or the 45-second observation deadline can have a late physical effect: inspect the lamp before one deliberate new press. The deadline does not promise native BLE cancellation. No command is replayed after restart, settings changes or errors.
+Color, brightness and presets also turn power on. Save each key separately. Existing UUIDs, assignments, language and custom titles/images are retained. Exported assignments contain no connection secret or imported file paths. An imported profile on another installation needs local lamp setup. A missing preset remains invalid until explicitly reassigned; another preset is never substituted.
 
-Plugin diagnostics are inside `logs/` in the installed plugin directory, or `streamdeck/com.obalunenko.mergbw.sdPlugin/logs/` for a linked development copy. Look for action kind, outcome/category, duration and decimal request ID. INFO is set before SDK connection; do not enable TRACE or payload logging. Tokens, complete command URLs and raw service errors are excluded. For service failure start `sunset` and check the port; for denied access replace the shared token; for backend errors inspect the controller/Bluetooth before retrying.
+The panel distinguishes controller readiness, HTTP authorization and Bluetooth connectivity. Connected or **Command sent** does not verify physical lamp state. Pending is shown in the panel without a key error symbol. A confirmed send shows success; rejected or uncertain results show an alert. During an action, repeated presses on the same pending key add no command. A timeout or lost reply can leave an unknown physical outcome; inspect the lamp before a deliberate new press. Native cancellation is cooperative, and an already started write may finish before process exit.
 
-| Local workflow | Purpose |
-| --- | --- |
-| `task plugin:deps` | Install locked npm dependencies |
-| `task plugin:lint` | Lint and formatting checks |
-| `task plugin:typecheck` | Backend and inspector type checks |
-| `task plugin:test` | Synthetic tests, no host or Bluetooth |
-| `task plugin:build` | Bundle runtime and inspector |
-| `task plugin:validate` | Validate the built plugin |
-| `task plugin:check` | Ordered lint, types, tests, build, validation and content gate |
-| `task plugin:package` | Run check, then replace the generated installer in root dist |
-| `task plugin:link` | Explicit local build/link alternative to installation |
-| `task plugin:watch` | Explicit rebuild/restart of an already linked plugin |
-| `task plugin:mock -- --catalog renamed` | Explicit synthetic service on port 18766 |
-| `task workflows:test` | Verify Task ordering with fake executables |
+Use the panel's explicit **Restart controller** after fixing a reported failure. Recovery preserves configuration and obtains fresh readiness; it never replays commands. If save confirmation is lost, use the read-only configuration check. The panel reports **Saved**, **Not saved** or **Save outcome unknown** and blocks configuration writes and lamp commands while active state cannot be read.
 
-Checks do not install/link the plugin, start a service or send hardware commands. Do not install and link the same UUID simultaneously. `make tools` and the existing Linux Go `task check` retain their roles. The [plugin quickstart](specs/006-streamdeck-control-plugin/quickstart.md) describes synthetic catalog/failure modes, host acceptance and separate equipment checks. See [validation](specs/006-streamdeck-control-plugin/validation.md) and [physical verification](specs/006-streamdeck-control-plugin/hardware-verification.md) for observed results and explicit acceptance exclusions. On one LT-06, the owner verified plugin On/Off, RGB FF5000, brightness 25/75 and sunset on macOS 27.0.1 with Stream Deck 7.6.0; this does not add machine state readback. Builds and simulated responses do not verify the lamp.
+Quitting Stream Deck, disabling or restarting the plugin stops its controller. Pending actions and remaining steps are cancelled without an extra Off command or automatic continuation. No system service or independent autostart is installed. Standalone CLI and GET/POST Website integrations remain available; never run a competing controller on the plugin's port.
 
-Linked development requires Stream Deck developer mode, enabled explicitly with `streamdeck/node_modules/.bin/streamdeck dev` before using `task plugin:link` or `task plugin:watch`. A successful CLI restart alone does not prove loading: confirm the five MeRGBW actions and `plugin.ready` in the log. To switch a linked copy to the normal installer, run `streamdeck/node_modules/.bin/streamdeck unlink com.obalunenko.mergbw` without `--delete`, then open the installer. Unlinking preserves the repository files.
+Lamp configuration lives in `~/Library/Application Support/com.obalunenko.mergbw`, outside the replaceable plugin directory. Updates retain settings, tokens, presets and key assignments. Files are private; treat copies as credentials. Restart does not reread imported source files: import an updated complete configuration through the panel to change it.
+
+For development, install **Go 1.27+**, **Node 24**, pinned project tools and the macOS SDK. Run `task plugin:check:software` for software checks. Full `plugin:check` and `plugin:package` require the complete two-architecture native payload and default to `development`, with local ad-hoc signatures and no Apple credentials. The installer is `dist/com.obalunenko.mergbw.development.streamDeckPlugin`. Developer ID signing/notarization remains an optional explicit `PACKAGE_MODE=distribution` path, outside personal-development acceptance. See the [feature quickstart](specs/007-bundled-plugin-controller/quickstart.md) for exact build, development and explicit link commands. For local development acceptance, the current-Mac `spike` builder and explicit pinned CLI link are sufficient; the fixture remains separate from the universal installer and is rejected by full package checks. Local installation is sufficient; downloading an installer is optional.
+
+Checks use synthetic HTTP/process/BLE fixtures and compile or inspect native binaries without executing the native worker. They do not install/link the plugin or operate a lamp. Diagnostics include safe categories, durations and request IDs, excluding tokens, full command URLs, imported paths and raw native errors. Keep SDK logging at INFO.
+
+[Validation](specs/007-bundled-plugin-controller/validation.md) distinguishes software results from local installation, Bluetooth permission, architecture and LT-06 observations. Developer ID, notarization and downloaded-installer checks are outside personal-development acceptance. Historical [plugin hardware results](specs/006-streamdeck-control-plugin/hardware-verification.md) do not verify this new bundled process and permission chain.
+
+The current local version is accepted for home use on the tested Apple Silicon Mac/LT-06. Additional manual permission/failure/sleep/clean-install/stress rounds are deferred by the owner, not passed. Runtime protections and automated tests remain in place.
 
 ## Task commands
 
@@ -154,6 +143,7 @@ task send -- off
 task send -- on
 task send -- color FF5000
 task send -- brightness 40
+task send -- transition FF5000 100 FF5000 0 30
 task send -- preset sunset
 task dry-run -- on
 task dry-run -- preset sunset

@@ -16,7 +16,7 @@ function event(id: string, key: KeyFacade, settings: Assignment = { schemaVersio
 	return { action: { id, isKey: () => true, ...key }, payload: { settings } };
 }
 function message(type: string, sessionId = "session-a", requestId = type.replaceAll(".", "-")) {
-	return { v: 1, type, sessionId, requestId, payload: {} };
+	return { v: 2, type, sessionId, requestId, payload: {} };
 }
 async function harness() {
 	const storage = new MemoryStorage();
@@ -89,7 +89,7 @@ test("hide and reappear preserve the same busy guard and equivalent revision wit
 	const second = event("a", restored);
 	await action.onWillAppear(second as unknown as WillAppearEvent<Assignment>);
 	assert.equal(h.settings.revision("a"), revision);
-	assert.equal(restored.alerts, 1);
+	assert.equal(restored.alerts, 0);
 	assert.equal(h.calls.length, 1);
 	await action.onKeyDown(second as unknown as KeyDownEvent<Assignment>);
 	assert.equal(h.calls.length, 1);
@@ -159,6 +159,7 @@ test("reopening PI gets pending and safe last error, while closing never cancels
 	const count = h.sent.length;
 	h.replies[0]!.resolve({ status: "rejected", errorCategory: "auth", requestId: "123" });
 	await pending;
+	assert.equal(key.alerts, 1);
 	assert.equal(h.sent.length, count);
 	await h.inspector.receive("a", message("inspector.get", "session-b"));
 	assert.equal(h.sent.at(-1)?.reply.sessionId, "session-b");
@@ -221,14 +222,18 @@ test("connection rotation invalidates prior read-only results and all current se
 	h.inspector.dispose();
 });
 
-test("runtime title/image defaults and temporary overlays never persist appearance settings", async () => {
+test("pending and repeated presses do not show failure overlays or persist appearance settings", async () => {
 	const h = await harness();
 	const action = new PowerOn(h.services);
 	const key = new KeyFacade();
 	const ev = event("a", key);
 	await action.onWillAppear(ev as unknown as WillAppearEvent<Assignment>);
 	const pending = action.onKeyDown(ev as unknown as KeyDownEvent<Assignment>);
-	assert.equal(key.alerts, 1);
+	assert.equal(key.alerts, 0);
+	await action.onKeyDown(ev as unknown as KeyDownEvent<Assignment>);
+	assert.equal(key.alerts, 0);
+	assert.equal(h.calls.length, 1);
+	assert.equal(h.inspector.snapshot("a").operation?.status, "pending");
 	h.replies[0]!.resolve({ status: "sent" });
 	await pending;
 	assert.equal(key.oks, 1);

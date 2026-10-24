@@ -60,6 +60,36 @@ jobs:
       - name: Check release tooling without Bluetooth
         run: task release:test
 
+
+  plugin-software:
+    name: Plugin / Linux / Node 24 / BLE-free fixtures
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go for tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/task/go.mod
+          cache-dependency-path: tools/task/go.sum
+      - name: Install pinned repository tools
+        run: make tools
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: streamdeck/package-lock.json
+      - name: Install locked plugin dependencies
+        run: task plugin:deps
+      - name: Check software and synthetic payload fixtures without native execution
+        run: task plugin:check:software
+      - name: Check Task ordering and native-input forwarding
+        run: task workflows:test
+
   macos:
     name: macOS / CoreBluetooth build
     runs-on: macos-latest
@@ -87,5 +117,5 @@ jobs:
           cache: false
       # Importing the native BLE package at runtime can prompt for Bluetooth
       # access. Compile/link with CGO here; do not run the binary or BLE tests.
-      - name: Build macOS controller with CGO
-        run: task build
+      - name: Build and inspect macOS native slice with CGO worker and pure supervisor
+        run: task plugin:native:build

@@ -3,8 +3,11 @@ version: '3'
 vars:
   GO: '{{default "go" .GO}}'
   PYTHON: '{{default "python3" .PYTHON}}'
+  PACKAGE_MODE: '{{default "development" .PACKAGE_MODE}}'
+  NATIVE_ARM64_DIR: '{{default (printf "%s/dist/plugin-native/darwin_arm64" .ROOT_DIR) .NATIVE_ARM64_DIR}}'
+  NATIVE_AMD64_DIR: '{{default (printf "%s/dist/plugin-native/darwin_amd64" .ROOT_DIR) .NATIVE_AMD64_DIR}}'
   DATA_DIR: '{{default .ROOT_DIR .MERGBW_DATA_DIR}}'
-  CORE_PACKAGES: ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble
+  CORE_PACKAGES: ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble ./internal/managed ./cmd/sunset/supervisor
   SPECKIT_INSTALL: scripts/install-speckit.sh
   SPECKIT_UPDATE_CHECK: scripts/check-speckit-updates.py
   SPECKIT_VERSION: '1.1.3'
@@ -143,8 +146,11 @@ tasks:
   mocks:generate:
     desc: Regenerate unit-test mocks using the pinned mockgen tool module.
     cmds:
+      - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/config/managed_config.go -destination=internal/config/mock_managed_store_test.go -package=config'
+      - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/managed/interfaces.go -destination=internal/managed/mock_runtime_test.go -package=managed'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/controller/controller.go -destination=internal/controller/mock_link_test.go -package=controller'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/bridge/http.go -destination=internal/bridge/mock_controller_test.go -package=bridge_test'
+      - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -destination=internal/bridge/mock_transition_controller_test.go -package=bridge_test github.com/obalunenko/mergbw-controller/internal/bridge TransitionController'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/controller/controller.go -destination=internal/bridge/mock_link_test.go -package=bridge_test'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -destination=internal/bridge/mock_response_writer_test.go -package=bridge_test net/http ResponseWriter'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/ble/transport.go -destination=internal/ble/mock_transport_test.go -package=ble'
@@ -227,8 +233,8 @@ tasks:
     cmds:
       - npm run validate
 
-  plugin:check:
-    desc: Run ordered plugin checks without installing or launching software.
+  plugin:check:software:
+    desc: Run BLE-free software and payload fixture checks without native artifacts or credentials.
     dir: streamdeck
     cmds:
       - task: plugin:lint
@@ -236,26 +242,67 @@ tasks:
       - task: plugin:test
       - task: plugin:build
       - task: plugin:validate
+      - npm run check:package:software
+      - '{{.PYTHON}} ../scripts/test_plugin_native.py'
+
+  plugin:native:build:
+    desc: Compile and inspect current-Mac slices without executing native code.
+    env:
+      GO: '{{.GO}}'
+    cmds:
+      - '{{.PYTHON}} scripts/plugin-native.py build --output-root {{shellQuote (printf "%s/dist" .ROOT_DIR)}}'
+
+  plugin:native:assemble:
+    desc: Assemble matching arm64 and Intel slices into an isolated universal app.
+    cmds:
+      - '{{.PYTHON}} scripts/plugin-native.py assemble --arm64-dir {{shellQuote .NATIVE_ARM64_DIR}} --amd64-dir {{shellQuote .NATIVE_AMD64_DIR}}'
+
+  plugin:native:dev:
+    desc: Mark and ad-hoc sign an assembled two-architecture development payload.
+    cmds:
+      - '{{.PYTHON}} scripts/plugin-native.py dev'
+
+  plugin:native:sign:
+    desc: Sign/notarize/staple the assembled distribution payload; requires explicit credentials.
+    cmds:
+      - '{{.PYTHON}} scripts/plugin-native.py sign'
+
+  plugin:check:
+    desc: Check software plus the complete staged native payload (development by default).
+    dir: streamdeck
+    env:
+      PACKAGE_MODE: '{{.PACKAGE_MODE}}'
+    cmds:
+      - task: plugin:check:software
       - npm run check:package
 
   plugin:package:
-    desc: Check then pack the plugin into root dist (replaces generated installer).
+    desc: Check then author and inspect the complete installer in root dist.
     dir: streamdeck
+    env:
+      PACKAGE_MODE: '{{.PACKAGE_MODE}}'
     cmds:
       - task: plugin:check
+        vars:
+          PACKAGE_MODE: '{{.PACKAGE_MODE}}'
       - npm run package
 
   plugin:link:
-    desc: Explicitly build and link the plugin to the local macOS Stream Deck host.
+    env:
+      PACKAGE_MODE: '{{.PACKAGE_MODE}}'
+    desc: Explicitly validate and link the complete staged plugin to the local macOS host.
     dir: streamdeck
     cmds:
-      - task: plugin:build
+      - npm run check:package
       - npm run link
 
   plugin:watch:
+    env:
+      PACKAGE_MODE: '{{.PACKAGE_MODE}}'
     desc: Explicitly watch builds and restart an already linked plugin.
     dir: streamdeck
     cmds:
+      - npm run check:package
       - npm run watch
 
   plugin:mock:

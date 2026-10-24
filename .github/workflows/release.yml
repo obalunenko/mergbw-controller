@@ -64,13 +64,31 @@ jobs:
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: release-controller-${{ matrix.os }}-${{ matrix.arch }}
-          path: dist/*.tar.gz
+          path: dist/sunset_${{ github.ref_name }}_${{ matrix.os }}_${{ matrix.arch }}.tar.gz
+          if-no-files-found: error
+
+
+      - name: Build and inspect same-source native plugin slice
+        if: matrix.os == 'darwin'
+        run: task plugin:native:build
+      - name: Preserve executable modes in native artifact envelope
+        if: matrix.os == 'darwin'
+        run: COPYFILE_DISABLE=1 tar -czf "dist/mergbw-native_darwin_${GOARCH}.tar.gz" -C dist/plugin-native "darwin_${GOARCH}"
+      - name: Upload native slice envelope
+        if: matrix.os == 'darwin'
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: native-darwin-${{ matrix.arch }}
+          path: dist/mergbw-native_darwin_${{ matrix.arch }}.tar.gz
           if-no-files-found: error
 
   plugin:
-    name: Stream Deck installer
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    name: Universal Stream Deck development installer
+    needs: [checks, controller]
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      PACKAGE_MODE: development
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -91,15 +109,31 @@ jobs:
           cache-dependency-path: streamdeck/package-lock.json
       - name: Install locked plugin dependencies
         run: task plugin:deps
-      - name: Check and pack plugin without Stream Deck or Bluetooth
+      - name: Check plugin software without Bluetooth or native execution
+        run: task plugin:check:software
+      - name: Download both native slice envelopes
+        uses: actions/download-artifact@70fc10c6e5e1ce46ad2ea6f2b72d43f7d47b13c3 # v8.0.0
+        with:
+          pattern: native-darwin-*
+          path: dist/native-transfer
+          merge-multiple: true
+      - name: Validate archive modes before extracting native inputs
+        run: |
+          python3 scripts/plugin-native.py extract-slice --archive dist/native-transfer/mergbw-native_darwin_arm64.tar.gz
+          python3 scripts/plugin-native.py extract-slice --archive dist/native-transfer/mergbw-native_darwin_amd64.tar.gz
+      - name: Inspect source-matched inputs and assemble both universal roles
+        run: task plugin:native:assemble
+      - name: Finalize local development payload without Apple credentials
+        run: task plugin:native:dev
+      - name: Check and author complete development installer without launching native code
         run: task plugin:package
-      - name: Verify installer contents
-        run: node streamdeck/scripts/check-package.mjs --archive dist/com.obalunenko.mergbw.streamDeckPlugin
+      - name: Verify extracted installer bytes, modes and local signatures
+        run: node streamdeck/scripts/check-package.mjs --archive dist/com.obalunenko.mergbw.development.streamDeckPlugin
       - name: Upload plugin installer
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: release-plugin
-          path: dist/*.streamDeckPlugin
+          path: dist/com.obalunenko.mergbw.development.streamDeckPlugin
           if-no-files-found: error
 
   publish:
@@ -132,7 +166,7 @@ jobs:
           for platform in darwin_arm64 darwin_amd64 linux_amd64 linux_arm64; do
             test -s "dist/sunset_${RELEASE_TAG}_${platform}.tar.gz"
           done
-          test -s dist/com.obalunenko.mergbw.streamDeckPlugin
+          test -s dist/com.obalunenko.mergbw.development.streamDeckPlugin
           cd dist
           sha256sum ./*.tar.gz ./*.streamDeckPlugin > SHA256SUMS
           sha256sum --check SHA256SUMS

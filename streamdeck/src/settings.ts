@@ -20,7 +20,10 @@ export type Persistence = {
 };
 export class Settings {
 	public connectionRevision = 0;
+	private managed?: () => Connection | null;
+	private managedSafe?: (value: string) => boolean;
 	private active: GlobalSettings | null = null;
+	private fallbackLanguage: Language = "en";
 	private queue: Promise<void> = Promise.resolve();
 	private readonly actions = new Map<string, { kind: ActionKind; raw: unknown; revision: number }>();
 	private readonly listeners = new Set<() => void>();
@@ -31,6 +34,12 @@ export class Settings {
 	public load(): Promise<void> {
 		return this.serial(async () => {
 			const raw = await this.persistence.getGlobal();
+			try {
+				if (typeof raw === "object" && raw !== null && "language" in raw)
+					this.fallbackLanguage = language(raw.language);
+			} catch {
+				/* Invalid language stays inspectable without persistence. */
+			}
 			let next: GlobalSettings | null;
 			try {
 				next = globals(raw);
@@ -45,10 +54,32 @@ export class Settings {
 		return structuredClone(this.active);
 	}
 	public getConnection(): Connection | null {
-		return this.get().connection;
+		return this.managed ? this.managed() : (this.get().connection ?? null);
+	}
+	public useManaged(connection: () => Connection | null, safe?: (value: string) => boolean): void {
+		this.managed = connection;
+		this.managedSafe = safe;
+		this.connectionRevision++;
+		this.notify();
+	}
+	public runtimeChanged(invalidate = true): void {
+		if (invalidate) this.connectionRevision++;
+		this.notify();
+	}
+	public migrationStatus(): "invalid" | "legacy" | "ready" {
+		return !this.active ? "invalid" : this.active.schemaVersion === 1 ? "legacy" : "ready";
+	}
+	public legacyConnection(): Connection | null {
+		return this.active?.schemaVersion === 1 ? (this.active.connection ?? null) : null;
+	}
+	public migrateCommitted(): Promise<void> {
+		return this.serial(async () => {
+			if (!this.active) throw new Error("validation");
+			if (this.active.schemaVersion === 1) await this.commit({ schemaVersion: 2, language: this.active.language });
+		});
 	}
 	public getLanguage(): Language {
-		return this.active?.language ?? "en";
+		return this.active?.language ?? this.fallbackLanguage;
 	}
 	public subscribe(listener: () => void): () => void {
 		this.listeners.add(listener);
@@ -75,7 +106,7 @@ export class Settings {
 	}
 	public isSafePresetId(id: string): boolean {
 		const secret = this.active?.connection?.accessToken;
-		return !(secret && id.includes(secret)) && !this.diagnostics?.hasSecret(id);
+		return !(secret && id.includes(secret)) && this.managedSafe?.(id) !== false && !this.diagnostics?.hasSecret(id);
 	}
 	public kind(context: string): ActionKind | undefined {
 		return this.actions.get(context)?.kind;
@@ -97,6 +128,7 @@ export class Settings {
 	}
 	public saveConnection(port: unknown, replacementToken?: unknown): Promise<void> {
 		return this.serial(async () => {
+			if (this.managed || !this.active) throw new Error("migration_required");
 			const old = this.active;
 			const secret =
 				replacementToken === "" || replacementToken === undefined ? old?.connection?.accessToken : replacementToken;
@@ -105,9 +137,10 @@ export class Settings {
 		});
 	}
 	public importConnection(value: Connection): Promise<void> {
-		return this.serial(() =>
-			this.commit({ schemaVersion: 1, connection: connection(value), language: this.active?.language ?? "en" }),
-		);
+		return this.serial(async () => {
+			if (this.managed || !this.active) throw new Error("migration_required");
+			await this.commit({ schemaVersion: 1, connection: connection(value), language: this.active.language });
+		});
 	}
 	public saveLanguage(value: unknown): Promise<void> {
 		return this.serial(async () => {
@@ -131,7 +164,7 @@ export class Settings {
 	private activate(next: GlobalSettings | null): void {
 		const previous = this.active;
 		this.active = structuredClone(next);
-		if (JSON.stringify(previous?.connection ?? null) !== JSON.stringify(next?.connection ?? null))
+		if (!this.managed && JSON.stringify(previous?.connection ?? null) !== JSON.stringify(next?.connection ?? null))
 			this.connectionRevision++;
 		this.notify();
 	}

@@ -111,3 +111,43 @@ test("corrupt and unknown assignments are neither reset nor persisted on receipt
 	await settings.saveAction("a", { schemaVersion: 1, percent: 50 });
 	assert.equal(settings.getAction("a").percent, 50);
 });
+
+test("v1 to managed migration preserves ten assignments, host artwork and language across reloads", async () => {
+	const storage = new MemoryStorage();
+	storage.global = { schemaVersion: 1, language: "ru", connection: { port: 23456, accessToken: syntheticToken } };
+	const host = new Map<string, { title: string; image: string; settings: Assignment }>();
+	for (const [kind, value] of assignments)
+		for (const context of [kind, `${kind}-copy`]) {
+			host.set(context, {
+				title: `Custom ${context}`,
+				image: `artwork/${context}.png`,
+				settings: structuredClone(value),
+			});
+			storage.actions.set(context, structuredClone(value));
+		}
+	const before = structuredClone([...host]);
+	const settings = new Settings(storage);
+	await settings.load();
+	settings.useManaged(() => null);
+	for (const [kind] of assignments)
+		for (const context of [kind, `${kind}-copy`]) settings.receiveAction(context, kind, host.get(context)!.settings);
+	await settings.migrateCommitted();
+	assert.deepEqual(storage.global, { schemaVersion: 2, language: "ru" });
+	assert.deepEqual([...host], before);
+	for (let restart = 0; restart < 3; restart++) {
+		const restored = new Settings(storage);
+		await restored.load();
+		restored.useManaged(() => null);
+		assert.equal(restored.getLanguage(), "ru");
+		for (const [kind, value] of assignments)
+			for (const context of [kind, `${kind}-copy`]) {
+				restored.receiveAction(context, kind, host.get(context)!.settings);
+				assert.deepEqual(restored.getAction(context), value);
+				assert.equal(safeSnapshot(context, restored, new OperationStore()).connection.configured, false);
+			}
+	}
+	const exported = JSON.stringify([...storage.actions]);
+	assert.ok(!exported.includes(syntheticToken));
+	assert.ok(!exported.includes("/synthetic/"));
+	assert.deepEqual([...host], before);
+});

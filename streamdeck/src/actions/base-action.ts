@@ -22,6 +22,7 @@ export type ActionServices = {
 	client: BridgeClient;
 	inspector: InspectorController;
 	diagnostics: Diagnostics;
+	runtime?: import("../managed-controller.js").ManagedController;
 };
 export class BaseAction extends SingletonAction<Assignment> {
 	private readonly visible = new Map<string, KeyView>();
@@ -54,6 +55,7 @@ export class BaseAction extends SingletonAction<Assignment> {
 					record,
 					services.settings.revision(record.context),
 					services.settings.connectionRevision,
+					services.runtime ? (capability) => services.runtime!.current(capability) : undefined,
 				)
 			)
 				void this.feedback.result(key, record);
@@ -66,7 +68,6 @@ export class BaseAction extends SingletonAction<Assignment> {
 		if (ev.action.isKey()) {
 			this.visible.set(ev.action.id, ev.action);
 			await this.feedback.ready(ev.action, this.kind, ev.action.id);
-			if (operations.get(ev.action.id)?.status === "pending") await this.feedback.pending(ev.action);
 		}
 	}
 	public override onWillDisappear(ev: WillDisappearEvent<Assignment>): void {
@@ -89,14 +90,13 @@ export class BaseAction extends SingletonAction<Assignment> {
 		const { settings, operations, client, diagnostics } = this.services;
 		const startedAt = operations.clock.now();
 		const context = ev.action.id;
-		if (operations.get(context)?.status === "pending") {
-			await this.feedback.pending(ev.action);
-			return;
-		}
+		if (operations.get(context)?.status === "pending") return;
 		let record;
 		try {
 			const assignment = settings.getAction(context);
-			const connection = settings.getConnection();
+			const capability = this.services.runtime?.capability();
+			if (this.services.runtime && !capability) throw new Error("validation");
+			const connection = capability?.connection ?? settings.getConnection();
 			if (!connection) throw new Error("validation");
 			const route = this.route(assignment);
 			this.services.inspector.explain(context);
@@ -105,7 +105,7 @@ export class BaseAction extends SingletonAction<Assignment> {
 				actionKind: this.kind,
 				settingsRevision: settings.revision(context),
 				connectionRevision: settings.connectionRevision,
-				snapshot: { connection, route },
+				snapshot: { connection, route, ...(capability ? { capability } : {}) },
 			});
 		} catch (error) {
 			const errorCategory = error instanceof Error && error.message === "preset" ? "preset" : "validation";
@@ -119,14 +119,10 @@ export class BaseAction extends SingletonAction<Assignment> {
 			await this.feedback.invalid(ev.action);
 			return;
 		}
-		if (!record) {
-			await this.feedback.pending(ev.action);
-			return;
-		}
+		if (!record) return;
 		const release = diagnostics.retain(record.snapshot.connection.accessToken);
 		diagnostics.emit("action.started", { actionKind: this.kind, operationId: record.operationId, outcome: "pending" });
-		// Attention is submitted immediately; waiting for host feedback must not delay dispatch.
-		void this.feedback.pending(ev.action);
+		// Pending is shown in the inspector. Reserve key alerts for failures.
 		try {
 			const result = await client.command(record);
 			operations.finish(record, { ...result, requestId: diagnostics.id(result.requestId) });

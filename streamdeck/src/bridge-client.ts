@@ -4,6 +4,36 @@ import { type ErrorCategory, requestId } from "./diagnostics.js";
 import { type Clock, type OperationRecord, type OperationResult, systemClock } from "./operation-store.js";
 import { type Connection, object, connection as validateConnection } from "./validation.js";
 
+export type TransitionSnapshot = {
+	id: string;
+	state: "cancelled" | "cancelling" | "completed" | "failed" | "running" | "unknown";
+	elapsedMs: number;
+	durationMs: number;
+	physical_state_verified: false;
+};
+export type TransitionEnvelope = { transition: TransitionSnapshot | null; physical_state_verified: false };
+export function transitionSnapshot(value: unknown, secret = ""): value is TransitionSnapshot {
+	if (!object(value) || Object.keys(value).sort().join(",") !== "durationMs,elapsedMs,id,physical_state_verified,state")
+		return false;
+	return (
+		typeof value.id === "string" &&
+		/^[0-9a-f]{32}$/.test(value.id) &&
+		!(secret && value.id.includes(secret)) &&
+		["running", "cancelling", "completed", "cancelled", "failed", "unknown"].includes(String(value.state)) &&
+		typeof value.durationMs === "number" &&
+		Number.isInteger(value.durationMs) &&
+		value.durationMs >= 1000 &&
+		value.durationMs <= 60000 &&
+		value.durationMs % 1000 === 0 &&
+		typeof value.elapsedMs === "number" &&
+		Number.isInteger(value.elapsedMs) &&
+		value.elapsedMs >= 0 &&
+		value.elapsedMs <= value.durationMs &&
+		value.physical_state_verified === false
+	);
+}
+const transitionRoute =
+	/^transition\/[A-F0-9]{6}\/(?:100|[1-9]?[0-9])\/[A-F0-9]{6}\/(?:100|[1-9]?[0-9])\/(?:[1-9]|[1-5][0-9]|60)$/;
 export type Health = { ok: true; version: string; bluetooth_connected: boolean; physical_state_verified: false };
 export type PresetEntry = { id: string; label: string };
 export type Catalog = { presets: PresetEntry[]; physical_state_verified: false };
@@ -11,9 +41,22 @@ export type ReadResult<T> = { statusCode?: number; value?: T; errorCategory?: Er
 type WireResult = ReadResult<unknown> & { dispatched?: boolean };
 
 export class BridgeClient {
+	private managedReadGuard?: (connection: Connection, signal?: AbortSignal) => boolean;
+	private managedGuard?: (cap: import("./managed-controller.js").Capability) => boolean;
+	public useManaged(
+		guard: (cap: import("./managed-controller.js").Capability) => boolean,
+		readGuard: (connection: Connection, signal?: AbortSignal) => boolean,
+	): void {
+		this.managedGuard = guard;
+		this.managedReadGuard = readGuard;
+	}
+	private readonly transports = new Set<Promise<void>>();
+	public async drain(): Promise<void> {
+		await Promise.all([...this.transports]);
+	}
 	constructor(private readonly clock: Clock = systemClock) {}
-	public async health(connection: Connection): Promise<ReadResult<Health>> {
-		const result = await this.read(connection, "/health", "GET", 65536, this.clock.now() + 5000);
+	public async health(connection: Connection, signal?: AbortSignal): Promise<ReadResult<Health>> {
+		const result = await this.read(connection, "/health", "GET", 65536, this.clock.now() + 5000, signal);
 		const value = result.value;
 		if (
 			result.statusCode === 200 &&
@@ -28,13 +71,14 @@ export class BridgeClient {
 			return { ...result, value: value as Health };
 		return { ...result, value: undefined, errorCategory: result.errorCategory ?? "protocol" };
 	}
-	public async catalog(connection: Connection): Promise<ReadResult<Catalog>> {
+	public async catalog(connection: Connection, signal?: AbortSignal): Promise<ReadResult<Catalog>> {
 		const result = await this.read(
 			connection,
 			`/${connection.accessToken}/presets`,
 			"GET",
 			1048576,
 			this.clock.now() + 5000,
+			signal,
 		);
 		const value = result.value;
 		if (
@@ -77,8 +121,14 @@ export class BridgeClient {
 		return { ...result, value: undefined, errorCategory: result.errorCategory ?? "protocol" };
 	}
 	public async command(record: OperationRecord): Promise<OperationResult> {
+		if (this.managedGuard && (!record.snapshot.capability || !this.managedGuard(record.snapshot.capability)))
+			return { status: "rejected", errorCategory: "service" };
+		if (record.snapshot.capability?.signal.aborted) return { status: "rejected", errorCategory: "service" };
 		const route = record.snapshot.route;
-		if (!/^(on|off|color\/[A-F0-9]{6}|brightness\/(?:[0-9]|[1-9][0-9]|100)|preset\/[a-z0-9_-]{1,40})$/.test(route))
+		if (
+			!/^(on|off|color\/[A-F0-9]{6}|brightness\/(?:[0-9]|[1-9][0-9]|100)|preset\/[a-z0-9_-]{1,40})$/.test(route) &&
+			!transitionRoute.test(route)
+		)
 			return { status: "rejected", errorCategory: "validation" };
 		const result = await this.read(
 			record.snapshot.connection,
@@ -86,8 +136,25 @@ export class BridgeClient {
 			"POST",
 			65536,
 			record.deadlineAt,
+			record.snapshot.capability?.signal,
 		);
 		const common = { requestId: result.requestId };
+		if (transitionRoute.test(route)) {
+			if (
+				result.statusCode === 202 &&
+				object(result.value) &&
+				Object.keys(result.value).sort().join(",") === "accepted,action,physical_state_verified,transition" &&
+				result.value.accepted === true &&
+				result.value.action === route &&
+				result.value.physical_state_verified === false &&
+				transitionSnapshot(result.value.transition, record.snapshot.connection.accessToken) &&
+				result.value.transition.durationMs === Number(route.split("/").at(-1)) * 1000
+			)
+				return { ...common, status: "accepted", transition: result.value.transition };
+			// A legacy-style 200 response cannot prove that a transition was admitted.
+			if (result.statusCode === 200 || result.statusCode === 202)
+				return { ...common, status: "unknown", errorCategory: "protocol" };
+		}
 		if (!result.dispatched && (result.errorCategory === "service" || result.errorCategory === "validation"))
 			return { ...common, status: "rejected", errorCategory: result.errorCategory };
 		if (
@@ -114,13 +181,67 @@ export class BridgeClient {
 						: (result.errorCategory ?? "protocol"),
 		};
 	}
+	public async transition(
+		connection: Connection,
+		signal?: AbortSignal,
+		capability?: import("./managed-controller.js").Capability,
+	): Promise<ReadResult<TransitionEnvelope>> {
+		if (this.managedGuard && (!capability || !this.managedGuard(capability))) return { errorCategory: "service" };
+		return this.transitionRequest(connection, "transition", "GET", signal);
+	}
+	public async cancelTransition(
+		connection: Connection,
+		id: string,
+		signal?: AbortSignal,
+		capability?: import("./managed-controller.js").Capability,
+	): Promise<ReadResult<TransitionEnvelope>> {
+		if (this.managedGuard && (!capability || !this.managedGuard(capability))) return { errorCategory: "service" };
+		if (!/^[0-9a-f]{32}$/.test(id) || id.includes(connection.accessToken)) return { errorCategory: "validation" };
+		return this.transitionRequest(connection, `transition/cancel/${id}`, "POST", signal);
+	}
+	private async transitionRequest(
+		connection: Connection,
+		route: string,
+		method: "GET" | "POST",
+		signal?: AbortSignal,
+	): Promise<ReadResult<TransitionEnvelope>> {
+		const result = await this.read(
+			connection,
+			`/${connection.accessToken}/${route}`,
+			method,
+			65536,
+			this.clock.now() + (method === "POST" ? 45000 : 5000),
+			signal,
+		);
+		const value = result.value;
+		if (
+			result.statusCode === 200 &&
+			object(value) &&
+			Object.keys(value).sort().join(",") === "physical_state_verified,transition" &&
+			value.physical_state_verified === false &&
+			(value.transition === null || transitionSnapshot(value.transition, connection.accessToken)) &&
+			(method === "GET" ||
+				(object(value.transition) && value.transition.id === route.slice("transition/cancel/".length)))
+		)
+			return { ...result, value: value as TransitionEnvelope };
+		return {
+			...result,
+			value: undefined,
+			errorCategory:
+				result.errorCategory ??
+				(result.statusCode === 403 ? "auth" : result.statusCode === 504 ? "timeout" : "protocol"),
+		};
+	}
 	private read(
 		connection: Connection,
 		path: string,
 		method: "GET" | "POST",
 		cap: number,
 		deadline: number,
+		signal?: AbortSignal,
 	): Promise<WireResult> {
+		if (this.managedReadGuard && !this.managedReadGuard(connection, signal))
+			return Promise.resolve({ errorCategory: "service" });
 		try {
 			validateConnection(connection);
 		} catch {
@@ -131,13 +252,30 @@ export class BridgeClient {
 			let dispatched = false;
 			let timer: unknown = undefined;
 			let req: ReturnType<typeof request> | undefined;
+			let drained!: () => void;
+			const transport = new Promise<void>((resolve) => {
+				drained = resolve;
+			});
+			this.transports.add(transport);
+			const completeDrain = (): void => {
+				this.transports.delete(transport);
+				drained();
+			};
+			const abort = (): void => finish({ errorCategory: "service" });
 			const finish = (result: WireResult): void => {
 				if (done) return;
 				done = true;
 				this.clock.clearTimeout(timer);
-				req?.destroy();
+				signal?.removeEventListener("abort", abort);
+				if (req) req.destroy();
+				else completeDrain();
 				resolve({ ...result, dispatched });
 			};
+			if (signal?.aborted) {
+				finish({ errorCategory: "service" });
+				return;
+			}
+			signal?.addEventListener("abort", abort, { once: true });
 			const remaining = deadline - this.clock.now();
 			if (remaining <= 0) {
 				finish({ errorCategory: "timeout" });
@@ -196,6 +334,7 @@ export class BridgeClient {
 						});
 					},
 				);
+				req.once("close", completeDrain);
 				req.once("socket", (socket) => {
 					socket.once("connect", () => {
 						dispatched = true;

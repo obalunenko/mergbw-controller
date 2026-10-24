@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import type { TransitionSnapshot } from "./bridge-client.js";
 import { type ErrorCategory, type Outcome, requestId } from "./diagnostics.js";
 import type { ActionKind, Connection } from "./validation.js";
 
@@ -17,6 +18,7 @@ export type OperationResult = {
 	status: Exclude<Outcome, "pending">;
 	errorCategory?: ErrorCategory;
 	requestId?: string;
+	transition?: TransitionSnapshot;
 };
 export type OperationRecord = {
 	readonly operationId: string;
@@ -24,10 +26,15 @@ export type OperationRecord = {
 	readonly actionKind: ActionKind;
 	readonly settingsRevision: number;
 	readonly connectionRevision: number;
-	readonly snapshot: { readonly route: string; readonly connection: Readonly<Connection> };
+	readonly snapshot: {
+		readonly route: string;
+		readonly connection: Readonly<Connection>;
+		readonly capability?: import("./managed-controller.js").Capability;
+	};
 	readonly startedAt: number;
 	readonly deadlineAt: number;
 	status: Outcome;
+	transition?: TransitionSnapshot;
 	errorCategory?: ErrorCategory;
 	requestId?: string;
 	durationMs: number;
@@ -72,7 +79,7 @@ export class OperationStore {
 		const startedAt = this.clock.now();
 		const record: OperationRecord = {
 			...input,
-			snapshot: structuredClone(input.snapshot),
+			snapshot: { ...input.snapshot, connection: { ...input.snapshot.connection } },
 			operationId: randomUUID(),
 			startedAt,
 			deadlineAt: startedAt + 45000,
@@ -95,6 +102,7 @@ export class OperationStore {
 		this.clock.clearTimeout(this.timers.get(record.operationId));
 		this.timers.delete(record.operationId);
 		record.status = result.status;
+		record.transition = result.transition ? { ...result.transition } : undefined;
 		record.errorCategory = result.errorCategory;
 		record.requestId = requestId(result.requestId, [record.snapshot.connection.accessToken]);
 		record.durationMs = Math.max(0, this.clock.now() - record.startedAt);
@@ -102,12 +110,18 @@ export class OperationStore {
 		if (!this.visible.has(record.context)) this.records.delete(record.context);
 		return true;
 	}
-	public canRender(record: OperationRecord, settingsRevision: number, connectionRevision: number): boolean {
+	public canRender(
+		record: OperationRecord,
+		settingsRevision: number,
+		connectionRevision: number,
+		current?: (capability: import("./managed-controller.js").Capability) => boolean,
+	): boolean {
 		return (
 			this.visible.has(record.context) &&
 			this.records.get(record.context)?.operationId === record.operationId &&
 			record.settingsRevision === settingsRevision &&
-			record.connectionRevision === connectionRevision
+			record.connectionRevision === connectionRevision &&
+			(!record.snapshot.capability || current?.(record.snapshot.capability) !== false)
 		);
 	}
 }

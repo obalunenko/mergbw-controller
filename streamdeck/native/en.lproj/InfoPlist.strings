@@ -1,0 +1,2 @@
+"CFBundleDisplayName" = "MeRGBW Controller";
+"NSBluetoothAlwaysUsageDescription" = "MeRGBW uses Bluetooth to connect to your selected lamp and send commands only when you press a Stream Deck action.";

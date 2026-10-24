@@ -12,6 +12,18 @@
 // A write already inside the native library can still complete after context
 // cancellation, before Write returns. Such a result includes ErrWriteUncertain.
 //
+// Managed shutdown cancels the worker root, stopping queued actions and the
+// remaining packets of an action without sending Off. An in-progress native
+// write still runs synchronously. The independent supervisor may terminate the
+// entire worker after its grace period; only confirmed process exit releases
+// its inherited runtime lock and listener. Process termination cannot establish
+// whether the final packet physically reached the lamp. A fresh worker never
+// resumes a previous queue or packet sequence.
+// Smooth transitions share the same whole-action gate. A new valid command
+// requests cancellation, waits for the synchronous native write to return,
+// then starts its own packets. A transition write is never retried; cancellation
+// inside a write has an unknown outcome. Status reads do not send packets.
+//
 // On Darwin, Connect's timeout requests cancellation but then waits for a
 // CoreBluetooth disconnect callback. The call can therefore exceed its timeout.
 // GATT discovery and the write-buffer wait have upstream ten-second timeouts.

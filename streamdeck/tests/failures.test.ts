@@ -138,3 +138,27 @@ test("one total deadline includes response body and activation time; read-only d
 		}
 	}
 });
+
+test("secret-bearing response text and forged request IDs never change rejection or trigger replay", async () => {
+	let calls = 0;
+	const server = await fixture((_req, res) => {
+		calls++;
+		res.writeHead(503, { "content-type": "application/json", "x-request-id": syntheticToken });
+		res.end(
+			JSON.stringify({
+				error: `native ${syntheticToken} /private/source/settings.json`,
+				physical_state_verified: false,
+			}),
+		);
+	});
+	try {
+		const result = await new BridgeClient().command(operation(server.port));
+		assert.equal(result.status, "unknown");
+		assert.equal(result.errorCategory, "backend");
+		assert.equal(calls, 1);
+		assert.ok(!JSON.stringify(result).includes(syntheticToken));
+		assert.ok(!JSON.stringify(result).includes("settings.json"));
+	} finally {
+		await server.close();
+	}
+});

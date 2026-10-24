@@ -76,9 +76,9 @@ func createJSON(path string, value any, mode os.FileMode) error {
 // Init creates only missing files. The first initialization requires an explicit
 // manufacturer identity. Existing settings, tokens and presets are retained.
 func Init(directory, identity string) (Settings, map[string]protocol.Preset, error) {
-	identity = strings.ToUpper(strings.TrimSpace(identity))
-	if identity != "" && !identityPattern.MatchString(identity) {
-		return Settings{}, nil, fmt.Errorf("--identity: нужны шесть HEX-байтов через двоеточие, например AA:BB:CC:DD:EE:FF")
+	identity, err := NormalizeIdentity(identity)
+	if err != nil {
+		return Settings{}, nil, err
 	}
 	settingsPath := filepath.Join(directory, "settings.json")
 	_, statErr := os.Stat(settingsPath)
@@ -92,11 +92,10 @@ func Init(directory, identity string) (Settings, map[string]protocol.Preset, err
 		return Settings{}, nil, err
 	}
 	if os.IsNotExist(statErr) {
-		secret := make([]byte, 24)
-		if _, err := rand.Read(secret); err != nil {
+		settings, err := PrepareManualSettings(identity, nil)
+		if err != nil {
 			return Settings{}, nil, err
 		}
-		settings := Settings{DeviceIdentity: identity, Port: DefaultPort, AccessToken: base64.RawURLEncoding.EncodeToString(secret)}
 		if err := createJSON(settingsPath, settings, 0600); err != nil {
 			return Settings{}, nil, err
 		}
@@ -112,18 +111,14 @@ func Init(directory, identity string) (Settings, map[string]protocol.Preset, err
 }
 
 func Load(directory string) (Settings, map[string]protocol.Preset, error) {
-	var settings Settings
 	data, err := os.ReadFile(filepath.Join(directory, "settings.json"))
 	if err != nil {
-		return settings, nil, fmt.Errorf("прочитать settings.json: %w; сначала выполните ./sunset init", err)
+		return Settings{}, nil, fmt.Errorf("прочитать settings.json: %w; сначала выполните ./sunset init", err)
 	}
-	if err := json.Unmarshal(data, &settings); err != nil {
-		return settings, nil, fmt.Errorf("settings.json: %w", err)
-	}
-	if err := settings.Validate(); err != nil {
+	settings, err := DecodeSettings(data)
+	if err != nil {
 		return settings, nil, err
 	}
-	settings.DeviceIdentity = strings.ToUpper(settings.DeviceIdentity)
 	presets, err := LoadPresets(directory)
 	return settings, presets, err
 }
@@ -133,6 +128,60 @@ func LoadPresets(directory string) (map[string]protocol.Preset, error) {
 	if err != nil {
 		return nil, fmt.Errorf("прочитать presets.json: %w", err)
 	}
+	return DecodePresets(data)
+}
+
+// DecodeSettings applies the existing standalone settings format and rules.
+func DecodeSettings(data []byte) (Settings, error) {
+	var settings Settings
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return settings, fmt.Errorf("settings.json: %w", err)
+	}
+	if err := settings.Validate(); err != nil {
+		return settings, err
+	}
+	settings.DeviceIdentity = strings.ToUpper(settings.DeviceIdentity)
+	return settings, nil
+}
+
+// NormalizeIdentity accepts the CLI's optional identity; callers creating new
+// settings must additionally reject an empty value.
+func NormalizeIdentity(identity string) (string, error) {
+	identity = strings.ToUpper(strings.TrimSpace(identity))
+	if identity != "" && !identityPattern.MatchString(identity) {
+		return "", fmt.Errorf("--identity: нужны шесть HEX-байтов через двоеточие, например AA:BB:CC:DD:EE:FF")
+	}
+	return identity, nil
+}
+
+// PrepareManualSettings prepares a candidate, without saving or changing a lamp.
+// Existing port and secret are retained, including for an explicitly reviewed
+// identity replacement. The caller owns confirmation and commit.
+func PrepareManualSettings(identity string, previous *Settings) (Settings, error) {
+	identity, err := NormalizeIdentity(identity)
+	if err != nil || identity == "" {
+		return Settings{}, fmt.Errorf("invalid_identity")
+	}
+	if previous != nil {
+		if err := previous.Validate(); err != nil {
+			return Settings{}, fmt.Errorf("invalid_settings")
+		}
+		candidate := *previous
+		candidate.DeviceIdentity = identity
+		return candidate, nil
+	}
+	secret := make([]byte, 24)
+	if _, err := rand.Read(secret); err != nil {
+		return Settings{}, fmt.Errorf("secret_generation_failed")
+	}
+	return Settings{DeviceIdentity: identity, Port: DefaultPort, AccessToken: base64.RawURLEncoding.EncodeToString(secret)}, nil
+}
+
+// DefaultPresets returns a fresh catalog, never a merge into an existing one.
+func DefaultPresets() map[string]protocol.Preset { return defaults() }
+
+// DecodePresets preserves the standalone catalog's missing-field validation.
+func DecodePresets(data []byte) (map[string]protocol.Preset, error) {
 	// Pointers distinguish missing/null brightness from the valid value zero.
 	var raw map[string]struct {
 		Label      string `json:"label"`

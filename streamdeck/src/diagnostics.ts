@@ -1,9 +1,37 @@
 import type { ActionKind } from "./validation.js";
 
+export const managedErrorCategories = [
+	"instance_busy",
+	"port_conflict",
+	"binary_missing",
+	"binary_incompatible",
+	"spawn_failed",
+	"protocol_incompatible",
+	"startup_timeout",
+	"host_unavailable",
+	"permission_denied",
+	"bluetooth_unavailable",
+	"backend_restart_required",
+	"worker_exited",
+	"cleanup_blocked",
+	"storage_unavailable",
+	"invalid_configuration",
+	"stale_configuration",
+	"internal_error",
+] as const;
 export type ErrorCategory =
-	"auth" | "backend" | "parameter" | "preset" | "protocol" | "service" | "timeout" | "validation";
-export type Outcome = "pending" | "rejected" | "sent" | "unknown";
+	| (typeof managedErrorCategories)[number]
+	| "auth"
+	| "backend"
+	| "parameter"
+	| "preset"
+	| "protocol"
+	| "service"
+	| "timeout"
+	| "validation";
+export type Outcome = "accepted" | "pending" | "rejected" | "sent" | "unknown";
 export type SafeEvent =
+	| "action.accepted"
 	| "action.rejected"
 	| "action.sent"
 	| "action.started"
@@ -11,8 +39,10 @@ export type SafeEvent =
 	| "connection.checked"
 	| "plugin.ready"
 	| "presets.failed"
-	| "presets.loaded";
+	| "presets.loaded"
+	| "runtime.failed";
 export type Diagnostic = {
+	phase?: "cleanup" | "configuration" | "readiness" | "recovery" | "startup";
 	actionKind?: ActionKind;
 	outcome?: Outcome;
 	errorCategory?: ErrorCategory;
@@ -60,6 +90,7 @@ export class Diagnostics {
 	public emit(event: SafeEvent, input: Diagnostic = {}): void {
 		if (
 			![
+				"action.accepted",
 				"action.rejected",
 				"action.sent",
 				"action.started",
@@ -68,21 +99,38 @@ export class Diagnostics {
 				"plugin.ready",
 				"presets.failed",
 				"presets.loaded",
+				"runtime.failed",
 			].includes(event)
 		)
 			return;
 		const fields: Record<string, number | string> = { event };
-		if (["on", "off", "color", "brightness", "preset"].includes(input.actionKind ?? ""))
+		if (["on", "off", "color", "brightness", "preset", "transition"].includes(input.actionKind ?? ""))
 			fields.actionKind = input.actionKind!;
-		if (["pending", "sent", "rejected", "unknown"].includes(input.outcome ?? "")) fields.outcome = input.outcome!;
+		if (["accepted", "pending", "sent", "rejected", "unknown"].includes(input.outcome ?? ""))
+			fields.outcome = input.outcome!;
 		if (
-			["validation", "service", "auth", "parameter", "preset", "backend", "protocol", "timeout"].includes(
-				input.errorCategory ?? "",
-			)
+			[
+				...managedErrorCategories,
+				"validation",
+				"service",
+				"auth",
+				"parameter",
+				"preset",
+				"backend",
+				"protocol",
+				"timeout",
+			].includes(input.errorCategory ?? "")
 		)
 			fields.errorCategory = input.errorCategory!;
-		if (typeof input.durationMs === "number" && Number.isFinite(input.durationMs) && input.durationMs >= 0)
+		if (
+			typeof input.durationMs === "number" &&
+			Number.isFinite(input.durationMs) &&
+			input.durationMs >= 0 &&
+			input.durationMs <= 86400000
+		)
 			fields.durationMs = input.durationMs;
+		if (["startup", "readiness", "recovery", "cleanup", "configuration"].includes(input.phase ?? ""))
+			fields.phase = input.phase!;
 		const id = this.id(input.requestId);
 		if (id) fields.requestId = id;
 		if (typeof input.operationId === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(input.operationId))

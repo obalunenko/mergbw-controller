@@ -51,18 +51,22 @@ class TaskWorkflowsTest(unittest.TestCase):
         plugin.mkdir()
         executables = self.directory / "executables"
         executables.mkdir()
-        for name in ("npm", "node"):
+        for name in ("npm", "node", "python"):
+            # The Python recorder represents build/fixture commands, never native executables.
             recorder = executables / name
             recorder.write_text(
                 "#!/usr/bin/env python3\n"
                 "import json,os,sys\n"
                 "from pathlib import Path\n"
                 "name=Path(sys.argv[0]).name\n"
+                "if name=='npm' and sys.argv[1:] in (['run','check:package'],['run','package']) and os.environ.get('WORKFLOW_MODE_FILE'):\n"
+                " with open(os.environ['WORKFLOW_MODE_FILE'],'a') as f: f.write(str(os.environ.get('PACKAGE_MODE'))+'\\n')\n"
                 "with open(os.environ['WORKFLOW_EVENTS'],'a') as f: "
                 "f.write(json.dumps([name,sys.argv[1:],os.getcwd()])+'\\n')\n"
                 "sys.exit(29 if name=='npm' and ' '.join(sys.argv[1:])==os.environ.get('WORKFLOW_NPM_FAIL') else 0)\n"
             )
             recorder.chmod(0o700)
+        self.python = executables / "python"
         self.environment["PATH"] = str(executables) + os.pathsep + self.environment["PATH"]
         installed = shutil.which("task")
         self.task = [installed] if installed else [
@@ -73,7 +77,7 @@ class TaskWorkflowsTest(unittest.TestCase):
         self.events.unlink(missing_ok=True)
         result = subprocess.run(
             [*self.task, "--taskfile", str(self.project / "Taskfile.yml"),
-             f"GO={self.go}", *arguments],
+             f"GO={self.go}", f"PYTHON={self.python}", *arguments],
             env=self.environment | (environment or {}),
             capture_output=True, text=True, timeout=20, check=False,
         )
@@ -154,6 +158,17 @@ class TaskWorkflowsTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(events[-1][0], "sunset")
 
+    def test_core_suites_include_ble_free_independent_supervisor(self):
+        for task in ("test:core", "test:race"):
+            with self.subTest(task=task):
+                result, events = self.run_task("--dry", task)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("./cmd/sunset/supervisor", result.stderr)
+                self.assertNotIn("./cmd/sunset ", result.stderr)
+                self.assertNotIn("./internal/ble/native", result.stderr)
+                self.assertNotIn("hardware", result.stderr)
+                self.assertEqual(events, [])
+
     def test_check_excludes_hardware_and_local_tooling(self):
         result, events = self.run_task("--dry", "check")
         self.assertEqual(result.returncode, 0, result.stderr)
@@ -171,32 +186,63 @@ class TaskWorkflowsTest(unittest.TestCase):
             "deps": ["ci"], "lint": ["run lint", "run format:check"],
             "typecheck": ["run typecheck"], "test": ["test"],
             "build": ["run build"], "validate": ["run validate"],
-            "link": ["run build", "run link"], "watch": ["run watch"],
+            "link": ["run check:package", "run link"], "watch": ["run check:package", "run watch"],
         }.items():
             with self.subTest(task=task):
                 result, events = self.run_task("plugin:" + task)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(events, self.plugin_events(commands))
 
+    def plugin_check_events(self, package=False, software=False):
+        checks = ["run lint", "run format:check", "run typecheck", "test", "run build", "run validate", "run check:package:software"]
+        events = self.plugin_events(checks)
+        events.append(["python", ["../scripts/test_plugin_native.py"], str((self.project / "streamdeck").resolve())])
+        if not software:
+            events += self.plugin_events(["run check:package"])
+        if package:
+            events += self.plugin_events(["run package"])
+        return events
+
     def test_plugin_check_and_package_are_ordered_without_host_effects(self):
-        checks = ["run lint", "run format:check", "run typecheck", "test",
-                  "run build", "run validate", "run check:package"]
-        for task, commands in (("check", checks), ("package", checks + ["run package"])):
+        for task in ("check:software", "check", "package"):
             result, events = self.run_task("plugin:" + task)
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertEqual(events, self.plugin_events(commands))
+            self.assertEqual(events, self.plugin_check_events(package=task == "package", software=task == "check:software"))
             self.assertNotIn("sunset", result.stderr)
             self.assertNotIn("hardware", result.stderr)
             self.assertNotIn("speckit", result.stderr)
+            self.assertFalse(any("link" in event[1] or "watch" in event[1] for event in events))
 
     def test_plugin_failure_stops_later_stages(self):
-        checks = ["run lint", "run format:check", "run typecheck", "test",
-                  "run build", "run validate", "run check:package", "run package"]
-        for index, command in enumerate(checks):
+        expected = self.plugin_check_events(package=True)
+        for command in [event[1] for event in expected if event[0] == "npm"]:
             with self.subTest(stage=command):
-                result, events = self.run_task("plugin:package", environment={"WORKFLOW_NPM_FAIL": command})
+                result, events = self.run_task("plugin:package", environment={"WORKFLOW_NPM_FAIL": " ".join(command)})
                 self.assertNotEqual(result.returncode, 0)
-                self.assertEqual(events, self.plugin_events(checks[:index + 1]))
+                index = next(i for i, event in enumerate(expected) if event[0] == "npm" and event[1] == command)
+                self.assertEqual(events, expected[:index + 1])
+
+    def test_native_tasks_forward_only_build_input_overrides(self):
+        arm = str(self.directory / "arm with ' quotes $HOME")
+        intel = str(self.directory / "intel with ' quotes $HOME")
+        for task, args in {
+            "build": ["build", "--output-root", str(self.project / "dist")],
+            "assemble": ["assemble", "--arm64-dir", arm, "--amd64-dir", intel],
+            "dev": ["dev"], "sign": ["sign"],
+        }.items():
+            result, events = self.run_task("plugin:native:" + task, f"NATIVE_ARM64_DIR={arm}", f"NATIVE_AMD64_DIR={intel}")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(events, [["python", ["scripts/plugin-native.py", *args], str(self.project.resolve())]])
+        for mode in ("distribution", "development"):
+            mode_file = self.directory / f"{mode}.txt"
+            result, events = self.run_task("plugin:package", f"PACKAGE_MODE={mode}", environment={"WORKFLOW_MODE_FILE": str(mode_file)})
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(mode_file.read_text().splitlines())
+            self.assertEqual(set(mode_file.read_text().splitlines()), {mode})
+        mode_file = self.directory / "default-mode.txt"
+        result, _ = self.run_task("plugin:package", environment={"WORKFLOW_MODE_FILE": str(mode_file)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(set(mode_file.read_text().splitlines()), {"development"})
 
     def test_plugin_mock_forwards_literal_arguments_without_install_or_launch(self):
         value = "catalog with ' quotes $HOME"

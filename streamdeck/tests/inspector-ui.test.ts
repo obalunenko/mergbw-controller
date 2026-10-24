@@ -66,6 +66,8 @@ function inspector() {
 		return elements.get(id)!;
 	};
 	const sent: Message[] = [];
+	let nextTimer = 0;
+	const timers = new Map<number, () => void>();
 	let listener: (event: { payload: unknown }) => void;
 	runInNewContext(code, {
 		exports: {},
@@ -75,6 +77,12 @@ function inspector() {
 			return validation;
 		},
 		crypto: { randomUUID },
+		setTimeout: (callback: () => void) => {
+			const id = ++nextTimer;
+			timers.set(id, callback);
+			return id;
+		},
+		clearTimeout: (id: number) => timers.delete(id),
 		document: {
 			getElementById: get,
 			querySelectorAll: () => [],
@@ -103,9 +111,17 @@ function inspector() {
 	});
 	const reply = (snapshot: Record<string, unknown>, extra: Record<string, unknown> = {}): void => {
 		const message = sent.at(-1)!;
-		listener({ payload: { ...message, v: 1, type: "result", complete: true, ok: true, snapshot, ...extra } });
+		listener({ payload: { ...message, v: 2, type: "result", complete: true, ok: true, snapshot, ...extra } });
 	};
-	return { get, sent, reply };
+	return {
+		get,
+		sent,
+		reply,
+		expire: () => {
+			for (const callback of [...timers.values()]) callback();
+			timers.clear();
+		},
+	};
 }
 const connection = { port: 18765, configured: true, hasToken: true };
 function snapshot(actionKind: string, assignment: Record<string, unknown>) {
@@ -113,23 +129,91 @@ function snapshot(actionKind: string, assignment: Record<string, unknown>) {
 		actionKind,
 		assignment: { schemaVersion: 1, ...assignment },
 		connection,
+		configuration: { ...connection, generation: "a".repeat(32), identity: "AA:BB:CC:DD:EE:FF" },
+		controller: { state: "ready", physical_state_verified: false },
 		language: "en",
 		settingsValid: true,
 	};
 }
 
-test("RGB and port drafts survive operation, language and unrelated settings publications", () => {
+test("transition fields preserve invalid drafts and validate one-to-sixty seconds before saving", () => {
+	const ui = inspector();
+	const saved = snapshot("transition", {
+		fromRGB: "FF5000",
+		fromPercent: 100,
+		toRGB: "FF5000",
+		toPercent: 0,
+		durationSeconds: 30,
+	});
+	ui.reply(saved);
+	assert.equal(ui.get("transition-controls").hidden, false);
+	assert.equal(ui.get("color-controls").hidden, true);
+	for (const invalid of ["0", "61", "1.5", ""]) {
+		ui.get("transition-seconds").value = invalid;
+		ui.get("assignment-save").fire("click");
+		assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 0);
+		ui.reply(saved);
+		assert.equal(ui.get("transition-seconds").value, invalid);
+	}
+	ui.get("transition-from-rgb").value = "#ff5000";
+	ui.get("transition-to-rgb").value = "123abc";
+	ui.get("transition-seconds").value = "60";
+	ui.get("assignment-save").fire("click");
+	assert.equal(
+		JSON.stringify(ui.sent.at(-1)!.payload),
+		JSON.stringify({
+			settings: {
+				schemaVersion: 1,
+				fromRGB: "FF5000",
+				fromPercent: 100,
+				toRGB: "123ABC",
+				toPercent: 0,
+				durationSeconds: 60,
+			},
+		}),
+	);
+});
+
+test("transition status buttons use read-only refresh and the displayed current cancellation ID", () => {
+	const ui = inspector();
+	const saved = snapshot("on", {});
+	ui.reply(saved);
+	assert.equal(ui.get("transition-cancel").disabled, true);
+	ui.get("transition-refresh").fire("click");
+	assert.equal(ui.sent.at(-1)!.type, "transition.status");
+	const transition = {
+		id: "a".repeat(32),
+		state: "running",
+		elapsedMs: 500,
+		durationMs: 1000,
+		physical_state_verified: false,
+	};
+	ui.reply({ ...saved, transition });
+	assert.match(ui.get("transition-status").textContent, /running/);
+	assert.match(ui.get("transition-status").textContent, /unverified/);
+	assert.equal(ui.get("transition-cancel").disabled, false);
+	ui.get("transition-cancel").fire("click");
+	assert.equal(ui.sent.at(-1)!.type, "transition.cancel");
+	assert.equal(JSON.stringify(ui.sent.at(-1)!.payload), JSON.stringify({ id: transition.id }));
+	ui.reply({ ...saved, transition: { ...transition, state: "cancelled" } });
+	assert.equal(ui.get("transition-cancel").disabled, true);
+	const count = ui.sent.length;
+	ui.get("transition-cancel").fire("click");
+	assert.equal(ui.sent.length, count);
+});
+
+test("RGB and manual identity drafts survive operation, language and unrelated settings publications", () => {
 	const ui = inspector();
 	const saved = snapshot("color", { rgb: "FF5000" });
 	ui.reply(saved);
 	ui.get("rgb").value = "00FF00";
 	ui.get("rgb").fire("change");
-	ui.get("port").value = "18766";
+	ui.get("identity").value = "11:22:33:44:55:66";
 	for (const status of ["pending", "sent", "unknown"]) {
 		ui.reply({ ...saved, language: "ru", operation: { status } });
 		assert.equal(ui.get("rgb").value, "00FF00");
 		assert.equal(ui.get("color-picker").value, "#00FF00");
-		assert.equal(ui.get("port").value, "18766");
+		assert.equal(ui.get("identity").value, "11:22:33:44:55:66");
 		assert.equal(ui.get("operation").textContent, i18n.translate("ru", status));
 	}
 	ui.get("assignment-save").fire("click");
@@ -139,10 +223,11 @@ test("RGB and port drafts survive operation, language and unrelated settings pub
 		JSON.stringify({ settings: { schemaVersion: 1, rgb: "00FF00" } }),
 	);
 	ui.reply(snapshot("color", { rgb: "00FF00" }));
-	assert.equal(ui.get("port").value, "18766");
-	ui.get("save").fire("click");
-	assert.equal(ui.sent.filter((message) => message.type === "connection.save").length, 1);
-	assert.equal(ui.sent.at(-1)!.payload.port, 18766);
+	assert.equal(ui.get("identity").value, "11:22:33:44:55:66");
+	ui.get("prepare").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.prepareManual");
+	assert.equal(ui.sent.at(-1)?.payload.identity, "11:22:33:44:55:66");
+	assert.equal(ui.get("identity").value, "");
 });
 
 test("brightness draft and slider survive publications and Save sends the draft once", () => {
@@ -207,12 +292,12 @@ test("save acknowledgements retain newer edits and explicit setting changes reco
 	ui.get("rgb").value = "00FF00";
 	ui.get("assignment-save").fire("click");
 	ui.get("rgb").value = "0000FF";
-	ui.get("port").value = "18766";
+	ui.get("identity").value = "11:22:33:44:55:66";
 	ui.reply(snapshot("color", { rgb: "00FF00" }));
 	assert.equal(ui.get("rgb").value, "0000FF");
-	assert.equal(ui.get("port").value, "18766");
+	assert.equal(ui.get("identity").value, "11:22:33:44:55:66");
 	ui.reply({ ...snapshot("color", { rgb: "00FF00" }), connection: { ...connection, port: 18767 } });
-	assert.equal(ui.get("port").value, "18767");
+	assert.equal(ui.get("identity").value, "11:22:33:44:55:66");
 	assert.equal(ui.get("rgb").value, "0000FF");
 	ui.reply({ ...snapshot("color", { rgb: "ABCDEF" }), connection: { ...connection, port: 18767 } });
 	assert.equal(ui.get("rgb").value, "ABCDEF");
@@ -240,61 +325,45 @@ test("invalid drafts and failed saves remain editable; a replacement session sta
 	const replacement = inspector();
 	replacement.reply(saved);
 	assert.equal(replacement.get("rgb").value, "FF5000");
-	assert.equal(replacement.get("port").value, "18765");
+	assert.equal(replacement.get("identity").value, "");
 });
 
-test("explicit import restores its port without discarding unrelated assignment drafts", () => {
+test("manual Prepare clears its identity without discarding unrelated assignment drafts", () => {
 	const ui = inspector();
 	const saved = snapshot("brightness", { percent: 25 });
 	ui.reply(saved);
 	ui.get("percent").value = "75";
-	ui.get("port").value = "18766";
-	ui.get("import-url").value = "http://127.0.0.1:18765/mock_access_token_1234567890123456/on";
-	ui.get("import").fire("click");
-	assert.equal(ui.get("import-url").value, "");
+	ui.get("identity").value = "aa:bb:cc:dd:ee:ff";
+	ui.get("prepare").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.prepareManual");
+	assert.equal(ui.sent.at(-1)?.payload.identity, "AA:BB:CC:DD:EE:FF");
+	assert.equal(ui.get("identity").value, "");
 	ui.reply(saved);
-	assert.equal(ui.get("port").value, "18765");
 	assert.equal(ui.get("percent").value, "75");
 	ui.get("percent").value = "101";
 	ui.get("percent").validity.valid = false;
-	ui.reply({ ...saved, operation: { status: "sent" } });
 	ui.get("assignment-save").fire("click");
-	assert.equal(ui.get("percent").value, "101");
 	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 0);
 });
 
-test("overlapping assignment and port saves retain newer drafts through intermediate publications", () => {
-	for (const field of ["rgb", "port"]) {
-		const ui = inspector();
-		const saved = snapshot("color", { rgb: "FF5000" });
-		ui.reply(saved);
-		const values = field === "rgb" ? ["00FF00", "0000FF", "ABCDEF"] : ["18766", "18767", "18768"];
-		const button = field === "rgb" ? "assignment-save" : "save";
-		const type = field === "rgb" ? "assignment.save" : "connection.save";
-		const updated = (value: string) =>
-			field === "rgb"
-				? snapshot("color", { rgb: value })
-				: { ...saved, connection: { ...connection, port: Number(value) } };
-		ui.get(field).value = values[0]!;
-		ui.get(button).fire("click");
-		ui.get(field).value = values[1]!;
-		ui.get(button).fire("click");
-		ui.get(field).value = values[2]!;
-		assert.equal(ui.sent.filter((message) => message.type === type).length, 1);
-		ui.reply(updated(values[0]!), { complete: false });
-		assert.equal(ui.get(field).value, values[2]);
-		assert.equal(ui.sent.filter((message) => message.type === type).length, 1);
-		ui.reply(updated(values[0]!));
-		assert.equal(ui.sent.filter((message) => message.type === type).length, 2);
-		const payload = ui.sent.at(-1)!.payload;
-		assert.equal(field === "rgb" ? (payload.settings as { rgb: string }).rgb : String(payload.port), values[1]);
-		ui.reply(updated(values[1]!), { complete: false });
-		ui.reply(updated(values[1]!));
-		assert.equal(ui.get(field).value, values[2]);
-		// Once saves finish, an explicit external change still reconciles the field.
-		ui.reply(updated(field === "rgb" ? "123456" : "18769"));
-		assert.equal(ui.get(field).value, field === "rgb" ? "123456" : "18769");
-	}
+test("overlapping assignment saves retain newer drafts through intermediate publications", () => {
+	const ui = inspector();
+	ui.reply(snapshot("color", { rgb: "FF5000" }));
+	ui.get("rgb").value = "00FF00";
+	ui.get("assignment-save").fire("click");
+	ui.get("rgb").value = "0000FF";
+	ui.get("assignment-save").fire("click");
+	ui.get("rgb").value = "ABCDEF";
+	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 1);
+	ui.reply(snapshot("color", { rgb: "00FF00" }), { complete: false });
+	assert.equal(ui.get("rgb").value, "ABCDEF");
+	ui.reply(snapshot("color", { rgb: "00FF00" }));
+	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 2);
+	assert.equal((ui.sent.at(-1)?.payload.settings as { rgb: string }).rgb, "0000FF");
+	ui.reply(snapshot("color", { rgb: "0000FF" }));
+	assert.equal(ui.get("rgb").value, "ABCDEF");
+	ui.reply(snapshot("color", { rgb: "123456" }));
+	assert.equal(ui.get("rgb").value, "123456");
 });
 
 test("a failed queued save preserves later edits and each explicit Save is submitted once", () => {
@@ -313,12 +382,12 @@ test("a failed queued save preserves later edits and each explicit Save is submi
 });
 
 test("save errors remain visible through queued language, check and refresh requests until that save recovers", () => {
-	for (const save of ["assignment-save", "save"]) {
+	for (const save of ["assignment-save"]) {
 		const ui = inspector();
 		const saved = snapshot("color", { rgb: "FF5000" });
 		ui.reply(saved);
 		ui.get("rgb").value = "00FF00";
-		ui.get("port").value = "18766";
+		ui.get("identity").value = "11:22:33:44:55:66";
 		ui.get(save).fire("click");
 		ui.get("language").value = "ru";
 		ui.get("language").fire("change");
@@ -338,7 +407,7 @@ test("save errors remain visible through queued language, check and refresh requ
 		ui.reply({ ...saved, language: "ru" });
 		assert.equal(ui.get("message").textContent, i18n.translate("ru", "storage"));
 		assert.equal(ui.get("rgb").value, "00FF00");
-		assert.equal(ui.get("port").value, "18766");
+		assert.equal(ui.get("identity").value, "11:22:33:44:55:66");
 		ui.get(save).fire("click");
 		ui.reply({ ...snapshot("color", { rgb: "00FF00" }), language: "ru", connection: { ...connection, port: 18766 } });
 		assert.equal(ui.get("message").textContent, "");
@@ -370,4 +439,189 @@ test("read-only timeout guidance is bilingual while command timeouts retain poss
 			assert.match(ui.get("operation").textContent, /late effect|поздн/i);
 		}
 	}
+});
+
+test("manual UI validates identity, previews Apply or Confirm and offers read-only unknown-save checking", () => {
+	const ui = inspector();
+	const saved = snapshot("on", {});
+	ui.reply(saved);
+	ui.get("identity").value = "bad";
+	ui.get("prepare").fire("click");
+	assert.equal(ui.sent.length, 1);
+	assert.equal(ui.get("identity-error").textContent, i18n.translate("en", "invalid_identity"));
+	ui.get("identity").value = "AA:BB:CC:DD:EE:FF";
+	ui.get("prepare").fire("click");
+	const proposal = {
+		transactionId: "b".repeat(32),
+		expectedGeneration: "a".repeat(32),
+		identity: "AA:BB:CC:DD:EE:FF",
+		port: 18765,
+		presetCount: 3,
+		hasToken: true,
+		requiresConfirmation: true,
+	};
+	ui.reply({ ...saved, proposal });
+	assert.equal(ui.get("confirm").hidden, false);
+	assert.equal(ui.get("apply").hidden, true);
+	ui.get("confirm").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.apply");
+	assert.equal(ui.sent.at(-1)?.payload.confirmed, true);
+	ui.reply({ ...saved, saveOutcome: { status: "commit_unknown", activeStateKnown: false } });
+	assert.equal(ui.get("prepare").disabled, true);
+	assert.equal(ui.get("save-outcome").textContent, i18n.translate("en", "commit_unknown"));
+	ui.get("configuration-check").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.check");
+});
+test("manual UI cancel discards proposal and HTML has no token/link/path or automatic identity persistence", () => {
+	const html = readFileSync("com.obalunenko.mergbw.sdPlugin/ui/index.html", "utf8");
+	assert.doesNotMatch(html, /replacement-token|import-url|setting=|global=/);
+	assert.match(html, /id="identity"/);
+	assert.match(html, /id="setup-method"/);
+	const ui = inspector();
+	const saved = snapshot("off", {});
+	ui.reply({
+		...saved,
+		proposal: {
+			transactionId: "b".repeat(32),
+			expectedGeneration: null,
+			identity: "AA:BB:CC:DD:EE:FF",
+			port: 18765,
+			presetCount: 3,
+			hasToken: true,
+			requiresConfirmation: false,
+		},
+	});
+	assert.equal(ui.get("apply").hidden, false);
+	ui.get("cancel").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.cancel");
+	assert.equal(ui.get("proposal").hidden, true);
+});
+
+test("file selection is transient, review/cancel clears it and readonly recovery never resends apply", () => {
+	const html = readFileSync("com.obalunenko.mergbw.sdPlugin/ui/index.html", "utf8");
+	assert.match(html, /<sdpi-file id="settings-file" accept=".json"/);
+	assert.match(html, /<sdpi-file id="presets-file" accept=".json"/);
+	assert.doesNotMatch(html, /setting=|global=/);
+	const ui = inspector(),
+		saved = snapshot("off", {});
+	ui.reply(saved);
+	const option = new Element();
+	option.value = "import";
+	ui.get("setup-method").replaceChildren(option);
+	ui.get("setup-method").value = "import";
+	ui.get("setup-method").fire("change");
+	ui.get("settings-file").value = "/synthetic/private/settings.json";
+	ui.get("presets-file").value = "/synthetic/private/presets.json";
+	ui.get("prepare").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.prepareImport");
+	assert.equal(ui.get("settings-file").value, "");
+	assert.equal(ui.get("presets-file").value, "");
+	const proposal = {
+		transactionId: "b".repeat(32),
+		expectedGeneration: "a".repeat(32),
+		identity: "11:22:33:44:55:66",
+		port: 23456,
+		presetCount: 1,
+		hasToken: true,
+		requiresConfirmation: true,
+		diff: { identity: true, port: true, secret: true, presets: true },
+	};
+	ui.reply({ ...saved, proposal });
+	assert.equal(ui.get("confirm").hidden, false);
+	assert.ok(ui.get("proposal-diff").textContent.includes(i18n.translate("en", "diff_secret")));
+	ui.get("confirm").fire("click");
+	ui.get("confirm").fire("click");
+	assert.equal(ui.sent.filter((message) => message.type === "configuration.apply").length, 1);
+	ui.reply({ ...saved, saveOutcome: { status: "commit_unknown", activeStateKnown: false } });
+	ui.get("prepare").fire("click");
+	assert.equal(ui.sent.filter((message) => message.type === "configuration.prepareImport").length, 1);
+	ui.get("configuration-check").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.check");
+	ui.reply({
+		...saved,
+		saveOutcome: { status: "applied", activeStateKnown: true },
+		controller: { state: "failed", errorCategory: "spawn_failed" },
+	});
+	assert.equal(ui.get("save-outcome").textContent, i18n.translate("en", "applied"));
+	assert.equal(ui.get("controller-state").textContent, i18n.translate("en", "spawn_failed"));
+	assert.equal(ui.sent.filter((message) => message.type === "configuration.apply").length, 1);
+	ui.get("settings-file").value = "/synthetic/again.json";
+	ui.get("cancel").fire("click");
+	assert.equal(ui.get("settings-file").value, "");
+});
+test("migration and whole-file guidance is bilingual and never suggests legacy links include identity", () => {
+	for (const language of ["en", "ru"] as const) {
+		const ui = inspector();
+		ui.reply({
+			...snapshot("preset", { presetId: "custom_missing" }),
+			language,
+			migration: "legacy",
+			catalog: { status: "available", entries: [{ id: "other", label: "Other" }] },
+		});
+		assert.equal(ui.get("migration-guidance").textContent, i18n.translate(language, "legacyIdentityRequired"));
+		assert.equal(ui.get("preset-select").value, "custom_missing");
+		assert.equal(ui.get("assignment-save").disabled, true);
+		assert.equal(ui.sent.length, 1);
+	}
+});
+
+test("a lost PI confirmation unblocks read-only checking without replaying or queuing another write", () => {
+	const ui = inspector(),
+		saved = snapshot("on", {});
+	ui.reply(saved);
+	ui.reply({
+		...saved,
+		proposal: {
+			transactionId: "b".repeat(32),
+			expectedGeneration: "a".repeat(32),
+			identity: "11:22:33:44:55:66",
+			port: 23456,
+			presetCount: 1,
+			hasToken: true,
+			requiresConfirmation: true,
+		},
+	});
+	ui.get("confirm").fire("click");
+	ui.expire();
+	assert.equal(ui.get("save-outcome").textContent, i18n.translate("en", "commit_unknown"));
+	assert.equal(ui.get("prepare").disabled, true);
+	ui.get("configuration-check").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.check");
+	ui.reply({ ...saved, activeStateKnown: true, saveOutcome: { status: "not_applied", activeStateKnown: true } });
+	assert.equal(ui.get("prepare").disabled, false);
+	assert.equal(ui.sent.filter((message) => message.type === "configuration.apply").length, 1);
+});
+
+test("panel restart coalesces repeated clicks and keeps readiness, Bluetooth and save outcome separate", () => {
+	const ui = inspector(),
+		saved = snapshot("on", {});
+	ui.reply({
+		...saved,
+		controller: { state: "failed", errorCategory: "host_unavailable", bluetooth: "unknown" },
+		saveOutcome: { status: "commit_unknown", activeStateKnown: false },
+		check: { service: "available", authorization: "verified", bluetooth: "connected" },
+	});
+	assert.equal(ui.get("bluetooth-status").textContent, i18n.translate("en", "statusUnknown"));
+	assert.equal(ui.get("save-outcome").textContent, i18n.translate("en", "commit_unknown"));
+	ui.get("restart").fire("click");
+	ui.get("restart").fire("click");
+	ui.get("restart").fire("click");
+	assert.equal(ui.sent.filter((message) => message.type === "controller.restart").length, 1);
+	assert.equal(JSON.stringify(ui.sent.at(-1)!.payload), JSON.stringify({ expectedGeneration: "a".repeat(32) }));
+	assert.equal(ui.get("restart").disabled, true);
+	ui.reply(
+		{
+			...saved,
+			controller: { state: "cleanup_blocked", errorCategory: "instance_busy", bluetooth: "unknown" },
+			saveOutcome: { status: "applied", activeStateKnown: true },
+		},
+		{ ok: false, messageKey: "instance_busy" },
+	);
+	assert.equal(ui.get("restart").disabled, false);
+	assert.equal(ui.get("controller-state").textContent, i18n.translate("en", "instance_busy"));
+	assert.equal(ui.get("save-outcome").textContent, i18n.translate("en", "applied"));
+	assert.equal(
+		ui.sent.some((message) => message.type === "configuration.apply"),
+		false,
+	);
 });

@@ -1,22 +1,29 @@
-import { BridgeClient, type PresetEntry } from "./bridge-client.js";
+import { BridgeClient, type PresetEntry, type TransitionSnapshot } from "./bridge-client.js";
 import { type Diagnostics, type ErrorCategory, requestId } from "./diagnostics.js";
+import type { ManagedController, Proposal } from "./managed-controller.js";
 import { type OperationStore, operationSummary, type OperationSummary } from "./operation-store.js";
 import type { Settings } from "./settings.js";
-import { assignment, type Assignment, type Language, object, parseConnectionLink } from "./validation.js";
+import { assignment, type Assignment, identity, type Language, object, selectedPath } from "./validation.js";
 
 export const messageTypes = [
 	"inspector.get",
-	"connection.import",
-	"connection.save",
+	"configuration.prepareManual",
+	"configuration.prepareImport",
+	"configuration.apply",
+	"configuration.cancel",
+	"configuration.check",
+	"controller.restart",
 	"connection.check",
 	"presets.refresh",
+	"transition.status",
+	"transition.cancel",
 	"assignment.save",
 	"language.save",
 	"inspector.close",
 ] as const;
 export type MessageType = (typeof messageTypes)[number];
 export type InspectorMessage = {
-	v: 1;
+	v: 2;
 	sessionId: string;
 	requestId: string;
 	type: MessageType;
@@ -24,10 +31,16 @@ export type InspectorMessage = {
 };
 const keys: Record<MessageType, string[]> = {
 	"inspector.get": [],
-	"connection.import": ["url"],
-	"connection.save": ["port", "replacementToken"],
+	"configuration.prepareManual": ["identity", "expectedGeneration"],
+	"configuration.prepareImport": ["settingsPath", "presetsPath", "expectedGeneration"],
+	"configuration.apply": ["transactionId", "expectedGeneration", "confirmed"],
+	"configuration.cancel": ["transactionId"],
+	"configuration.check": [],
+	"controller.restart": ["expectedGeneration"],
 	"connection.check": [],
 	"presets.refresh": [],
+	"transition.status": [],
+	"transition.cancel": ["id"],
 	"assignment.save": ["settings"],
 	"language.save": ["language"],
 	"inspector.close": [],
@@ -37,7 +50,7 @@ export function parseMessage(context: string, raw: unknown): InspectorMessage {
 		!context ||
 		context.length > 256 ||
 		!object(raw) ||
-		raw.v !== 1 ||
+		raw.v !== 2 ||
 		typeof raw.type !== "string" ||
 		!messageTypes.includes(raw.type as MessageType)
 	)
@@ -56,12 +69,55 @@ export function parseMessage(context: string, raw: unknown): InspectorMessage {
 		throw new Error("validation");
 	const type = raw.type as MessageType;
 	if (Object.keys(raw.payload).some((k) => !keys[type].includes(k))) throw new Error("validation");
-	return { v: 1, sessionId: raw.sessionId, requestId: raw.requestId, type, payload: raw.payload };
+	if (type === "configuration.prepareManual") identity(raw.payload.identity);
+	if (type === "configuration.prepareImport") {
+		selectedPath(raw.payload.settingsPath);
+		if (raw.payload.presetsPath !== undefined) selectedPath(raw.payload.presetsPath);
+	}
+	if (
+		type === "configuration.prepareManual" ||
+		type === "configuration.prepareImport" ||
+		type === "configuration.apply" ||
+		type === "controller.restart"
+	) {
+		if (
+			raw.payload.expectedGeneration !== null &&
+			(typeof raw.payload.expectedGeneration !== "string" || !/^[0-9a-f]{32}$/.test(raw.payload.expectedGeneration))
+		)
+			throw new Error("validation");
+	}
+	if (type === "configuration.apply" || type === "configuration.cancel") {
+		if (typeof raw.payload.transactionId !== "string" || !/^[0-9a-f]{32}$/.test(raw.payload.transactionId))
+			throw new Error("validation");
+	}
+	if (type === "transition.cancel" && (typeof raw.payload.id !== "string" || !/^[0-9a-f]{32}$/.test(raw.payload.id)))
+		throw new Error("validation");
+	if (type === "configuration.apply" && typeof raw.payload.confirmed !== "boolean") throw new Error("validation");
+	return { v: 2, sessionId: raw.sessionId, requestId: raw.requestId, type, payload: raw.payload };
 }
 export type ConnectionSummary = { configured: boolean; port: number; hasToken: boolean };
 export type InspectorSnapshot = {
+	transition?: TransitionSnapshot | null;
+	transitionError?: ErrorCategory;
+	transitionPending?: boolean;
 	connection: ConnectionSummary;
+	activeStateKnown?: boolean;
+	configuration?: import("./managed-controller.js").ActiveConfiguration;
+	controller?: {
+		state: string;
+		errorCategory?: string;
+		bluetooth: "connected" | "disconnected" | "unknown";
+		physical_state_verified: false;
+	};
+	proposal?: Omit<Proposal, "candidateGeneration" | "ownerSession"> & { requiresConfirmation: boolean };
+	saveOutcome?: {
+		transactionId?: string;
+		status: import("./managed-controller.js").SaveOutcome;
+		activeStateKnown: boolean;
+		canCheck: boolean;
+	};
 	language: Language;
+	migration?: "invalid" | "legacy" | "ready";
 	check?: ConnectionCheck;
 	catalog?: CatalogSnapshot;
 	assignment?: Assignment;
@@ -93,9 +149,8 @@ export function safeSnapshot(context: string, settings: Settings, operations: Op
 	const operation = operations.get(context);
 	if (
 		operation &&
-		(operation.status === "pending" ||
-			(operation.settingsRevision === settings.revision(context) &&
-				operation.connectionRevision === settings.connectionRevision))
+		operation.connectionRevision === settings.connectionRevision &&
+		(operation.status === "pending" || operation.settingsRevision === settings.revision(context))
 	)
 		snapshot.operation = operationSummary(operation);
 	return snapshot;
@@ -123,7 +178,7 @@ export function presetOptions(entries: PresetEntry[]): PresetEntry[] {
 	return entries.map(({ id, label }) => ({ id, label: counts.get(label)! > 1 ? `${label} (${id})` : label }));
 }
 export type InspectorReply = {
-	v: 1;
+	v: 2;
 	sessionId: string;
 	requestId: string;
 	type: "result";
@@ -140,6 +195,19 @@ const emptyCheck = (): ConnectionCheck => ({
 });
 
 export class InspectorController {
+	private readonly transitions = new Map<
+		string,
+		{
+			value?: TransitionSnapshot | null;
+			error?: ErrorCategory;
+			capability?: import("./managed-controller.js").Capability;
+		}
+	>();
+	private readonly transitionRequests = new Set<string>();
+	private transitionGeneration = 0;
+	private transitionOperation?: string;
+	private readonly proposals = new Map<string, Proposal>();
+	private readonly completedRequests = new Map<string, Map<string, { ok: boolean; messageKey?: string }>>();
 	private readonly sessions = new Map<string, InspectorMessage>();
 	private readonly sessionTokens = new Map<string, object>();
 	private refreshContext?: string;
@@ -152,6 +220,7 @@ export class InspectorController {
 		string,
 		{ category?: ErrorCategory; operation?: OperationSummary; assignment: number; connection: number }
 	>();
+	private managementSession?: string;
 	private readonly catalogListeners = new Set<() => void>();
 	constructor(
 		private readonly settings: Settings,
@@ -159,10 +228,23 @@ export class InspectorController {
 		private readonly client: BridgeClient,
 		private readonly send: (reply: InspectorReply, context: string) => Promise<void> | void,
 		private readonly diagnostics?: Diagnostics,
+		private readonly runtime?: ManagedController,
 	) {
 		this.revision = settings.connectionRevision;
 		this.catalog = { connectionRevision: this.revision, status: "idle", entries: [], requestGeneration: 0 };
+		const runtimeUnsubscribe = runtime?.subscribe(() => {
+			const session = runtime.managementSession();
+			if (session !== this.managementSession) {
+				this.managementSession = session;
+				this.proposals.clear();
+				this.transitions.clear();
+				this.transitionGeneration++;
+				this.completedRequests.clear();
+			}
+			this.publish();
+		});
 		this.unsubscribers = [
+			...(runtimeUnsubscribe ? [runtimeUnsubscribe] : []),
 			settings.subscribe(() => {
 				for (const [context, explanation] of this.explanations) {
 					if (
@@ -173,6 +255,8 @@ export class InspectorController {
 				}
 				if (settings.connectionRevision !== this.revision) {
 					this.revision = settings.connectionRevision;
+					this.transitions.clear();
+					this.transitionGeneration++;
 					this.generation++;
 					this.check = emptyCheck();
 					this.catalog = {
@@ -185,8 +269,31 @@ export class InspectorController {
 				this.publish();
 			}),
 			operations.subscribe((record) => {
-				if (record.status === "pending") this.explanations.delete(record.context);
-				else if (
+				if (record.status === "pending") {
+					this.explanations.delete(record.context);
+					if (
+						record.settingsRevision === settings.revision(record.context) &&
+						record.connectionRevision === settings.connectionRevision &&
+						(this.runtime
+							? !!record.snapshot.capability && this.runtime.current(record.snapshot.capability)
+							: !record.snapshot.capability)
+					) {
+						this.transitions.clear();
+						this.transitionOperation = record.operationId;
+						this.transitionGeneration++;
+					}
+				} else if (
+					record.status === "accepted" &&
+					record.transition &&
+					record.operationId === this.transitionOperation &&
+					record.settingsRevision === settings.revision(record.context) &&
+					record.connectionRevision === settings.connectionRevision &&
+					(!record.snapshot.capability || this.runtime?.current(record.snapshot.capability))
+				) {
+					this.transitionGeneration++;
+					for (const [context, checked] of this.transitions)
+						if (checked.value?.id !== record.transition.id) this.transitions.delete(context);
+				} else if (
 					(record.status === "rejected" || record.status === "unknown") &&
 					record.settingsRevision === settings.revision(record.context) &&
 					record.connectionRevision === settings.connectionRevision
@@ -206,6 +313,11 @@ export class InspectorController {
 		this.catalogListeners.clear();
 	}
 	public close(context: string): void {
+		const proposal = this.proposals.get(context);
+		if (proposal) void this.runtime?.cancel(proposal.transactionId, proposal.ownerSession).catch(() => {});
+		this.proposals.delete(context);
+		this.transitions.delete(context);
+		this.completedRequests.delete(context);
 		this.sessions.delete(context);
 		this.sessionTokens.delete(context);
 		if (this.refreshContext === context && this.catalog.status === "loading") {
@@ -218,6 +330,9 @@ export class InspectorController {
 			};
 			this.publish();
 		}
+	}
+	public lifecycleState(): string | undefined {
+		return this.runtime?.error ?? this.runtime?.state;
 	}
 	public subscribeCatalog(listener: () => void): () => void {
 		this.catalogListeners.add(listener);
@@ -244,11 +359,70 @@ export class InspectorController {
 	}
 	public snapshot(context: string): InspectorSnapshot {
 		const explanation = this.explanations.get(context);
+		const record = this.operations.get(context);
+		const accepted =
+			record?.status === "accepted" &&
+			record.actionKind === "transition" &&
+			record.operationId === this.transitionOperation &&
+			record.settingsRevision === this.settings.revision(context) &&
+			record.connectionRevision === this.settings.connectionRevision
+				? record.transition
+				: undefined;
+		// The validated 202 response already identifies this admitted job. An
+		// explicit status read can replace it with newer progress or final state.
+		const transition =
+			this.transitions.get(context) ??
+			(accepted ? { value: accepted, capability: record?.snapshot.capability } : undefined);
 		const snapshot: InspectorSnapshot = {
 			...safeSnapshot(context, this.settings, this.operations),
+			migration:
+				this.runtime?.active.configured && this.settings.migrationStatus() === "legacy"
+					? "ready"
+					: this.settings.migrationStatus(),
 			check: { ...this.check },
 			catalog: structuredClone(this.catalog),
 		};
+		if (transition && (!transition.capability || this.runtime?.current(transition.capability))) {
+			snapshot.transition = transition.value;
+			snapshot.transitionError = transition.error;
+		}
+		snapshot.transitionPending = this.transitionRequests.has(context);
+		if (this.runtime) {
+			snapshot.activeStateKnown = this.runtime.activeStateKnown;
+			const { configured, generation, identity, port, hasToken, presetCount } = this.runtime.active;
+			snapshot.configuration = { configured, generation, identity, port, hasToken, presetCount };
+			snapshot.connection = { configured, port: port ?? 18765, hasToken: hasToken ?? false };
+			snapshot.controller = {
+				state: this.runtime.state,
+				errorCategory: this.runtime.error,
+				bluetooth: this.runtime.bluetooth,
+				physical_state_verified: false,
+			};
+			const proposal = this.proposals.get(context);
+			if (proposal) {
+				const { transactionId, expectedGeneration, identity, port, hasToken, presetCount, changed, diff, expiresAt } =
+					proposal;
+				snapshot.proposal = {
+					transactionId,
+					expectedGeneration,
+					identity,
+					port,
+					hasToken,
+					presetCount,
+					changed,
+					diff: { ...diff },
+					expiresAt,
+					requiresConfirmation: configured && changed,
+				};
+			}
+			if (this.runtime.saveOutcome)
+				snapshot.saveOutcome = {
+					status: this.runtime.saveOutcome,
+					transactionId: this.runtime.saveTransaction,
+					activeStateKnown: this.runtime.activeStateKnown,
+					canCheck: true,
+				};
+		}
 		if (explanation?.category) {
 			snapshot.explanation = explanation.category;
 			delete snapshot.operation;
@@ -280,7 +454,51 @@ export class InspectorController {
 		let message: InspectorMessage;
 		try {
 			message = parseMessage(context, raw);
-		} catch {
+		} catch (error) {
+			if (
+				object(raw) &&
+				raw.v === 2 &&
+				typeof raw.sessionId === "string" &&
+				/^[A-Za-z0-9_-]{1,80}$/.test(raw.sessionId) &&
+				typeof raw.requestId === "string" &&
+				/^[A-Za-z0-9_-]{1,80}$/.test(raw.requestId)
+			)
+				await this.send(
+					{
+						v: 2,
+						sessionId: raw.sessionId,
+						requestId: raw.requestId,
+						type: "result",
+						complete: true,
+						ok: false,
+						messageKey:
+							error instanceof Error && ["invalid_identity", "import_file"].includes(error.message)
+								? error.message
+								: "validation",
+						snapshot: this.snapshot(context),
+					},
+					context,
+				);
+			if (
+				object(raw) &&
+				raw.v === 1 &&
+				typeof raw.sessionId === "string" &&
+				/^[A-Za-z0-9_-]{1,80}$/.test(raw.sessionId) &&
+				typeof raw.requestId === "string" &&
+				/^[A-Za-z0-9_-]{1,80}$/.test(raw.requestId)
+			)
+				await this.send(
+					{
+						v: 2,
+						sessionId: raw.sessionId,
+						requestId: raw.requestId,
+						type: "result",
+						complete: true,
+						ok: false,
+						messageKey: "migration_required",
+					},
+					context,
+				);
 			return;
 		}
 		if (message.type === "inspector.get") {
@@ -295,14 +513,77 @@ export class InspectorController {
 			this.close(context);
 			return;
 		}
+		const oldReply = this.completedRequests.get(context)?.get(message.requestId);
+		if (oldReply) {
+			await this.reply(context, message, oldReply.ok, oldReply.messageKey);
+			return;
+		}
 		const sessionToken = this.sessionTokens.get(context);
+		const runtimeSession = this.runtime?.managementSession();
 		try {
 			switch (message.type) {
-				case "connection.import":
-					await this.settings.importConnection(parseConnectionLink(message.payload.url));
+				case "configuration.prepareManual":
+				case "configuration.prepareImport": {
+					if (!this.runtime) throw new Error("unconfigured");
+					const old = this.proposals.get(context);
+					if (old) await this.runtime.cancel(old.transactionId, old.ownerSession);
+					this.proposals.delete(context);
+					let proposal: Proposal;
+					if (message.type === "configuration.prepareImport") {
+						proposal = await this.runtime.prepareImport(
+							selectedPath(message.payload.settingsPath),
+							message.payload.presetsPath === undefined ? undefined : selectedPath(message.payload.presetsPath),
+							message.payload.expectedGeneration as string | null,
+							message.sessionId,
+						);
+					} else {
+						proposal = await this.runtime.prepare(
+							identity(message.payload.identity),
+							message.payload.expectedGeneration as string | null,
+							message.sessionId,
+						);
+					}
+					if (runtimeSession !== this.runtime.managementSession()) return;
+					if (this.sessionTokens.get(context) !== sessionToken) {
+						await this.runtime.cancel(proposal.transactionId, proposal.ownerSession);
+						return;
+					}
+					this.proposals.set(context, proposal);
 					break;
-				case "connection.save":
-					await this.settings.saveConnection(message.payload.port, message.payload.replacementToken);
+				}
+				case "configuration.apply": {
+					const proposal = this.proposals.get(context);
+					if (
+						!this.runtime ||
+						!proposal ||
+						proposal.transactionId !== message.payload.transactionId ||
+						proposal.expiresAt <= Date.now()
+					)
+						throw new Error("proposal_expired");
+					if (proposal.expectedGeneration !== message.payload.expectedGeneration)
+						throw new Error("stale_configuration");
+					if (this.runtime.active.configured && proposal.changed && !message.payload.confirmed)
+						throw new Error("confirmation_required");
+					this.proposals.delete(context);
+					await this.runtime.apply(proposal, message.payload.confirmed as boolean);
+					break;
+				}
+				case "configuration.cancel": {
+					const proposal = this.proposals.get(context);
+					if (!proposal || proposal.transactionId !== message.payload.transactionId)
+						throw new Error("proposal_expired");
+					this.proposals.delete(context);
+					await this.runtime?.cancel(proposal.transactionId, proposal.ownerSession);
+					break;
+				}
+				case "controller.restart":
+					if (!this.runtime) throw new Error("unconfigured");
+					for (const key of this.proposals.keys()) this.proposals.delete(key);
+					await this.runtime.restart(message.payload.expectedGeneration as string | null);
+					break;
+				case "configuration.check":
+					if (!this.runtime) throw new Error("unconfigured");
+					await this.runtime.reload();
 					break;
 				case "language.save":
 					await this.settings.saveLanguage(message.payload.language);
@@ -331,6 +612,10 @@ export class InspectorController {
 					await this.settings.saveAction(context, next);
 					break;
 				}
+				case "transition.status":
+				case "transition.cancel":
+					await this.refreshTransition(context, message);
+					break;
 				case "connection.check":
 					await this.refresh(true, context, message);
 					break;
@@ -345,12 +630,84 @@ export class InspectorController {
 					context,
 					message,
 					false,
-					error instanceof Error && error.message === "storage" ? "storage" : "validation",
+					error instanceof Error &&
+						[
+							"storage",
+							"storage_unavailable",
+							"instance_busy",
+							"binary_missing",
+							"binary_incompatible",
+							"spawn_failed",
+							"protocol_incompatible",
+							"port_conflict",
+							"startup_timeout",
+							"permission_denied",
+							"bluetooth_unavailable",
+							"backend_restart_required",
+							"worker_exited",
+							"cleanup_blocked",
+							"host_unavailable",
+							"stale_configuration",
+							"proposal_expired",
+							"confirmation_required",
+							"unconfigured",
+							"invalid_identity",
+							"import_missing",
+							"import_unreadable",
+							"import_size",
+							"import_file",
+							"invalid_configuration",
+							"port_conflict",
+							"host_unavailable",
+							"cleanup_blocked",
+							"instance_busy",
+						].includes(error.message)
+						? error.message
+						: "validation",
 				);
 		}
 	}
+	private async refreshTransition(context: string, message: InspectorMessage): Promise<void> {
+		if (this.transitionRequests.has(context)) throw new Error("validation");
+		const capability = this.runtime?.capability();
+		const connection = this.runtime ? capability?.connection : this.settings.getConnection();
+		if (!connection) throw new Error("unconfigured");
+		const known = this.snapshot(context).transition;
+		const id = message.payload.id;
+		if (message.type === "transition.cancel" && (!known || known.id !== id)) throw new Error("validation");
+		const revision = this.settings.connectionRevision;
+		const generation = this.transitionGeneration;
+		const token = this.sessionTokens.get(context);
+		this.transitionRequests.add(context);
+		this.publish();
+		const release = this.diagnostics?.retain(connection.accessToken);
+		try {
+			const result =
+				message.type === "transition.cancel"
+					? await this.client.cancelTransition(connection, id as string, capability?.signal, capability ?? undefined)
+					: await this.client.transition(connection, capability?.signal, capability ?? undefined);
+			if (
+				(capability && !this.runtime?.current(capability)) ||
+				this.settings.connectionRevision !== revision ||
+				this.transitionGeneration !== generation ||
+				this.sessionTokens.get(context) !== token ||
+				this.sessions.get(context)?.requestId !== message.requestId
+			)
+				return;
+			this.transitions.set(context, {
+				value: result.value?.transition,
+				error: result.value ? undefined : (result.errorCategory ?? "protocol"),
+				capability: capability ?? undefined,
+			});
+		} finally {
+			release?.();
+			this.transitionRequests.delete(context);
+			this.publish();
+		}
+	}
 	private async refresh(includeHealth: boolean, context: string, message: InspectorMessage): Promise<void> {
-		const connection = this.settings.getConnection();
+		const capability = this.runtime?.provisional();
+		const connection = this.runtime ? capability?.connection : this.settings.getConnection();
 		if (!connection) throw new Error("validation");
 		const revision = this.settings.connectionRevision;
 		const generation = ++this.generation;
@@ -361,10 +718,11 @@ export class InspectorController {
 		const release = this.diagnostics?.retain(connection.accessToken);
 		try {
 			const [health, catalog] = await Promise.all([
-				includeHealth ? this.client.health(connection) : Promise.resolve(undefined),
-				this.client.catalog(connection),
+				includeHealth ? this.client.health(connection, capability?.signal) : Promise.resolve(undefined),
+				this.client.catalog(connection, capability?.signal),
 			]);
 			if (
+				(capability && !this.runtime?.current(capability)) ||
 				this.settings.connectionRevision !== revision ||
 				this.generation !== generation ||
 				this.sessionTokens.get(context) !== token ||
@@ -448,9 +806,15 @@ export class InspectorController {
 		messageKey?: string,
 		complete = true,
 	): Promise<void> {
+		if (complete) {
+			const cache = this.completedRequests.get(context) ?? new Map<string, { ok: boolean; messageKey?: string }>();
+			if (cache.size >= 32) cache.delete(cache.keys().next().value!);
+			cache.set(message.requestId, { ok, messageKey });
+			this.completedRequests.set(context, cache);
+		}
 		await this.send(
 			{
-				v: 1,
+				v: 2,
 				sessionId: message.sessionId,
 				requestId: message.requestId,
 				type: "result",

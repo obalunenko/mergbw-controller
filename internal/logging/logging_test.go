@@ -48,3 +48,17 @@ func TestRedactionCoversMessagesBoundFieldsErrorsAndGroups(t *testing.T) {
 	assert.Equal(t, "preset/sunset", record["command"])
 	assert.Equal(t, float64(3), record["packet_count"])
 }
+
+func TestManagedDiagnosticsAreSafeBeforeConfigurationLoads(t *testing.T) {
+	var output bytes.Buffer
+	ctx := logging.WithLogger(t.Context(), slog.New(slog.NewJSONHandler(&output, nil)))
+	hostile := "token=never-display https://127.0.0.1/private /private/source/settings.json\n{\"secret\":true}"
+	logging.Managed(ctx, "startup", hostile, hostile, 1)
+	assert.Contains(t, output.String(), "internal_error")
+	assert.NotContains(t, output.String(), "never-display")
+	assert.NotContains(t, output.String(), "settings.json")
+	assert.NotContains(t, output.String(), "request_id")
+	output.Reset()
+	logging.Managed(ctx, hostile, "worker_exited", "", 0)
+	assert.Empty(t, output.String())
+}

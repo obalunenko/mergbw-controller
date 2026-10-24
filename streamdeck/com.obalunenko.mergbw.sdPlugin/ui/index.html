@@ -21,18 +21,63 @@
 				<option value="ru">Русский</option>
 			</select>
 			<fieldset>
-				<legend data-i18n="connection">Connection</legend>
+				<legend data-i18n="setup">Lamp setup</legend>
+				<label for="setup-method" data-i18n="setupMethod">Setup method</label>
+				<select id="setup-method">
+					<option value="manual" data-i18n="manualSetup">Manual identity</option>
+					<option value="import" data-i18n="importFiles">Import files</option>
+				</select>
 				<p id="connection-summary"></p>
-				<label for="import-url" data-i18n="import">Import link</label>
-				<input id="import-url" type="password" autocomplete="off" spellcheck="false" />
-				<button id="import" type="button" data-i18n="import">Import link</button>
-				<label for="port" data-i18n="port">Port</label>
-				<input id="port" type="number" min="1024" max="65535" value="18765" step="1" />
-				<label for="replacement-token" data-i18n="replacementToken">Replacement token (blank keeps saved token)</label>
-				<input id="replacement-token" type="password" autocomplete="new-password" spellcheck="false" />
+				<div id="manual-controls">
+					<label for="identity" data-i18n="identity">Manufacturer-data identity</label>
+					<input
+						id="identity"
+						type="text"
+						maxlength="17"
+						autocomplete="off"
+						spellcheck="false"
+						placeholder="AA:BB:CC:DD:EE:FF"
+						aria-describedby="identity-help identity-error"
+					/>
+					<p id="identity-help" data-i18n="identityHelp">
+						Use six HEX bytes from the lamp's manufacturer data, separated by colons. This is not a Bluetooth address.
+						Discovery is not included.
+					</p>
+				</div>
+				<div id="import-controls" hidden>
+					<label for="settings-file" data-i18n="settingsFile">Settings file (required)</label>
+					<sdpi-file id="settings-file" accept=".json"></sdpi-file>
+					<label for="presets-file" data-i18n="presetsFile">Presets file (optional)</label>
+					<sdpi-file id="presets-file" accept=".json"></sdpi-file>
+					<p data-i18n="catalogWholeFile">The selected catalog replaces the whole file; stock keys are never merged.</p>
+				</div>
+				<p id="migration-guidance" data-i18n="importHelp"></p>
+				<p id="identity-error" role="status"></p>
+				<p data-i18n="stopExternal">
+					Stop your previous standalone controller before applying. The plugin uses its bundled controller.
+				</p>
+				<button id="prepare" type="button" data-i18n="prepare">Prepare</button>
+				<section id="proposal" hidden aria-live="polite">
+					<p id="proposal-summary"></p>
+					<p id="proposal-diff"></p>
+					<p data-i18n="reviewExpiry">Review expires in five minutes.</p>
+					<p id="interruption-warning" data-i18n="interruptionWarning" hidden>
+						Applying changed data stops the current action before replacing the configuration.
+					</p>
+					<div class="buttons">
+						<button id="apply" type="button" data-i18n="apply">Apply</button>
+						<button id="confirm" type="button" data-i18n="confirm" hidden>Confirm changes</button>
+						<button id="cancel" type="button" data-i18n="cancel">Cancel</button>
+					</div>
+				</section>
+				<p id="save-outcome" role="status"></p>
+				<p id="controller-state" role="status"></p>
 				<div class="buttons">
-					<button id="save" type="button" data-i18n="save">Save</button
-					><button id="check" type="button" data-i18n="check">Check connection</button>
+					<button id="configuration-check" type="button" data-i18n="configurationCheck">
+						Check saved configuration
+					</button>
+					<button id="restart" type="button" data-i18n="restart">Restart controller</button>
+					<button id="check" type="button" data-i18n="check">Check connection</button>
 				</div>
 			</fieldset>
 			<fieldset id="assignment-controls" hidden>
@@ -48,6 +93,10 @@
 					<input id="percent-slider" type="range" min="0" max="100" step="1" value="50" />
 					<label for="percent" data-i18n="percent">Brightness (%)</label>
 					<input id="percent" type="number" min="0" max="100" step="1" value="50" />
+					<p data-i18n="dialHelp">
+						Stream Deck+ dials change the current-session target by 1% per tick. Rotation turns power on; the target is
+						not a lamp reading.
+					</p>
 				</div>
 				<div id="preset-controls" hidden>
 					<label for="preset-select" data-i18n="preset">Preset</label>
@@ -55,8 +104,32 @@
 					<button id="refresh" type="button" data-i18n="refresh">Refresh presets</button>
 					<p id="catalog-status" role="status"></p>
 				</div>
+				<div id="transition-controls" hidden>
+					<label for="transition-from-rgb" data-i18n="transitionFromRGB">Start RGB</label>
+					<input id="transition-from-rgb" type="text" value="FF5000" maxlength="7" spellcheck="false" />
+					<label for="transition-from-percent" data-i18n="transitionFromPercent">Start brightness (%)</label>
+					<input id="transition-from-percent" type="number" min="0" max="100" step="1" value="100" />
+					<label for="transition-to-rgb" data-i18n="transitionToRGB">End RGB</label>
+					<input id="transition-to-rgb" type="text" value="FF5000" maxlength="7" spellcheck="false" />
+					<label for="transition-to-percent" data-i18n="transitionToPercent">End brightness (%)</label>
+					<input id="transition-to-percent" type="number" min="0" max="100" step="1" value="0" />
+					<label for="transition-seconds" data-i18n="transitionSeconds">Duration (1–60 seconds)</label>
+					<input id="transition-seconds" type="number" min="1" max="60" step="1" value="30" />
+					<p data-i18n="transitionHelp">
+						Start values are explicit targets and may cause a jump; they are not read from the lamp. New lighting
+						commands cancel the transition after an active write returns. Zero brightness does not send Off.
+					</p>
+				</div>
 				<p data-i18n="powersOn">This command also turns power on.</p>
 				<button id="assignment-save" type="button" data-i18n="save">Save</button>
+			</fieldset>
+			<fieldset>
+				<legend data-i18n="transition">Transition</legend>
+				<p id="transition-status" role="status" data-i18n="transitionUnchecked">Not checked</p>
+				<button id="transition-refresh" type="button" data-i18n="transitionRefresh">Check transition status</button>
+				<button id="transition-cancel" type="button" data-i18n="transitionCancel" disabled>
+					Cancel current transition
+				</button>
 			</fieldset>
 			<dl aria-live="polite">
 				<dt data-i18n="serviceStatus">Service</dt>

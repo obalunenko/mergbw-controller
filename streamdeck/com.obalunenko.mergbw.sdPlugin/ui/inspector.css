@@ -67,3 +67,23 @@ p {
 	line-height: 1.5;
 	overflow-wrap: anywhere;
 }
+
+#identity-help,
+#interruption-warning {
+	line-height: 1.4;
+}
+#identity-error,
+#save-outcome {
+	min-height: 1.2em;
+}
+#proposal {
+	border: 1px solid var(--sdpi-background, #555);
+	padding: 0.6rem;
+	margin-top: 0.6rem;
+}
+#proposal-summary {
+	overflow-wrap: anywhere;
+}
+[hidden] {
+	display: none !important;
+}

@@ -110,7 +110,13 @@ test("PI read-only diagnostics and snapshots strip server text and secret IDs ac
 		},
 		diagnostics,
 	);
-	const message = (type: string) => ({ v: 1, sessionId: "session", requestId: "request", type, payload: {} });
+	const message = (type: string) => ({
+		v: 2,
+		sessionId: "session",
+		requestId: type.replace(".", "_"),
+		type,
+		payload: {},
+	});
 	try {
 		await inspector.receive("key", message("inspector.get"));
 		await settings.saveConnection(18766, next);
@@ -143,9 +149,9 @@ test("superseded read-only connection retains its secret until the response is d
 	client.catalog = () => pending.promise;
 	const inspector = new InspectorController(settings, new OperationStore(), client, () => {}, diagnostics);
 	try {
-		await inspector.receive("key", { v: 1, sessionId: "s", requestId: "r", type: "inspector.get", payload: {} });
+		await inspector.receive("key", { v: 2, sessionId: "s", requestId: "r", type: "inspector.get", payload: {} });
 		const checking = inspector.receive("key", {
-			v: 1,
+			v: 2,
 			sessionId: "s",
 			requestId: "r2",
 			type: "presets.refresh",
@@ -198,7 +204,7 @@ test("current and retained tokens cannot become preset assignments, snapshots or
 						physical_state_verified: false,
 					},
 				});
-				await inspector.receive("key", { v: 1, sessionId: "s", requestId: "r", type: "inspector.get", payload: {} });
+				await inspector.receive("key", { v: 2, sessionId: "s", requestId: "r", type: "inspector.get", payload: {} });
 				await inspector.receive("key", {
 					v: 1,
 					sessionId: "s",
@@ -222,4 +228,52 @@ test("current and retained tokens cannot become preset assignments, snapshots or
 		release();
 		inspector.dispose();
 	}
+});
+
+test("managed private secret safety is independent of ready capability and source paths never enter exported settings", async () => {
+	const storage = new MemoryStorage(),
+		settings = new Settings(storage);
+	await settings.load();
+	const privateSecret = "123456789012345678901234";
+	const diagnostics = new Diagnostics(() => {});
+	settings.useManaged(
+		() => null,
+		(value) => !value.includes(privateSecret),
+	);
+	assert.equal(settings.getConnection(), null);
+	assert.equal(diagnostics.hasSecret(privateSecret), false);
+	settings.receiveAction("preset", "preset", { schemaVersion: 1, presetId: privateSecret });
+	await assert.rejects(settings.saveAction("preset", { schemaVersion: 1, presetId: privateSecret }));
+	settings.receiveAction("preset", "preset", { schemaVersion: 1, presetId: "custom" });
+	await settings.saveAction("preset", {
+		schemaVersion: 1,
+		presetId: "custom",
+		settingsPath: "/synthetic/private/settings.json",
+		accessToken: privateSecret,
+	});
+	const pi = new InspectorController(settings, new OperationStore(), new BridgeClient(), () => {}, diagnostics);
+	const exported = JSON.stringify([...storage.actions]) + JSON.stringify(pi.snapshot("preset"));
+	assert.ok(!exported.includes(privateSecret));
+	assert.ok(!exported.includes("/synthetic/private"));
+	assert.deepEqual(storage.actions.get("preset"), { schemaVersion: 1, presetId: "custom" });
+	pi.dispose();
+});
+
+test("managed diagnostics accept only bounded lifecycle fields before any secret is loaded", () => {
+	const events: Record<string, number | string>[] = [];
+	const diagnostics = new Diagnostics((fields) => events.push(fields));
+	const hostile = "token=never-display https://127.0.0.1/on?access_token=hidden /private/source/settings.json\n{}";
+	diagnostics.emit("runtime.failed", { errorCategory: "binary_missing", phase: "startup", durationMs: 500 });
+	diagnostics.emit("runtime.failed", {
+		errorCategory: hostile,
+		phase: hostile,
+		requestId: hostile,
+		durationMs: Infinity,
+		raw: hostile,
+	} as never);
+	assert.deepEqual(events, [
+		{ event: "runtime.failed", errorCategory: "binary_missing", durationMs: 500, phase: "startup" },
+		{ event: "runtime.failed" },
+	]);
+	assert.ok(!JSON.stringify(events).includes("never-display"));
 });

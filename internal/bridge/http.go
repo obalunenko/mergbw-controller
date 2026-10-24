@@ -135,7 +135,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
-	if len(parts) != 2 && len(parts) != 3 {
+	if len(parts) != 2 && len(parts) != 3 && !(len(parts) > 1 && parts[1] == "transition" && (len(parts) == 4 || len(parts) == 7)) {
 		fail(http.StatusNotFound, "неизвестный адрес команды")
 		return
 	}
@@ -143,9 +143,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusForbidden, "неверная ссылка; используйте streamdeck-buttons.txt")
 		return
 	}
+	if h.serveTransition(w, r, parts[1:]) {
+		return
+	}
 	action, err := protocol.Resolve(parts[1:], h.presets)
 	if err != nil {
-		fail(http.StatusBadRequest, err.Error())
+		fail(http.StatusBadRequest, "некорректная команда или параметр")
 		return
 	}
 	command = action.Route
@@ -155,10 +158,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Do not detach the native BLE write on timeout: it may still be in progress.
 	if err := h.controller.Execute(ctx, action); err != nil {
 		status := http.StatusServiceUnavailable
+		message := "ошибка контроллера или Bluetooth; исход команды неизвестен"
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			status = http.StatusGatewayTimeout
+			message = "ожидание операции завершено; возможен поздний эффект"
 		}
-		fail(status, err.Error())
+		fail(status, message)
 		return
 	}
 	if err := respond(w, r, http.StatusOK, map[string]any{

@@ -122,3 +122,42 @@ func TestHealthAndErrorsDoNotClaimPhysicalState(t *testing.T) {
 		assert.Contains(t, recorder.Body.String(), `"physical_state_verified":false`)
 	}
 }
+
+func TestManagedRecoveryKeepsLoopbackMethodsRequestIDsAndSafeFailures(t *testing.T) {
+	handler, controller, settings := testHandler(t)
+	hostile := errors.New("native /private/source/settings.json https://127.0.0.1/" + settings.AccessToken + "/on")
+	for index, method := range []string{http.MethodGet, http.MethodPost, http.MethodHead} {
+		request := httptest.NewRequest(method, settings.BaseURL()+"/on", nil)
+		request.Header.Set("X-Request-ID", settings.AccessToken)
+		if method != http.MethodHead {
+			controller.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(hostile)
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		assert.Equal(t, []string{"1", "2", "3"}[index], recorder.Header().Get("X-Request-ID"))
+		assert.NotContains(t, recorder.Body.String(), settings.AccessToken)
+		assert.NotContains(t, recorder.Body.String(), "settings.json")
+		if method == http.MethodHead {
+			assert.Equal(t, 405, recorder.Code)
+			assert.Empty(t, recorder.Body.String())
+		} else {
+			assert.Equal(t, 503, recorder.Code)
+			assert.Contains(t, recorder.Body.String(), `"physical_state_verified":false`)
+		}
+	}
+	foreign := httptest.NewRequest(http.MethodPost, settings.BaseURL()+"/on", nil)
+	foreign.Host = "foreign.invalid"
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, foreign)
+	assert.Equal(t, http.StatusForbidden, recorder.Code)
+}
+
+func TestUnknownPresetDoesNotExposeTokenLookingCatalogIDs(t *testing.T) {
+	_, controller, settings := testHandler(t)
+	handler := bridge.New(settings, map[string]protocol.Preset{settings.AccessToken: {Label: "Fixture", RGB: []int{1, 2, 3}, Brightness: 20}}, controller)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, settings.BaseURL()+"/preset/missing", nil))
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.NotContains(t, recorder.Body.String(), settings.AccessToken)
+	assert.Contains(t, recorder.Body.String(), `"physical_state_verified":false`)
+}

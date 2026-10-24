@@ -18,8 +18,9 @@ type Preset struct {
 }
 
 type Action struct {
-	Route   string
-	Packets [][]byte
+	Route      string
+	Packets    [][]byte
+	Transition *Transition
 }
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9_-]{1,40}$`)
@@ -80,6 +81,9 @@ func Resolve(args []string, presets map[string]Preset) (Action, error) {
 		return Action{}, fmt.Errorf("нужна команда: on, off, color, brightness или preset")
 	}
 	name := args[0]
+	if name == "transition" {
+		return resolveTransition(args[1:])
+	}
 	if name == "on" || name == "off" {
 		if len(args) != 1 {
 			return Action{}, fmt.Errorf("команда %s не принимает параметров", name)

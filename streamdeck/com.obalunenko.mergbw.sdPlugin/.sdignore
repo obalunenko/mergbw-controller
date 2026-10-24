@@ -13,3 +13,13 @@ scripts/
 fixtures/
 *.streamDeckProfile
 .DS_Store
+
+**/settings.json
+**/presets.json
+**/streamdeck-buttons.txt
+**/.env*
+**/*.log
+**/logs/**
+**/fixtures/**
+*.go
+*.ts

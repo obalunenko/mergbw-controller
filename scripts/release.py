@@ -82,14 +82,16 @@ def notes(tag, repository):
                             ("linux_amd64", "Linux / x86-64"), ("linux_arm64", "Linux / ARM64")]:
         filename = f"sunset_{tag}_{platform}.tar.gz"
         lines.append(f"| {label} | [{filename}]({download}/{filename}) |")
-    plugin = "com.obalunenko.mergbw.streamDeckPlugin"
+    plugin = "com.obalunenko.mergbw.development.streamDeckPlugin"
     lines += [f"| Stream Deck / macOS | [{plugin}]({download}/{plugin}) |", "",
               f"Verify downloads using [SHA256SUMS]({download}/SHA256SUMS) (`shasum -a 256 -c SHA256SUMS` on macOS; `sha256sum -c SHA256SUMS` on Linux).", "",
-              "Controller archives contain `sunset`, both READMEs and the MIT license. Extract the archive, then initialize and start the controller:", "",
+              "Standalone controller archives contain `sunset`, both READMEs and the MIT license. For standalone CLI use, extract the archive, then initialize and start the controller:", "",
               "```sh", "./sunset --identity AA:BB:CC:DD:EE:FF init", "./sunset serve", "```", "",
               "Replace the example identity with your lamp's manufacturer-data identity. Existing settings and presets are preserved. On macOS, allow Bluetooth for the terminal launching the controller. Linux requires BlueZ/D-Bus and a Bluetooth adapter.", "",
-              "Open the `.streamDeckPlugin` installer on macOS with Stream Deck 7.1+ (macOS 13.5+); it requires the running controller. Import a private controller URL in the plugin inspector.", "",
-              "CI validates software and builds native binaries without operating a lamp. Device compatibility and physical effects are described in the bundled READMEs.", ""]
+              "Open the `.development.streamDeckPlugin` installer with Stream Deck 7.1+ on macOS 13.5+. This personal development build uses local ad-hoc signatures, without Developer ID, notarization or an Apple certificate. It bundles both Apple Silicon and Intel controller components; the plugin setup needs no separate controller, Terminal, developer tools or runtime executable download. Local installation is sufficient for acceptance; downloading the installer is optional.", "",
+              "Before plugin setup, stop any old standalone server using the method that originally launched it; the plugin never terminates foreign processes. In any action panel, enter the known manufacturer-data identity or select a local settings.json and optional presets.json, review the changes, then apply. Source files remain unchanged; legacy private command links alone cannot configure lamp identity.", "",
+              "Managed settings, token and presets live in Application Support outside the replaced plugin directory. Updates preserve this local configuration plus Stream Deck assignments, custom artwork and language. A transferred profile contains assignments without credentials and needs local setup before commands are enabled.", "",
+              "Record Bluetooth permission, local installation and actual lamp observations on the tested Mac. Architecture support in the payload does not prove execution on another Mac. CI validates software and inspects compiled native binaries without operating a lamp; builds and packet transmission do not prove physical lamp state. See the bundled READMEs for recorded device observations.", ""]
     changelog = f"{base}/compare/{quote(previous, safe='')}...{encoded_tag}" if previous else f"{base}/commits/{encoded_tag}"
     lines += [f"[Full changelog]({changelog})", ""]
     return "\n".join(lines)

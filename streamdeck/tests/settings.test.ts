@@ -6,7 +6,7 @@ import { globals, port, token } from "../src/validation.js";
 import { deferred, MemoryStorage, syntheticToken } from "./helpers.js";
 
 test("blank, invalid and unknown storage preserve trust boundaries", async () => {
-	assert.deepEqual(globals({}), { schemaVersion: 1, connection: null, language: "en" });
+	assert.deepEqual(globals({}), { schemaVersion: 2, language: "en" });
 	for (const raw of [
 		null,
 		undefined,

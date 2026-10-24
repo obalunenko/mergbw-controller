@@ -1,8 +1,18 @@
 export type Language = "en" | "ru";
-export type ActionKind = "brightness" | "color" | "off" | "on" | "preset";
+export type ActionKind = "brightness" | "color" | "off" | "on" | "preset" | "transition";
 export type Connection = { port: number; accessToken: string };
-export type GlobalSettings = { schemaVersion: 1; connection: Connection | null; language: Language };
-export type Assignment = { schemaVersion: 1; rgb?: string; percent?: number; presetId?: string };
+export type GlobalSettings = { schemaVersion: 1 | 2; connection?: Connection | null; language: Language };
+export type Assignment = {
+	schemaVersion: 1;
+	rgb?: string;
+	percent?: number;
+	presetId?: string;
+	fromRGB?: string;
+	fromPercent?: number;
+	toRGB?: string;
+	toPercent?: number;
+	durationSeconds?: number;
+};
 
 export function object(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -25,8 +35,13 @@ export function language(value: unknown): Language {
 	return value;
 }
 export function globals(value: unknown): GlobalSettings {
-	if (object(value) && Object.keys(value).length === 0) return { schemaVersion: 1, connection: null, language: "en" };
-	if (!object(value) || value.schemaVersion !== 1) throw new Error("validation");
+	if (object(value) && Object.keys(value).length === 0) return { schemaVersion: 2, language: "en" };
+	if (!object(value)) throw new Error("validation");
+	if (value.schemaVersion === 2) {
+		if (Object.keys(value).some((k) => !["schemaVersion", "language"].includes(k))) throw new Error("validation");
+		return { schemaVersion: 2, language: language(value.language) };
+	}
+	if (value.schemaVersion !== 1) throw new Error("validation");
 	return {
 		schemaVersion: 1,
 		connection: value.connection === null ? null : connection(value.connection),
@@ -40,12 +55,48 @@ export function colorInput(value: unknown): string {
 export function assignment(kind: ActionKind, value: unknown): Assignment {
 	if (!object(value)) throw new Error("validation");
 	if (Object.keys(value).length === 0) {
+		if (kind === "transition")
+			return {
+				schemaVersion: 1,
+				fromRGB: "FF5000",
+				fromPercent: 100,
+				toRGB: "FF5000",
+				toPercent: 0,
+				durationSeconds: 30,
+			};
 		if (kind === "color") return { schemaVersion: 1, rgb: "FF5000" };
 		if (kind === "brightness") return { schemaVersion: 1, percent: 50 };
 		return { schemaVersion: 1 };
 	}
 	if (value.schemaVersion !== 1) throw new Error("validation");
 	switch (kind) {
+		case "transition": {
+			if (
+				typeof value.fromRGB !== "string" ||
+				!/^[a-fA-F0-9]{6}$/.test(value.fromRGB) ||
+				typeof value.toRGB !== "string" ||
+				!/^[a-fA-F0-9]{6}$/.test(value.toRGB)
+			)
+				throw new Error("validation");
+			for (const key of ["fromPercent", "toPercent", "durationSeconds"] as const) {
+				const field = value[key];
+				if (
+					typeof field !== "number" ||
+					!Number.isInteger(field) ||
+					field < (key === "durationSeconds" ? 1 : 0) ||
+					field > (key === "durationSeconds" ? 60 : 100)
+				)
+					throw new Error("validation");
+			}
+			return {
+				schemaVersion: 1,
+				fromRGB: value.fromRGB.toUpperCase(),
+				fromPercent: value.fromPercent as number,
+				toRGB: value.toRGB.toUpperCase(),
+				toPercent: value.toPercent as number,
+				durationSeconds: value.durationSeconds as number,
+			};
+		}
 		case "color":
 			if (typeof value.rgb !== "string" || !/^[a-fA-F0-9]{6}$/.test(value.rgb)) throw new Error("validation");
 			return { schemaVersion: 1, rgb: value.rgb.toUpperCase() };
@@ -82,4 +133,22 @@ export function parseConnectionLink(value: unknown): Connection {
 		throw new Error("validation");
 	if (route.startsWith("brightness/") && Number(route.slice(11)) > 100) throw new Error("validation");
 	return connection({ port: Number(match[2]), accessToken: match[3] });
+}
+
+export function identity(value: unknown): string {
+	if (typeof value !== "string" || !/^(?:[a-fA-F0-9]{2}:){5}[a-fA-F0-9]{2}$/.test(value.trim()))
+		throw new Error("invalid_identity");
+	return value.trim().toUpperCase();
+}
+
+// File paths travel only on the transient private setup channel, never settings.
+export function selectedPath(value: unknown): string {
+	if (
+		typeof value !== "string" ||
+		!value.startsWith("/") ||
+		new TextEncoder().encode(value).length > 4096 ||
+		value.includes("\0")
+	)
+		throw new Error("import_file");
+	return value;
 }

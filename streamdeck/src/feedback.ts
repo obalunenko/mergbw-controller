@@ -30,16 +30,19 @@ export class Feedback {
 				/* Invalid assignments keep their action name until corrected. */
 			}
 		}
+		const lifecycle = this.inspector?.lifecycleState();
+		if (lifecycle && lifecycle !== "ready") title = translate(this.settings.getLanguage(), lifecycle);
 		// Runtime defaults let Stream Deck's user title and image overrides retain precedence.
 		await Promise.all([key.setTitle(title), key.setImage(`imgs/${kind}.png`)]);
-	}
-	public async pending(key: KeyView): Promise<void> {
-		await key.showAlert().catch(() => {});
 	}
 	public async invalid(key: KeyView): Promise<void> {
 		await key.showAlert().catch(() => {});
 	}
 	public async result(key: KeyView, record: OperationRecord): Promise<void> {
+		if (record.status === "accepted") {
+			await key.setTitle(translate(this.settings.getLanguage(), "accepted")).catch(() => {});
+			return;
+		}
 		if (record.status === "sent") await key.showOk().catch(() => {});
 		else await key.showAlert().catch(() => {});
 	}

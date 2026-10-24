@@ -11,10 +11,11 @@ import { Settings } from "../src/settings.js";
 import type { Assignment } from "../src/validation.js";
 import { deferred, fixture, KeyFacade, MemoryStorage, syntheticToken } from "./helpers.js";
 
+let nextRequest = 0;
 const message = (type: string, payload: Record<string, unknown> = {}, sessionId = "session") => ({
-	v: 1,
+	v: 2,
 	sessionId,
-	requestId: "req",
+	requestId: `req${++nextRequest}`,
 	type,
 	payload,
 });

@@ -539,3 +539,50 @@ func TestCloseDuringStartedWriteIsTerminalAndExclusive(t *testing.T) {
 		})
 	}
 }
+
+func TestRootCancellationJoinsCurrentWriteCancelsQueueAndNeverSendsOffOrReplays(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	entered, release := make(chan struct{}), make(chan struct{})
+	link := NewMockLink(gomock.NewController(t))
+	gomock.InOrder(
+		link.EXPECT().Connect(ctx).Return(nil),
+		link.EXPECT().Write(ctx, []byte{1}).DoAndReturn(func(context.Context, []byte) error { close(entered); <-release; return nil }),
+		link.EXPECT().Close().Return(nil),
+	)
+	lamp := New(link)
+	lamp.gap = 0
+	active, queued := make(chan error, 1), make(chan error, 1)
+	go func() { active <- lamp.Execute(ctx, testAction(1, 2, 3)) }()
+	awaitSignal(t, entered)
+	go func() { queued <- lamp.Execute(ctx, testAction(4, 5)) }()
+	cancel()
+	assert.ErrorIs(t, awaitResult(t, queued), context.Canceled)
+	select {
+	case <-active:
+		t.Fatal("native write was abandoned before return")
+	default:
+	}
+	close(release)
+	assert.ErrorIs(t, awaitResult(t, active), context.Canceled)
+	require.NoError(t, lamp.Close(t.Context()))
+	// Expectations permit exactly the in-progress packet, no remaining/queued
+	// packet and no synthetic Off. A new controller has no persisted queue.
+	replacement := New(NewMockLink(gomock.NewController(t)))
+	assert.NotNil(t, replacement)
+}
+
+func TestUncertainWriteNeverRepeatsOrEmitsRemainingSequence(t *testing.T) {
+	ctx := t.Context()
+	uncertainty := errors.New("uncertain native write")
+	link := NewMockLink(gomock.NewController(t))
+	gomock.InOrder(
+		link.EXPECT().Connect(ctx).Return(nil),
+		link.EXPECT().Write(ctx, []byte{1}).Return(uncertainty),
+		link.EXPECT().CanRetry(uncertainty).Return(false),
+	)
+	lamp := New(link)
+	lamp.gap = 0
+	require.ErrorIs(t, lamp.Execute(ctx, testAction(1, 2, 3)), uncertainty)
+	// No additional Write, reconnect or synthetic Off is admitted by the mock.
+}

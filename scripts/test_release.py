@@ -46,6 +46,23 @@ class ReleaseTest(unittest.TestCase):
         for platform in ("darwin_arm64", "darwin_amd64", "linux_amd64", "linux_arm64"):
             self.assertIn(f"sunset_v1.0.0_{platform}.tar.gz", notes)
 
+    def test_bundled_setup_import_upgrade_and_standalone_instructions_are_distinct(self):
+        self.git("tag", "v1.0.0")
+        notes = release.notes("v1.0.0", "example/controller")
+        for expected in ("both Apple Silicon and Intel", "no separate controller, Terminal", "runtime executable download",
+                         "stop any old standalone server", "never terminates foreign processes",
+                         "settings.json and optional presets.json", "Source files remain unchanged",
+                         "Application Support", "assignments, custom artwork and language",
+                         "profile contains assignments without credentials", "needs local setup",
+                         "For standalone CLI use", "./sunset serve", "permission",
+                         "Local installation is sufficient for acceptance",
+                         "without Developer ID, notarization or an Apple certificate",
+                         "com.obalunenko.mergbw.development.streamDeckPlugin"):
+            self.assertIn(expected, notes)
+        self.assertNotIn("it requires the running controller", notes)
+        self.assertNotIn("Import a private controller URL", notes)
+        self.assertEqual(notes.count(".tar.gz]"), 4)
+
     def test_incremental_release_excludes_old_and_unrelated_history(self):
         self.git("tag", "-a", "v1.0.0", "-m", "First")
         self.git("switch", "-c", "unrelated")

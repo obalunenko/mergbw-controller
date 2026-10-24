@@ -46,7 +46,7 @@ test("power SDK press/release sends exactly one POST and never claims physical s
 			await action.onKeyDown(ev as unknown as KeyDownEvent<Assignment>);
 			action.onKeyUp?.(ev as unknown as KeyUpEvent<Assignment>);
 			assert.equal(key.oks, 1);
-			assert.equal(key.alerts, 1);
+			assert.equal(key.alerts, 0);
 			assert.ok(key.titles.every((title) => title === "On" || title === "Off"));
 			assert.equal(operations.get(kind)?.status, "sent");
 		}

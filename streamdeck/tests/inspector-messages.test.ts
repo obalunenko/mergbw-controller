@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { test } from "node:test";
 
 import { BridgeClient } from "../src/bridge-client.js";
@@ -8,9 +9,9 @@ import { Settings } from "../src/settings.js";
 import { deferred, fixture, MemoryStorage, syntheticToken } from "./helpers.js";
 
 const message = (type: string, payload: Record<string, unknown> = {}, sessionId = "session") => ({
-	v: 1,
+	v: 2,
 	sessionId,
-	requestId: "req",
+	requestId: randomUUID(),
 	type,
 	payload,
 });
@@ -19,7 +20,7 @@ test("envelope version, type, context and payload fields are constrained", () =>
 	for (const raw of [
 		{},
 		message("bogus"),
-		{ ...message("inspector.get"), v: 2 },
+		{ ...message("inspector.get"), v: 1 },
 		{ ...message("inspector.get"), sessionId: "bad id" },
 		message("connection.check", { context: "foreign" }),
 		{ ...message("inspector.get"), requestId: "" },
@@ -29,7 +30,7 @@ test("envelope version, type, context and payload fields are constrained", () =>
 	assert.equal(parseMessage("a", message("inspector.get")).type, "inspector.get");
 });
 
-test("PI import, save, health/catalog checks, get and close never send commands or echo secrets", async () => {
+test("PI read checks and obsolete setup never send commands or echo secrets", async () => {
 	let commands = 0;
 	const server = await fixture((req, res) => {
 		if (req.method === "POST") commands++;
@@ -46,6 +47,7 @@ test("PI import, save, health/catalog checks, get and close never send commands 
 	const settings = new Settings(storage);
 	await settings.load();
 	settings.receiveAction("a", "on", {});
+	await settings.saveConnection(server.port, syntheticToken);
 	const ops = new OperationStore();
 	const replies: InspectorReply[] = [];
 	const pi = new InspectorController(settings, ops, new BridgeClient(), (reply) => {
@@ -53,11 +55,11 @@ test("PI import, save, health/catalog checks, get and close never send commands 
 	});
 	try {
 		await pi.receive("a", message("inspector.get"));
-		await pi.receive(
-			"a",
-			message("connection.import", { url: `http://localhost:${server.port}/${syntheticToken}/off` }),
-		);
-		await pi.receive("a", message("connection.save", { port: server.port, replacementToken: "" }));
+		await pi.receive("a", {
+			...message("connection.save", { port: server.port, replacementToken: syntheticToken }),
+			v: 1,
+		});
+		assert.equal(replies.at(-1)?.messageKey, "migration_required");
 		await pi.receive("a", message("connection.check"));
 		assert.equal(replies.at(-1)?.snapshot?.check?.authorization, "verified");
 		assert.equal(replies.at(-1)?.snapshot?.check?.bluetooth, "disconnected");
@@ -137,7 +139,7 @@ test("late old-session read reply is discarded", async () => {
 });
 
 test("save acknowledgements retain their identity after intervening requests and suppress replaced sessions", async () => {
-	for (const saveType of ["assignment.save", "connection.save"]) {
+	for (const saveType of ["assignment.save", "language.save"]) {
 		for (const interveningType of ["language.save", "connection.check", "presets.refresh", "inspector.get"]) {
 			for (const fails of [false, true]) {
 				const storage = new MemoryStorage();
@@ -184,9 +186,7 @@ test("save acknowledgements retain their identity after intervening requests and
 					const saving = pi.receive("a", {
 						...message(
 							saveType,
-							saveType === "assignment.save"
-								? { settings: { schemaVersion: 1, rgb: "00FF00" } }
-								: { port: 18767, replacementToken: "" },
+							saveType === "assignment.save" ? { settings: { schemaVersion: 1, rgb: "00FF00" } } : { language: "ru" },
 						),
 						requestId: "save",
 					});
@@ -212,17 +212,15 @@ test("save acknowledgements retain their identity after intervening requests and
 						await pi.receive("a", {
 							...message(
 								saveType,
-								saveType === "assignment.save"
-									? { settings: { schemaVersion: 1, rgb: "0000FF" } }
-									: { port: 18768, replacementToken: "" },
+								saveType === "assignment.save" ? { settings: { schemaVersion: 1, rgb: "0000FF" } } : { language: "en" },
 							),
 							requestId: "retry",
 						});
 						assert.equal(replies.at(-1)?.complete, true);
 						assert.equal(replies.at(-1)?.ok, true);
 						assert.equal(
-							saveType === "assignment.save" ? settings.getAction("a").rgb : settings.getConnection()?.port,
-							saveType === "assignment.save" ? "0000FF" : 18768,
+							saveType === "assignment.save" ? settings.getAction("a").rgb : settings.getLanguage(),
+							saveType === "assignment.save" ? "0000FF" : "en",
 						);
 					}
 				} finally {
