@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,8 +34,11 @@ type Controller struct {
 	cancelRoot   context.CancelFunc
 	transitionMu sync.Mutex
 	transition   *transitionJob
+	active       *transitionJob
+	effect       *transitionJob
 	now          func() time.Time
 	pause        func(context.Context, time.Duration) error
+	random       func() float64
 }
 
 func New(link Link) *Controller {
@@ -43,7 +47,7 @@ func New(link Link) *Controller {
 
 func NewWithContext(parent context.Context, link Link) *Controller {
 	root, cancel := context.WithCancel(parent)
-	c := &Controller{link: link, gate: make(chan struct{}, 1), gap: 80 * time.Millisecond, admission: make(chan struct{}, 1), root: root, cancelRoot: cancel, now: time.Now, pause: wait}
+	c := &Controller{link: link, gate: make(chan struct{}, 1), gap: 80 * time.Millisecond, admission: make(chan struct{}, 1), root: root, cancelRoot: cancel, now: time.Now, pause: wait, random: rand.Float64}
 	c.gate <- struct{}{}
 	c.admission <- struct{}{}
 	return c

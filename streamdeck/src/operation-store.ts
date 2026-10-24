@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { TransitionSnapshot } from "./bridge-client.js";
 import { type ErrorCategory, type Outcome, requestId } from "./diagnostics.js";
+import type { EffectSnapshot } from "./preset-effects.js";
 import type { ActionKind, Connection } from "./validation.js";
 
 export type Clock = {
@@ -19,6 +20,7 @@ export type OperationResult = {
 	errorCategory?: ErrorCategory;
 	requestId?: string;
 	transition?: TransitionSnapshot;
+	effect?: EffectSnapshot;
 };
 export type OperationRecord = {
 	readonly operationId: string;
@@ -35,6 +37,7 @@ export type OperationRecord = {
 	readonly deadlineAt: number;
 	status: Outcome;
 	transition?: TransitionSnapshot;
+	effect?: EffectSnapshot;
 	errorCategory?: ErrorCategory;
 	requestId?: string;
 	durationMs: number;
@@ -103,6 +106,7 @@ export class OperationStore {
 		this.timers.delete(record.operationId);
 		record.status = result.status;
 		record.transition = result.transition ? { ...result.transition } : undefined;
+		record.effect = result.effect ? { ...result.effect } : undefined;
 		record.errorCategory = result.errorCategory;
 		record.requestId = requestId(result.requestId, [record.snapshot.connection.accessToken]);
 		record.durationMs = Math.max(0, this.clock.now() - record.startedAt);

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -180,13 +181,26 @@ func PrepareManualSettings(identity string, previous *Settings) (Settings, error
 // DefaultPresets returns a fresh catalog, never a merge into an existing one.
 func DefaultPresets() map[string]protocol.Preset { return defaults() }
 
+// PreloadedPresetIDs identifies unchanged stock entries. Copies and overrides
+// remain user presets, even when they reuse a stock label or ID.
+func PreloadedPresetIDs(presets map[string]protocol.Preset) map[string]bool {
+	ids := make(map[string]bool)
+	for id, preset := range defaults() {
+		if current, ok := presets[id]; ok && reflect.DeepEqual(current, preset) {
+			ids[id] = true
+		}
+	}
+	return ids
+}
+
 // DecodePresets preserves the standalone catalog's missing-field validation.
 func DecodePresets(data []byte) (map[string]protocol.Preset, error) {
 	// Pointers distinguish missing/null brightness from the valid value zero.
 	var raw map[string]struct {
-		Label      string `json:"label"`
-		RGB        []int  `json:"rgb"`
-		Brightness *int   `json:"brightness"`
+		Label      string          `json:"label"`
+		RGB        []int           `json:"rgb"`
+		Brightness *int            `json:"brightness"`
+		Effect     json.RawMessage `json:"effect"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("presets.json: %w", err)
@@ -196,7 +210,17 @@ func DecodePresets(data []byte) (map[string]protocol.Preset, error) {
 		if value.Brightness == nil {
 			return nil, fmt.Errorf("пресет %s: поле brightness обязательно", slug)
 		}
-		presets[slug] = protocol.Preset{Label: value.Label, RGB: value.RGB, Brightness: *value.Brightness}
+		preset := protocol.Preset{Label: value.Label, RGB: value.RGB, Brightness: *value.Brightness}
+		if len(value.Effect) != 0 {
+			if string(value.Effect) == "null" {
+				return nil, fmt.Errorf("пресет %s: effect не может быть null", slug)
+			}
+			preset.Effect = new(protocol.Effect)
+			if err := json.Unmarshal(value.Effect, preset.Effect); err != nil {
+				return nil, fmt.Errorf("пресет %s: некорректный effect", slug)
+			}
+		}
+		presets[slug] = preset
 	}
 	if err := protocol.ValidatePresets(presets); err != nil {
 		return nil, err

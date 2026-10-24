@@ -12,7 +12,7 @@ import type { BridgeClient } from "../bridge-client.js";
 import type { Diagnostics } from "../diagnostics.js";
 import { Feedback, type KeyView } from "../feedback.js";
 import type { InspectorController } from "../inspector-messages.js";
-import type { OperationStore } from "../operation-store.js";
+import type { OperationRecord, OperationResult, OperationStore } from "../operation-store.js";
 import type { Settings } from "../settings.js";
 import type { ActionKind, Assignment } from "../validation.js";
 
@@ -87,7 +87,7 @@ export class BaseAction extends SingletonAction<Assignment> {
 		await this.services.inspector.receive(ev.action.id, ev.payload);
 	}
 	public override async onKeyDown(ev: KeyDownEvent<Assignment>): Promise<void> {
-		const { settings, operations, client, diagnostics } = this.services;
+		const { settings, operations, diagnostics } = this.services;
 		const startedAt = operations.clock.now();
 		const context = ev.action.id;
 		if (operations.get(context)?.status === "pending") return;
@@ -124,13 +124,16 @@ export class BaseAction extends SingletonAction<Assignment> {
 		diagnostics.emit("action.started", { actionKind: this.kind, operationId: record.operationId, outcome: "pending" });
 		// Pending is shown in the inspector. Reserve key alerts for failures.
 		try {
-			const result = await client.command(record);
+			const result = await this.command(record);
 			operations.finish(record, { ...result, requestId: diagnostics.id(result.requestId) });
 		} catch {
 			operations.finish(record, { status: "unknown", errorCategory: "service" });
 		} finally {
 			release();
 		}
+	}
+	protected command(record: OperationRecord): Promise<OperationResult> {
+		return this.services.client.command(record);
 	}
 	protected route(assignment: Assignment): string {
 		void assignment;

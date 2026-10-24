@@ -6,6 +6,7 @@ import { runInNewContext } from "node:vm";
 import ts from "typescript";
 
 import * as i18n from "../src/i18n.js";
+import * as presetEffects from "../src/preset-effects.js";
 import * as validation from "../src/validation.js";
 
 // Run the actual inspector entry point with DOM and SDPI facades, without SDK startup.
@@ -16,6 +17,9 @@ class Element {
 	public dataset: Record<string, string> = {};
 	public children: Element[] = [];
 	public validity = { valid: true };
+	public checked = false;
+	public label = "";
+	public style: Record<string, string> = {};
 	private currentValue = "";
 	private readonly listeners = new Map<string, (() => void)[]>();
 	constructor(private readonly isSelect = false) {}
@@ -23,13 +27,16 @@ class Element {
 		return this.currentValue;
 	}
 	public set value(value: string) {
-		this.currentValue = this.isSelect && !this.children.some((child) => child.value === value) ? "" : value;
+		this.currentValue = this.isSelect && !this.options.some((child) => child.value === value) ? "" : value;
 	}
 	public get valueAsNumber(): number {
 		return this.value === "" ? NaN : Number(this.value);
 	}
 	public get selectedOptions(): Element[] {
-		return this.children.filter((child) => child.value === this.value);
+		return this.options.filter((child) => child.value === this.value);
+	}
+	public get options(): Element[] {
+		return this.children.flatMap((child) => (child.children.length ? child.children : [child]));
 	}
 	public replaceChildren(...children: Element[]): void {
 		this.children = children;
@@ -46,26 +53,37 @@ class Element {
 		this.listeners.set(event, [...(this.listeners.get(event) ?? []), listener]);
 	}
 	public fire(event: string): void {
+		if (this.disabled) return;
 		for (const listener of this.listeners.get(event) ?? []) listener();
+	}
+	public click(): void {
+		this.fire("click");
 	}
 }
 type Message = { sessionId: string; requestId: string; type: string; payload: Record<string, unknown> };
 const code = ts.transpileModule(readFileSync("src/ui/inspector.ts", "utf8"), {
 	compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
-function inspector() {
+function inspector(autoSummary = true) {
 	const html = readFileSync("com.obalunenko.mergbw.sdPlugin/ui/index.html", "utf8");
 	const elements = new Map(
-		Array.from(html.matchAll(/<(\w+)[^>]*\bid="([^"]+)"[^>]*>/g), ([, tag, id]) => [
-			id!,
-			new Element(tag === "select"),
-		]),
+		Array.from(html.matchAll(/<(\w+)[^>]*\bid="([^"]+)"[^>]*>/g), ([markup, tag, id]) => {
+			const element = new Element(tag === "select");
+			element.hidden = /\bhidden\b/.test(markup!);
+			element.disabled = /\bdisabled\b/.test(markup!);
+			element.checked = /\bchecked\b/.test(markup!);
+			element.value = markup!.match(/\bvalue="([^"]*)"/)?.[1] ?? "";
+			return [id!, element] as const;
+		}),
 	);
 	const get = (id: string): Element => {
 		assert.ok(elements.has(id), `Element ${id} exists in the inspector HTML`);
 		return elements.get(id)!;
 	};
 	const sent: Message[] = [];
+	const summaries: Message[] = [];
+	let active: Message;
+	let lastSnapshot: Record<string, unknown> = {};
 	let nextTimer = 0;
 	const timers = new Map<number, () => void>();
 	let listener: (event: { payload: unknown }) => void;
@@ -73,6 +91,7 @@ function inspector() {
 		exports: {},
 		require: (name: string) => {
 			if (name === "../i18n.js") return i18n;
+			if (name === "../preset-effects.js") return presetEffects;
 			assert.equal(name, "../validation.js");
 			return validation;
 		},
@@ -88,7 +107,7 @@ function inspector() {
 			querySelectorAll: () => [],
 			documentElement: { lang: "en" },
 			createElement: (tag: string) => {
-				assert.equal(tag, "option");
+				assert.ok(["option", "optgroup"].includes(tag));
 				return new Element();
 			},
 		},
@@ -98,6 +117,33 @@ function inspector() {
 				streamDeckClient: {
 					send: async (event: string, message: Message) => {
 						assert.equal(event, "sendToPlugin");
+						active = message;
+						if (
+							autoSummary &&
+							message.type === "configuration.presetRead" &&
+							!get("view-main").hidden &&
+							get("view-editor").hidden
+						) {
+							summaries.push(structuredClone(message));
+							listener({
+								payload: {
+									...message,
+									v: 2,
+									type: "result",
+									complete: true,
+									ok: true,
+									snapshot: {
+										...lastSnapshot,
+										presetDefinition: {
+											generation: message.payload.expectedGeneration,
+											id: message.payload.id,
+											preset: { label: "Summary", rgb: [255, 80, 0], brightness: 60 },
+										},
+									},
+								},
+							});
+							return;
+						}
 						sent.push(structuredClone(message));
 					},
 					sendToPropertyInspector: {
@@ -110,13 +156,25 @@ function inspector() {
 		},
 	});
 	const reply = (snapshot: Record<string, unknown>, extra: Record<string, unknown> = {}): void => {
-		const message = sent.at(-1)!;
+		lastSnapshot = snapshot;
+		const message = active;
 		listener({ payload: { ...message, v: 2, type: "result", complete: true, ok: true, snapshot, ...extra } });
 	};
 	return {
 		get,
 		sent,
+		summaries,
 		reply,
+		save: () => {
+			const field = (
+				{ color: "rgb", brightness: "percent", preset: "preset-select", transition: "transition-seconds" } as Record<
+					string,
+					string
+				>
+			)[String(lastSnapshot.actionKind)];
+			assert.ok(field);
+			get(field).fire("change");
+		},
 		expire: () => {
 			for (const callback of [...timers.values()]) callback();
 			timers.clear();
@@ -136,6 +194,292 @@ function snapshot(actionKind: string, assignment: Record<string, unknown>) {
 	};
 }
 
+function editorSnapshot(generation = "a".repeat(32)) {
+	return {
+		...snapshot("preset", { presetId: "colors" }),
+		configuration: { ...connection, generation, identity: "AA:BB:CC:DD:EE:FF", presetCount: 1 },
+		activeStateKnown: true,
+		catalog: { status: "available", entries: [{ id: "colors", label: "Colors" }] },
+		presetPage: { generation, entries: [{ id: "colors", label: "Colors", labelTruncated: false }], nextCursor: null },
+	};
+}
+
+test("one grouped preset picker autosaves selection and keeps library and setup outside key settings", () => {
+	const ui = inspector();
+	const initial = {
+		...editorSnapshot(),
+		assignment: { schemaVersion: 1, presetId: "sunset" },
+		catalog: {
+			status: "available",
+			entries: [
+				{ id: "sunset", label: "Sunset", builtIn: true },
+				{ id: "mine", label: "My animation", builtIn: false },
+			],
+		},
+	};
+	ui.reply(initial);
+	assert.equal(ui.get("view-main").hidden, false);
+	assert.equal(ui.get("view-setup").hidden, true);
+	assert.equal(ui.get("view-library").hidden, true);
+	assert.deepEqual(
+		ui.get("preset-select").children.map((group) => group.label),
+		[i18n.en.preloadedPresets, i18n.en.customPresets],
+	);
+	assert.deepEqual(
+		ui.get("preset-select").options.map((option) => option.value),
+		["sunset", "mine"],
+	);
+	assert.equal(ui.get("preset-copy").hidden, false);
+	ui.get("preset-select").value = "mine";
+	ui.get("preset-select").fire("change");
+	assert.equal(ui.get("preset-copy").hidden, true);
+	assert.equal(ui.get("preset-edit").hidden, false);
+	assert.equal(ui.sent.at(-1)?.type, "assignment.save");
+	assert.equal((ui.sent.at(-1)?.payload.settings as { presetId: string }).presetId, "mine");
+	ui.reply({ ...initial, assignment: { schemaVersion: 1, presetId: "mine" } });
+	ui.get("library-open").fire("click");
+	assert.equal(ui.get("view-library").hidden, false);
+	assert.equal(ui.sent.at(-1)?.type, "configuration.presetList");
+	ui.reply(initial);
+	ui.get("back").fire("click");
+	assert.equal(ui.get("view-main").hidden, false);
+	ui.get("setup-open").fire("click");
+	assert.equal(ui.get("view-setup").hidden, false);
+});
+
+test("an empty catalog keeps assignment unset and creates nothing automatically", () => {
+	const ui = inspector();
+	ui.reply({
+		...editorSnapshot(),
+		assignment: { schemaVersion: 1, presetId: "" },
+		catalog: { status: "available", entries: [] },
+	});
+	assert.equal(ui.get("preset-select").disabled, true);
+	assert.equal(ui.get("preset-copy").disabled, true);
+	assert.equal(ui.get("catalog-status").textContent, i18n.en.noPresets);
+	assert.equal(ui.sent.length, 1);
+});
+
+test("customizing preloaded settings captures a new personal preset without changing the original", () => {
+	const ui = inspector();
+	const initial = {
+		...editorSnapshot(),
+		assignment: { schemaVersion: 1, presetId: "sunset" },
+		catalog: { status: "available", entries: [{ id: "sunset", label: "Sunset", builtIn: true }] },
+	};
+	ui.reply(initial);
+	ui.get("preset-copy").fire("click");
+	assert.equal(ui.sent.at(-1)!.type, "configuration.presetRead");
+	assert.equal(ui.sent.at(-1)!.payload.id, "sunset");
+	ui.reply({
+		...initial,
+		presetDefinition: {
+			generation: "a".repeat(32),
+			id: "sunset",
+			preset: { label: "Sunset", rgb: [255, 80, 0], brightness: 60 },
+		},
+	});
+	assert.equal(ui.get("view-editor").hidden, false);
+	assert.equal(ui.get("view-library").hidden, true);
+	assert.match(ui.get("editor-id").value, /^p_[a-f0-9]{32}$/);
+	assert.equal(ui.get("editor-name").value, "Sunset (copy)");
+	ui.get("editor-review").fire("click");
+	const review = ui.sent.at(-1)!;
+	assert.equal(review.type, "configuration.preparePreset");
+	assert.equal(review.payload.operation, "create");
+	assert.notEqual(review.payload.id, "sunset");
+	assert.equal(
+		ui.sent.some((message) => message.type === "configuration.apply"),
+		false,
+	);
+});
+
+test("preset editor creates an ordered palette, captures review and reopens saved definitions without resetting drafts", () => {
+	const ui = inspector(),
+		initial = editorSnapshot();
+	ui.reply(initial);
+	ui.get("editor-new").fire("click");
+	const stableId = ui.get("editor-id").value;
+	assert.match(stableId, /^p_[a-f0-9]{32}$/);
+	ui.get("editor-name").value = "My colors";
+	ui.get("editor-kind").value = "palette";
+	ui.get("editor-kind").fire("change");
+	assert.equal(ui.get("editor-id").value, stableId);
+	assert.equal(ui.get("editor-palette-controls").hidden, false);
+	assert.equal(ui.get("editor-rgb-controls").hidden, true);
+	ui.get("palette-add").fire("click");
+	ui.get("palette-select").value = "2";
+	ui.get("palette-select").fire("change");
+	ui.get("palette-up").fire("click");
+	ui.get("palette-select").value = "0";
+	ui.get("palette-down").fire("click");
+	ui.get("palette-color").value = "#00ff00";
+	ui.get("palette-color").fire("input");
+	ui.get("palette-add").fire("click");
+	ui.get("palette-remove").fire("click");
+	ui.get("editor-review").fire("click");
+	const review = ui.sent.at(-1)!;
+	assert.equal(review.type, "configuration.preparePreset");
+	assert.equal(review.payload.id, stableId);
+	assert.equal(review.payload.operation, "create");
+	const preset = review.payload.preset as presetEffects.PresetDefinition;
+	assert.deepEqual(preset.rgb, [255, 80, 0]);
+	assert.deepEqual(preset.effect, {
+		kind: "palette",
+		loop: true,
+		colors: [
+			[0, 255, 0],
+			[0, 80, 255],
+		],
+		transitionMs: 2000,
+	});
+	const proposal = {
+		transactionId: "c".repeat(32),
+		expectedGeneration: "a".repeat(32),
+		requiresConfirmation: true,
+		identity: "AA:BB:CC:DD:EE:FF",
+		port: 18765,
+		presetCount: 2,
+		hasToken: true,
+		diff: { presets: true },
+	};
+	ui.reply({ ...initial, proposal });
+	assert.equal(ui.get("interruption-warning").hidden, false);
+	assert.ok(ui.get("proposal-summary").textContent.includes("My colors"));
+	ui.get("editor-name").value = "Dirty local draft";
+	ui.reply(
+		{
+			...initial,
+			proposal,
+			effect: {
+				id: "d".repeat(32),
+				presetId: "colors",
+				kind: "palette",
+				state: "running",
+				elapsedMs: 500,
+				durationMs: null,
+				physical_state_verified: false,
+			},
+		},
+		{ complete: false },
+	);
+	assert.equal(ui.get("editor-name").value, "Dirty local draft");
+	assert.equal(ui.get("editor-id").value, stableId);
+	ui.get("confirm").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.apply");
+	const next = editorSnapshot("b".repeat(32));
+	ui.reply({ ...next, saveOutcome: { status: "applied", activeStateKnown: true } });
+	assert.equal(ui.get("preset-editor").hidden, true);
+	assert.equal(ui.sent.at(-1)?.type, "presets.refresh");
+	ui.reply(next);
+	// This synthetic response omits the created ID, so no assignment is made.
+	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 0);
+	ui.get("editor-edit").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "configuration.presetRead");
+	ui.reply({ ...next, presetDefinition: { generation: "b".repeat(32), id: "colors", preset } });
+	assert.equal(ui.get("editor-name").value, "My colors");
+	assert.equal(ui.get("editor-id").value, "colors");
+	ui.get("editor-name").value = "Renamed";
+	ui.get("editor-review").fire("click");
+	assert.equal(ui.sent.at(-1)?.payload.operation, "update");
+	assert.equal(ui.sent.at(-1)?.payload.id, "colors");
+	assert.equal((ui.sent.at(-1)?.payload.preset as presetEffects.PresetDefinition).label, "Renamed");
+	assert.equal(ui.sent.filter((message) => message.type === "assignment.save" || message.type === "command").length, 0);
+});
+
+test("preset editor bounds palette size, validates mode fields and preserves stale drafts", () => {
+	const ui = inspector(),
+		initial = editorSnapshot();
+	ui.reply(initial);
+	ui.get("editor-new").fire("click");
+	ui.get("editor-name").value = "Bounded palette";
+	ui.get("editor-kind").value = "palette";
+	ui.get("editor-kind").fire("change");
+	for (let i = 0; i < 20; i++) ui.get("palette-add").fire("click");
+	assert.equal(ui.get("palette-select").children.length, 16);
+	for (let i = 0; i < 20; i++) ui.get("palette-remove").fire("click");
+	assert.equal(ui.get("palette-select").children.length, 2);
+	const sent = ui.sent.length;
+	ui.get("editor-transition").value = "0.499";
+	ui.get("editor-review").fire("click");
+	assert.equal(ui.sent.length, sent);
+	assert.equal(ui.get("editor-error").textContent, i18n.en.validation);
+	ui.reply(editorSnapshot("b".repeat(32)), { complete: false });
+	assert.equal(ui.get("editor-name").value, "Bounded palette");
+	assert.equal(ui.get("editor-review").disabled, true);
+	assert.equal(ui.get("editor-error").textContent, i18n.en.editorDraftStale);
+	ui.get("editor-kind").value = "strobe";
+	ui.get("editor-kind").fire("change");
+	ui.get("editor-review").fire("click");
+	assert.equal(ui.sent.length, sent, "changing type cannot bypass a stale draft generation");
+});
+
+for (const kind of presetEffects.presetKinds)
+	test(`preset editor configures ${kind} without playback`, () => {
+		const ui = inspector(),
+			initial = editorSnapshot();
+		ui.reply({ ...initial, language: "ru" });
+		ui.get("editor-new").fire("click");
+		ui.get("editor-name").value = `Preset ${kind}`;
+		ui.get("editor-kind").value = kind;
+		ui.get("editor-kind").fire("change");
+		if (kind === "candle") {
+			ui.get("editor-loop").checked = false;
+			ui.get("editor-loop").fire("change");
+			assert.equal(ui.get("editor-duration-controls").hidden, false);
+			ui.get("editor-duration").value = "5";
+		}
+		ui.get("editor-review").fire("click");
+		const message = ui.sent.at(-1)!;
+		assert.equal(message.type, "configuration.preparePreset");
+		const preset = presetEffects.presetDefinition(message.payload.preset);
+		assert.equal(preset.effect?.kind ?? "static", kind);
+		if (kind === "candle") assert.equal(preset.effect?.kind === "candle" && preset.effect.durationMs, 5000);
+		assert.equal(
+			ui.sent.filter((message) => message.type === "effect.cancel" || message.type === "assignment.save").length,
+			0,
+		);
+		assert.equal(ui.get("editor-kind").selectedOptions[0]?.textContent, i18n.translate("ru", `kind.${kind}`));
+	});
+
+test("preset deletion is reviewed and effect controls use the exact visible run", () => {
+	const ui = inspector(),
+		initial = editorSnapshot();
+	ui.reply(initial);
+	ui.get("editor-delete").fire("click");
+	assert.deepEqual(ui.sent.at(-1)?.payload, { expectedGeneration: "a".repeat(32), operation: "delete", id: "colors" });
+	ui.reply({
+		...initial,
+		proposal: {
+			transactionId: "c".repeat(32),
+			expectedGeneration: "a".repeat(32),
+			requiresConfirmation: true,
+			identity: "AA:BB:CC:DD:EE:FF",
+			port: 18765,
+			presetCount: 1,
+			hasToken: true,
+			diff: { presets: true },
+		},
+	});
+	assert.ok(ui.get("proposal-summary").textContent.includes("Delete: Colors (colors)"));
+	assert.equal(ui.sent.filter((message) => message.type === "configuration.apply").length, 0);
+	const effect = {
+		id: "d".repeat(32),
+		presetId: "colors",
+		kind: "candle",
+		state: "running",
+		elapsedMs: 1000,
+		durationMs: null,
+		physical_state_verified: false,
+	};
+	ui.reply({ ...initial, effect }, { complete: false });
+	assert.equal(ui.get("effect-cancel").disabled, false);
+	assert.ok(!ui.get("effect-status").textContent.includes("null"));
+	ui.get("effect-cancel").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "effect.cancel");
+	assert.deepEqual(ui.sent.at(-1)?.payload, { id: effect.id });
+});
+
 test("transition fields preserve invalid drafts and validate one-to-sixty seconds before saving", () => {
 	const ui = inspector();
 	const saved = snapshot("transition", {
@@ -150,7 +494,7 @@ test("transition fields preserve invalid drafts and validate one-to-sixty second
 	assert.equal(ui.get("color-controls").hidden, true);
 	for (const invalid of ["0", "61", "1.5", ""]) {
 		ui.get("transition-seconds").value = invalid;
-		ui.get("assignment-save").fire("click");
+		ui.save();
 		assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 0);
 		ui.reply(saved);
 		assert.equal(ui.get("transition-seconds").value, invalid);
@@ -158,7 +502,7 @@ test("transition fields preserve invalid drafts and validate one-to-sixty second
 	ui.get("transition-from-rgb").value = "#ff5000";
 	ui.get("transition-to-rgb").value = "123abc";
 	ui.get("transition-seconds").value = "60";
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	assert.equal(
 		JSON.stringify(ui.sent.at(-1)!.payload),
 		JSON.stringify({
@@ -216,7 +560,6 @@ test("RGB and manual identity drafts survive operation, language and unrelated s
 		assert.equal(ui.get("identity").value, "11:22:33:44:55:66");
 		assert.equal(ui.get("operation").textContent, i18n.translate("ru", status));
 	}
-	ui.get("assignment-save").fire("click");
 	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 1);
 	assert.equal(
 		JSON.stringify(ui.sent.at(-1)!.payload),
@@ -230,7 +573,7 @@ test("RGB and manual identity drafts survive operation, language and unrelated s
 	assert.equal(ui.get("identity").value, "");
 });
 
-test("brightness draft and slider survive publications and Save sends the draft once", () => {
+test("brightness draft and slider survive publications and a change saves the draft once", () => {
 	const ui = inspector();
 	const saved = snapshot("brightness", { percent: 25 });
 	ui.reply(saved);
@@ -241,7 +584,7 @@ test("brightness draft and slider survive publications and Save sends the draft 
 		assert.equal(ui.get("percent").value, "75");
 		assert.equal(ui.get("percent-slider").value, "75");
 	}
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 1);
 	assert.equal(
 		JSON.stringify(ui.sent.at(-1)!.payload),
@@ -262,9 +605,9 @@ test("preset draft survives catalog refresh and rename, while deleted or uncheck
 	ui.get("preset-select").fire("change");
 	ui.reply({ ...saved, operation: { status: "pending" }, catalog: { status: "loading", entries: [] } });
 	assert.equal(ui.get("preset-select").value, "reading");
-	assert.equal(ui.get("assignment-save").disabled, true);
-	ui.get("assignment-save").fire("click");
-	assert.equal(ui.sent.length, 1);
+	assert.equal(ui.get("preset-select").selectedOptions[0]?.disabled, true);
+	ui.save();
+	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 1);
 	ui.reply({
 		...saved,
 		operation: { status: "sent" },
@@ -272,17 +615,16 @@ test("preset draft survives catalog refresh and rename, while deleted or uncheck
 	});
 	assert.equal(ui.get("preset-select").value, "reading");
 	assert.equal(ui.get("preset-select").selectedOptions[0]!.textContent, "Renamed (reading)");
-	assert.equal(ui.get("assignment-save").disabled, false);
-	ui.get("assignment-save").fire("click");
+	assert.equal(ui.get("preset-select").selectedOptions[0]?.disabled, false);
 	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 1);
 	assert.equal(
-		JSON.stringify(ui.sent.at(-1)!.payload),
+		JSON.stringify(ui.sent.find((message) => message.type === "assignment.save")!.payload),
 		JSON.stringify({ settings: { schemaVersion: 1, presetId: "reading" } }),
 	);
 	ui.reply({ ...saved, catalog: { status: "available", entries: entries.slice(0, 1) } });
 	assert.equal(ui.get("preset-select").value, "reading");
-	assert.equal(ui.get("assignment-save").disabled, true);
-	ui.get("assignment-save").fire("click");
+	assert.equal(ui.get("preset-select").selectedOptions[0]?.disabled, true);
+	ui.save();
 	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 1);
 });
 
@@ -290,7 +632,7 @@ test("save acknowledgements retain newer edits and explicit setting changes reco
 	const ui = inspector();
 	ui.reply(snapshot("color", { rgb: "FF5000" }));
 	ui.get("rgb").value = "00FF00";
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	ui.get("rgb").value = "0000FF";
 	ui.get("identity").value = "11:22:33:44:55:66";
 	ui.reply(snapshot("color", { rgb: "00FF00" }));
@@ -310,10 +652,10 @@ test("invalid drafts and failed saves remain editable; a replacement session sta
 	ui.get("rgb").value = "broken";
 	ui.reply({ ...saved, operation: { status: "pending" } });
 	assert.equal(ui.get("rgb").value, "broken");
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	assert.equal(ui.sent.length, 1);
 	ui.get("rgb").value = "00FF00";
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	ui.reply(saved, { ok: false, messageKey: "storage" });
 	assert.equal(ui.get("rgb").value, "00FF00");
 	assert.equal(ui.get("message").textContent, i18n.translate("en", "storage"));
@@ -342,7 +684,7 @@ test("manual Prepare clears its identity without discarding unrelated assignment
 	assert.equal(ui.get("percent").value, "75");
 	ui.get("percent").value = "101";
 	ui.get("percent").validity.valid = false;
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 0);
 });
 
@@ -350,9 +692,9 @@ test("overlapping assignment saves retain newer drafts through intermediate publ
 	const ui = inspector();
 	ui.reply(snapshot("color", { rgb: "FF5000" }));
 	ui.get("rgb").value = "00FF00";
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	ui.get("rgb").value = "0000FF";
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	ui.get("rgb").value = "ABCDEF";
 	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 1);
 	ui.reply(snapshot("color", { rgb: "00FF00" }), { complete: false });
@@ -366,13 +708,13 @@ test("overlapping assignment saves retain newer drafts through intermediate publ
 	assert.equal(ui.get("rgb").value, "123456");
 });
 
-test("a failed queued save preserves later edits and each explicit Save is submitted once", () => {
+test("a failed queued save preserves later edits and each changed value is submitted once", () => {
 	const ui = inspector();
 	ui.reply(snapshot("color", { rgb: "FF5000" }));
 	ui.get("rgb").value = "00FF00";
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	ui.get("rgb").value = "0000FF";
-	ui.get("assignment-save").fire("click");
+	ui.save();
 	ui.get("rgb").value = "ABCDEF";
 	ui.reply(snapshot("color", { rgb: "FF5000" }), { ok: false, messageKey: "storage" });
 	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 2);
@@ -382,13 +724,13 @@ test("a failed queued save preserves later edits and each explicit Save is submi
 });
 
 test("save errors remain visible through queued language, check and refresh requests until that save recovers", () => {
-	for (const save of ["assignment-save"]) {
+	{
 		const ui = inspector();
 		const saved = snapshot("color", { rgb: "FF5000" });
 		ui.reply(saved);
 		ui.get("rgb").value = "00FF00";
 		ui.get("identity").value = "11:22:33:44:55:66";
-		ui.get(save).fire("click");
+		ui.save();
 		ui.get("language").value = "ru";
 		ui.get("language").fire("change");
 		ui.get("check").fire("click");
@@ -408,7 +750,7 @@ test("save errors remain visible through queued language, check and refresh requ
 		assert.equal(ui.get("message").textContent, i18n.translate("ru", "storage"));
 		assert.equal(ui.get("rgb").value, "00FF00");
 		assert.equal(ui.get("identity").value, "11:22:33:44:55:66");
-		ui.get(save).fire("click");
+		ui.save();
 		ui.reply({ ...snapshot("color", { rgb: "00FF00" }), language: "ru", connection: { ...connection, port: 18766 } });
 		assert.equal(ui.get("message").textContent, "");
 	}
@@ -560,7 +902,7 @@ test("migration and whole-file guidance is bilingual and never suggests legacy l
 		});
 		assert.equal(ui.get("migration-guidance").textContent, i18n.translate(language, "legacyIdentityRequired"));
 		assert.equal(ui.get("preset-select").value, "custom_missing");
-		assert.equal(ui.get("assignment-save").disabled, true);
+		assert.equal(ui.get("preset-select").selectedOptions[0]?.disabled, true);
 		assert.equal(ui.sent.length, 1);
 	}
 });
@@ -625,3 +967,236 @@ test("panel restart coalesces repeated clicks and keeps readiness, Bluetooth and
 		false,
 	);
 });
+
+test("creating a preset assigns its captured ID only after known commit and a current catalog refresh", () => {
+	const ui = inspector();
+	const initial = editorSnapshot();
+	ui.reply(initial);
+	ui.get("preset-new").fire("click");
+	ui.get("editor-name").value = "My evening";
+	ui.get("editor-rgb").value = "123ABC";
+	ui.get("editor-brightness").value = "43";
+	ui.get("editor-kind").value = "breathing";
+	ui.get("editor-kind").fire("change");
+	ui.get("editor-cycle").value = "2.375";
+	ui.get("editor-review").fire("click");
+	const prepared = ui.sent.at(-1)!;
+	assert.equal(prepared.type, "configuration.preparePreset");
+	const id = prepared.payload.id as string;
+	const definition = prepared.payload.preset as presetEffects.PresetDefinition;
+	assert.deepEqual(definition.rgb, [18, 58, 188]);
+	assert.equal(definition.brightness, 43);
+	assert.equal(definition.effect?.kind, "breathing");
+	assert.equal(definition.effect?.kind === "breathing" && definition.effect.cycleMs, 2375);
+	ui.reply({
+		...initial,
+		proposal: {
+			transactionId: "c".repeat(32),
+			expectedGeneration: "a".repeat(32),
+			requiresConfirmation: true,
+			identity: "AA:BB:CC:DD:EE:FF",
+			port: 18765,
+			presetCount: 2,
+			hasToken: true,
+		},
+	});
+	assert.equal(ui.get("view-review").hidden, false);
+	assert.equal(ui.get("view-setup").hidden, true);
+	assert.equal(ui.get("confirm").textContent, i18n.en.createAndAssignConfirm);
+	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 0);
+	ui.get("confirm").fire("click");
+	assert.equal(ui.get("back").disabled, true);
+	const next = {
+		...editorSnapshot("b".repeat(32)),
+		catalog: {
+			status: "available",
+			entries: [
+				{ id: "colors", label: "Colors" },
+				{ id, label: "My evening" },
+			],
+		},
+	};
+	ui.reply({ ...next, saveOutcome: { status: "applied", activeStateKnown: true } });
+	assert.equal(ui.sent.at(-1)?.type, "presets.refresh");
+	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 0);
+	ui.reply(next);
+	const assignment = ui.sent.find((message) => message.type === "assignment.save");
+	assert.ok(assignment);
+	assert.equal((assignment.payload.settings as { presetId: string }).presetId, id);
+	ui.reply({ ...next, assignment: { schemaVersion: 1, presetId: id } });
+	assert.equal(ui.get("preset-select").value, id);
+	assert.equal(ui.get("assignment-status").textContent, i18n.en.assigned);
+	assert.equal(ui.get("view-main").hidden, false);
+	assert.equal(
+		ui.sent.some((message) => message.type === "command"),
+		false,
+	);
+});
+
+test("unknown preset commit keeps the draft, offers read-only recovery and never assigns or replays", () => {
+	const ui = inspector();
+	const initial = editorSnapshot();
+	ui.reply(initial);
+	ui.get("preset-new").fire("click");
+	ui.get("editor-name").value = "Keep this draft";
+	ui.get("editor-review").fire("click");
+	const id = ui.sent.at(-1)!.payload.id as string;
+	ui.reply({
+		...initial,
+		proposal: {
+			transactionId: "c".repeat(32),
+			expectedGeneration: "a".repeat(32),
+			requiresConfirmation: true,
+			identity: "AA:BB:CC:DD:EE:FF",
+			port: 18765,
+			presetCount: 2,
+			hasToken: true,
+		},
+	});
+	ui.get("confirm").fire("click");
+	ui.expire();
+	assert.equal(ui.get("configuration-check").hidden, false);
+	assert.equal(ui.get("view-editor").hidden, false);
+	assert.equal(ui.get("editor-name").value, "Keep this draft");
+	assert.equal(ui.get("editor-review").disabled, true);
+	ui.get("configuration-check").fire("click");
+	const next = {
+		...editorSnapshot("b".repeat(32)),
+		activeStateKnown: true,
+		catalog: { status: "available", entries: [{ id, label: "Keep this draft" }] },
+		saveOutcome: { status: "applied", activeStateKnown: true },
+	};
+	ui.reply(next);
+	ui.get("refresh").fire("click");
+	ui.reply(next);
+	assert.equal(ui.sent.filter((message) => message.type === "configuration.apply").length, 1);
+	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 0);
+	assert.equal(ui.get("editor-name").value, "Keep this draft");
+});
+
+test("delayed descriptions follow selection without opening an editor or reverting a pending assignment", () => {
+	const ui = inspector(false);
+	const initial = {
+		...editorSnapshot(),
+		catalog: {
+			status: "available",
+			entries: [
+				{ id: "colors", label: "Colors" },
+				{ id: "other", label: "Other" },
+			],
+		},
+	};
+	ui.reply(initial);
+	assert.equal(ui.sent.at(-1)?.type, "configuration.presetRead");
+	assert.equal(ui.sent.at(-1)?.payload.id, "colors");
+	ui.get("preset-select").value = "other";
+	ui.get("preset-select").fire("change");
+	ui.reply({
+		...initial,
+		presetDefinition: {
+			generation: "a".repeat(32),
+			id: "colors",
+			preset: { label: "Colors", rgb: [255, 0, 0], brightness: 90 },
+		},
+	});
+	assert.equal(ui.get("preset-select").value, "other");
+	assert.equal(ui.get("view-editor").hidden, true);
+	assert.equal(ui.sent.at(-1)?.type, "assignment.save");
+	ui.reply({ ...initial, assignment: { schemaVersion: 1, presetId: "other" } });
+	assert.equal(ui.sent.at(-1)?.type, "configuration.presetRead");
+	assert.equal(ui.sent.at(-1)?.payload.id, "other");
+	ui.reply({
+		...initial,
+		assignment: { schemaVersion: 1, presetId: "other" },
+		presetDefinition: {
+			generation: "a".repeat(32),
+			id: "other",
+			preset: { label: "Other", rgb: [0, 0, 255], brightness: 23 },
+		},
+	});
+	assert.equal(ui.get("preset-description").textContent, i18n.en["kind.static"] + " · 23%");
+	assert.equal(ui.get("preset-swatch").style.backgroundColor, "#0000FF");
+	assert.equal(ui.sent.filter((message) => message.type === "assignment.save").length, 1);
+});
+
+test("switching effect kinds preserves color, brightness, exact timing, repeat and ordered palette drafts", () => {
+	const ui = inspector();
+	ui.reply(editorSnapshot());
+	ui.get("preset-new").fire("click");
+	ui.get("editor-name").value = "Keep parameters";
+	ui.get("editor-rgb").value = "12AB34";
+	ui.get("editor-brightness").value = "37";
+	ui.get("editor-cycle").value = "3.125";
+	ui.get("editor-loop").checked = false;
+	ui.get("editor-kind").value = "palette";
+	ui.get("editor-kind").fire("change");
+	ui.get("palette-select").value = "0";
+	ui.get("palette-color").value = "#aabbcc";
+	ui.get("palette-color").fire("input");
+	for (const kind of ["strobe", "candle", "static", "palette", "breathing"]) {
+		ui.get("editor-kind").value = kind;
+		ui.get("editor-kind").fire("change");
+	}
+	assert.equal(ui.get("editor-rgb").value, "12AB34");
+	assert.equal(ui.get("editor-brightness").value, "37");
+	assert.equal(ui.get("editor-loop").checked, false);
+	assert.ok(ui.get("palette-select").options[0]?.textContent.includes("AABBCC"));
+	ui.get("editor-review").fire("click");
+	const definition = ui.sent.at(-1)?.payload.preset as presetEffects.PresetDefinition;
+	assert.equal(definition.effect?.kind === "breathing" && definition.effect.cycleMs, 3125);
+	assert.equal(definition.effect?.loop, false);
+});
+
+for (const outcome of ["failed-refresh", "new-generation", "new-assignment", "explicit-choice"]) {
+	test(`create-and-assign preserves a newer choice or an unverified catalog: ${outcome}`, () => {
+		const ui = inspector();
+		const initial = editorSnapshot();
+		ui.reply(initial);
+		ui.get("preset-new").fire("click");
+		ui.get("editor-name").value = "Created preset";
+		ui.get("editor-review").fire("click");
+		const id = ui.sent.at(-1)!.payload.id as string;
+		ui.reply({
+			...initial,
+			proposal: {
+				transactionId: "c".repeat(32),
+				expectedGeneration: "a".repeat(32),
+				requiresConfirmation: true,
+				identity: "AA:BB:CC:DD:EE:FF",
+				port: 18765,
+				presetCount: 2,
+				hasToken: true,
+			},
+		});
+		ui.get("confirm").fire("click");
+		const next = {
+			...editorSnapshot("b".repeat(32)),
+			catalog: {
+				status: "available",
+				entries: [
+					{ id: "colors", label: "Colors" },
+					{ id, label: "Created preset" },
+					{ id: "other", label: "Other" },
+				],
+			},
+		};
+		ui.reply({ ...next, saveOutcome: { status: "applied", activeStateKnown: true } });
+		assert.equal(ui.sent.at(-1)?.type, "presets.refresh");
+		if (outcome === "explicit-choice") {
+			ui.get("preset-select").value = "other";
+			ui.get("preset-select").fire("change");
+		}
+		const refreshed = {
+			...next,
+			...(outcome === "new-generation" ? { configuration: { ...next.configuration, generation: "d".repeat(32) } } : {}),
+			...(outcome === "new-assignment" ? { assignment: { schemaVersion: 1, presetId: "other" } } : {}),
+		};
+		ui.reply(refreshed, outcome === "failed-refresh" ? { ok: false, messageKey: "service" } : {});
+		const assignments = ui.sent.filter((message) => message.type === "assignment.save");
+		assert.equal(
+			assignments.some((message) => (message.payload.settings as { presetId: string }).presetId === id),
+			false,
+		);
+		assert.equal(ui.sent.filter((message) => message.type === "configuration.apply").length, 1);
+	});
+}

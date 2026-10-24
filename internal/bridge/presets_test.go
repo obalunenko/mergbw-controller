@@ -12,6 +12,7 @@ import (
 	"go.uber.org/mock/gomock"
 
 	"github.com/obalunenko/mergbw-controller/internal/bridge"
+	"github.com/obalunenko/mergbw-controller/internal/config"
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
 )
 
@@ -36,7 +37,7 @@ func TestPresetCatalogProjection(t *testing.T) {
 			if labels == nil {
 				assert.JSONEq(t, `[]`, string(got["presets"]))
 			} else {
-				expected, err := json.Marshal([]map[string]string{{"id": "night", "label": labels[1]}, {"id": "sunset", "label": labels[0]}})
+				expected, err := json.Marshal([]map[string]any{{"id": "night", "label": labels[1], "builtIn": false}, {"id": "sunset", "label": labels[0], "builtIn": false}})
 				require.NoError(t, err)
 				assert.JSONEq(t, string(expected), string(got["presets"]))
 			}
@@ -49,6 +50,20 @@ func TestPresetCatalogProjection(t *testing.T) {
 			assert.NotContains(t, w.Body.String(), settings.DeviceIdentity)
 		})
 	}
+}
+
+func TestPresetCatalogSeparatesStockCopiesAndOverrides(t *testing.T) {
+	_, _, settings := testHandler(t)
+	stock := config.DefaultPresets()
+	changed := protocol.ClonePreset(stock["night"])
+	changed.Brightness++
+	presets := map[string]protocol.Preset{"sunset": stock["sunset"], "night": changed, "my_sunset": stock["sunset"]}
+	lamp := NewMockController(gomock.NewController(t))
+	h := bridge.New(settings, presets, lamp)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, settings.BaseURL()+"/presets", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"presets":[{"id":"my_sunset","label":"Закат","builtIn":false},{"id":"night","label":"Ночь","builtIn":false},{"id":"sunset","label":"Закат","builtIn":true}],"physical_state_verified":false}`, w.Body.String())
 }
 
 func TestPresetCatalogGuards(t *testing.T) {

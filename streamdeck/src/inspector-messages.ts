@@ -2,6 +2,16 @@ import { BridgeClient, type PresetEntry, type TransitionSnapshot } from "./bridg
 import { type Diagnostics, type ErrorCategory, requestId } from "./diagnostics.js";
 import type { ManagedController, Proposal } from "./managed-controller.js";
 import { type OperationStore, operationSummary, type OperationSummary } from "./operation-store.js";
+import {
+	effectSnapshot,
+	type EffectSnapshot,
+	generationId,
+	presetDefinition,
+	type PresetDefinition,
+	presetId,
+	type PresetPage,
+	type PresetRead,
+} from "./preset-effects.js";
 import type { Settings } from "./settings.js";
 import { assignment, type Assignment, identity, type Language, object, selectedPath } from "./validation.js";
 
@@ -9,6 +19,9 @@ export const messageTypes = [
 	"inspector.get",
 	"configuration.prepareManual",
 	"configuration.prepareImport",
+	"configuration.presetList",
+	"configuration.presetRead",
+	"configuration.preparePreset",
 	"configuration.apply",
 	"configuration.cancel",
 	"configuration.check",
@@ -17,6 +30,8 @@ export const messageTypes = [
 	"presets.refresh",
 	"transition.status",
 	"transition.cancel",
+	"effect.status",
+	"effect.cancel",
 	"assignment.save",
 	"language.save",
 	"inspector.close",
@@ -33,6 +48,9 @@ const keys: Record<MessageType, string[]> = {
 	"inspector.get": [],
 	"configuration.prepareManual": ["identity", "expectedGeneration"],
 	"configuration.prepareImport": ["settingsPath", "presetsPath", "expectedGeneration"],
+	"configuration.presetList": ["expectedGeneration", "cursor"],
+	"configuration.presetRead": ["expectedGeneration", "id"],
+	"configuration.preparePreset": ["expectedGeneration", "operation", "id", "preset"],
 	"configuration.apply": ["transactionId", "expectedGeneration", "confirmed"],
 	"configuration.cancel": ["transactionId"],
 	"configuration.check": [],
@@ -41,6 +59,8 @@ const keys: Record<MessageType, string[]> = {
 	"presets.refresh": [],
 	"transition.status": [],
 	"transition.cancel": ["id"],
+	"effect.status": [],
+	"effect.cancel": ["id"],
 	"assignment.save": ["settings"],
 	"language.save": ["language"],
 	"inspector.close": [],
@@ -93,10 +113,29 @@ export function parseMessage(context: string, raw: unknown): InspectorMessage {
 	if (type === "transition.cancel" && (typeof raw.payload.id !== "string" || !/^[0-9a-f]{32}$/.test(raw.payload.id)))
 		throw new Error("validation");
 	if (type === "configuration.apply" && typeof raw.payload.confirmed !== "boolean") throw new Error("validation");
+	if (["configuration.presetList", "configuration.presetRead", "configuration.preparePreset"].includes(type)) {
+		if (!generationId(raw.payload.expectedGeneration)) throw new Error("validation");
+		if (type === "configuration.presetList" && raw.payload.cursor !== undefined && !presetId(raw.payload.cursor))
+			throw new Error("validation");
+		if (type !== "configuration.presetList" && !presetId(raw.payload.id)) throw new Error("validation");
+		if (type === "configuration.preparePreset") {
+			if (!["create", "update", "delete"].includes(String(raw.payload.operation))) throw new Error("validation");
+			if (raw.payload.operation === "delete") {
+				if ("preset" in raw.payload) throw new Error("validation");
+			} else presetDefinition(raw.payload.preset);
+		}
+	}
+	if (type === "effect.cancel" && !generationId(raw.payload.id)) throw new Error("validation");
 	return { v: 2, sessionId: raw.sessionId, requestId: raw.requestId, type, payload: raw.payload };
 }
 export type ConnectionSummary = { configured: boolean; port: number; hasToken: boolean };
 export type InspectorSnapshot = {
+	presetPage?: PresetPage;
+	presetDefinition?: PresetRead;
+	presetEditorError?: string;
+	effect?: EffectSnapshot | null;
+	effectError?: ErrorCategory;
+	effectPending?: boolean;
 	transition?: TransitionSnapshot | null;
 	transitionError?: ErrorCategory;
 	transitionPending?: boolean;
@@ -175,7 +214,11 @@ export type CatalogSnapshot = {
 export function presetOptions(entries: PresetEntry[]): PresetEntry[] {
 	const counts = new Map<string, number>();
 	for (const entry of entries) counts.set(entry.label, (counts.get(entry.label) ?? 0) + 1);
-	return entries.map(({ id, label }) => ({ id, label: counts.get(label)! > 1 ? `${label} (${id})` : label }));
+	return entries.map(({ id, label, builtIn }) => ({
+		id,
+		label: counts.get(label)! > 1 ? `${label} (${id})` : label,
+		...(builtIn === undefined ? {} : { builtIn }),
+	}));
 }
 export type InspectorReply = {
 	v: 2;
@@ -195,6 +238,16 @@ const emptyCheck = (): ConnectionCheck => ({
 });
 
 export class InspectorController {
+	private readonly editors = new Map<
+		string,
+		{ generation: string; page?: PresetPage; definition?: PresetRead; error?: string }
+	>();
+	private readonly effects = new Map<
+		string,
+		{ value?: EffectSnapshot | null; error?: ErrorCategory; capability?: import("./managed-controller.js").Capability }
+	>();
+	private readonly effectRequests = new Set<string>();
+	private effectGeneration = 0;
 	private readonly transitions = new Map<
 		string,
 		{
@@ -237,6 +290,9 @@ export class InspectorController {
 			if (session !== this.managementSession) {
 				this.managementSession = session;
 				this.proposals.clear();
+				this.editors.clear();
+				this.effects.clear();
+				this.effectGeneration++;
 				this.transitions.clear();
 				this.transitionGeneration++;
 				this.completedRequests.clear();
@@ -256,6 +312,8 @@ export class InspectorController {
 				if (settings.connectionRevision !== this.revision) {
 					this.revision = settings.connectionRevision;
 					this.transitions.clear();
+					this.effects.clear();
+					this.effectGeneration++;
 					this.transitionGeneration++;
 					this.generation++;
 					this.check = emptyCheck();
@@ -279,6 +337,8 @@ export class InspectorController {
 							: !record.snapshot.capability)
 					) {
 						this.transitions.clear();
+						this.effects.clear();
+						this.effectGeneration++;
 						this.transitionOperation = record.operationId;
 						this.transitionGeneration++;
 					}
@@ -317,6 +377,8 @@ export class InspectorController {
 		if (proposal) void this.runtime?.cancel(proposal.transactionId, proposal.ownerSession).catch(() => {});
 		this.proposals.delete(context);
 		this.transitions.delete(context);
+		this.effects.delete(context);
+		this.editors.delete(context);
 		this.completedRequests.delete(context);
 		this.sessions.delete(context);
 		this.sessionTokens.delete(context);
@@ -382,6 +444,33 @@ export class InspectorController {
 			check: { ...this.check },
 			catalog: structuredClone(this.catalog),
 		};
+		const editor = this.editors.get(context);
+		if (editor && editor.generation === this.runtime?.active.generation) {
+			if (editor.page) snapshot.presetPage = structuredClone(editor.page);
+			if (editor.definition) snapshot.presetDefinition = structuredClone(editor.definition);
+			snapshot.presetEditorError = editor.error;
+			if (snapshot.presetPage)
+				snapshot.presetPage.entries = snapshot.presetPage.entries.map((entry) => ({
+					...entry,
+					label: this.safeEditorText(entry.label),
+				}));
+			if (snapshot.presetDefinition)
+				snapshot.presetDefinition.preset.label = this.safeEditorText(snapshot.presetDefinition.preset.label);
+		}
+		const effect =
+			this.effects.get(context) ??
+			(record?.effect &&
+			record.status === "accepted" &&
+			record.operationId === this.transitionOperation &&
+			record.settingsRevision === this.settings.revision(context) &&
+			record.connectionRevision === this.settings.connectionRevision
+				? { value: record.effect, capability: record.snapshot.capability }
+				: undefined);
+		if (effect && (!effect.capability || this.runtime?.current(effect.capability))) {
+			snapshot.effect = effect.value;
+			snapshot.effectError = effect.error;
+		}
+		snapshot.effectPending = this.effectRequests.has(context);
 		if (transition && (!transition.capability || this.runtime?.current(transition.capability))) {
 			snapshot.transition = transition.value;
 			snapshot.transitionError = transition.error;
@@ -449,6 +538,23 @@ export class InspectorController {
 				label: this.diagnostics?.text(entry.label) ?? entry.label,
 			}));
 		return snapshot;
+	}
+	private safeEditorText(value: string): string {
+		return this.diagnostics?.text(value) ?? value.replace(/https?:\/\/[^\s]+/gi, "[redacted]");
+	}
+	public publishEffect(
+		context: string,
+		value: EffectSnapshot | null,
+		error?: ErrorCategory,
+		capability?: import("./managed-controller.js").Capability,
+	): void {
+		if (
+			(capability && !this.runtime?.current(capability)) ||
+			(value && (!effectSnapshot(value) || !this.isSafePresetId(value.presetId)))
+		)
+			return;
+		this.effects.set(context, { value: value ? structuredClone(value) : null, error, capability });
+		this.publish();
 	}
 	public async receive(context: string, raw: unknown): Promise<void> {
 		let message: InspectorMessage;
@@ -522,6 +628,30 @@ export class InspectorController {
 		const runtimeSession = this.runtime?.managementSession();
 		try {
 			switch (message.type) {
+				case "configuration.presetList":
+				case "configuration.presetRead": {
+					if (!this.runtime) throw new Error("unconfigured");
+					const expected = message.payload.expectedGeneration as string;
+					const result =
+						message.type === "configuration.presetList"
+							? await this.runtime.presetList(expected, message.sessionId, message.payload.cursor as string | undefined)
+							: await this.runtime.presetRead(expected, message.sessionId, message.payload.id as string);
+					if (
+						runtimeSession !== this.runtime.managementSession() ||
+						this.sessionTokens.get(context) !== sessionToken ||
+						this.sessions.get(context)?.requestId !== message.requestId ||
+						this.runtime.active.generation !== expected
+					)
+						return;
+					const editor =
+						this.editors.get(context)?.generation === expected ? this.editors.get(context)! : { generation: expected };
+					if (message.type === "configuration.presetList") editor.page = result as PresetPage;
+					else editor.definition = result as PresetRead;
+					delete editor.error;
+					this.editors.set(context, editor);
+					break;
+				}
+				case "configuration.preparePreset":
 				case "configuration.prepareManual":
 				case "configuration.prepareImport": {
 					if (!this.runtime) throw new Error("unconfigured");
@@ -529,7 +659,15 @@ export class InspectorController {
 					if (old) await this.runtime.cancel(old.transactionId, old.ownerSession);
 					this.proposals.delete(context);
 					let proposal: Proposal;
-					if (message.type === "configuration.prepareImport") {
+					if (message.type === "configuration.preparePreset") {
+						proposal = await this.runtime.preparePreset(
+							message.payload.operation as "create" | "delete" | "update",
+							message.payload.id as string,
+							message.payload.preset as PresetDefinition | undefined,
+							message.payload.expectedGeneration as string,
+							message.sessionId,
+						);
+					} else if (message.type === "configuration.prepareImport") {
 						proposal = await this.runtime.prepareImport(
 							selectedPath(message.payload.settingsPath),
 							message.payload.presetsPath === undefined ? undefined : selectedPath(message.payload.presetsPath),
@@ -616,6 +754,10 @@ export class InspectorController {
 				case "transition.cancel":
 					await this.refreshTransition(context, message);
 					break;
+				case "effect.status":
+				case "effect.cancel":
+					await this.refreshEffect(context, message);
+					break;
 				case "connection.check":
 					await this.refresh(true, context, message);
 					break;
@@ -625,6 +767,24 @@ export class InspectorController {
 			}
 			if (this.sessionTokens.get(context) === sessionToken) await this.reply(context, message, true);
 		} catch (error) {
+			if (message.type.startsWith("configuration.preset") || message.type === "configuration.preparePreset") {
+				const expected = message.payload.expectedGeneration as string;
+				if (this.runtime?.active.generation === expected && this.sessionTokens.get(context) === sessionToken) {
+					const editor = this.editors.get(context) ?? { generation: expected };
+					editor.error =
+						error instanceof Error &&
+						[
+							"stale_configuration",
+							"preset_exists",
+							"preset_not_found",
+							"preset_too_large",
+							"storage_unavailable",
+						].includes(error.message)
+							? error.message
+							: "invalid_configuration";
+					this.editors.set(context, editor);
+				}
+			}
 			if (this.sessionTokens.get(context) === sessionToken)
 				await this.reply(
 					context,
@@ -657,6 +817,9 @@ export class InspectorController {
 							"import_size",
 							"import_file",
 							"invalid_configuration",
+							"preset_exists",
+							"preset_not_found",
+							"preset_too_large",
 							"port_conflict",
 							"host_unavailable",
 							"cleanup_blocked",
@@ -665,6 +828,44 @@ export class InspectorController {
 						? error.message
 						: "validation",
 				);
+		}
+	}
+	private async refreshEffect(context: string, message: InspectorMessage): Promise<void> {
+		if (this.effectRequests.has(context)) throw new Error("validation");
+		const capability = this.runtime?.capability();
+		const connection = this.runtime ? capability?.connection : this.settings.getConnection();
+		if (!connection) throw new Error("unconfigured");
+		const id = message.payload.id;
+		if (message.type === "effect.cancel" && this.snapshot(context).effect?.id !== id) throw new Error("validation");
+		const revision = this.settings.connectionRevision,
+			generation = this.effectGeneration,
+			token = this.sessionTokens.get(context);
+		this.effectRequests.add(context);
+		this.publish();
+		const release = this.diagnostics?.retain(connection.accessToken);
+		try {
+			const result =
+				message.type === "effect.cancel"
+					? await this.client.cancelEffect(connection, id as string, capability?.signal, capability ?? undefined)
+					: await this.client.effect(connection, capability?.signal, capability ?? undefined);
+			if (
+				(capability && !this.runtime?.current(capability)) ||
+				revision !== this.settings.connectionRevision ||
+				generation !== this.effectGeneration ||
+				token !== this.sessionTokens.get(context) ||
+				this.sessions.get(context)?.requestId !== message.requestId
+			)
+				return;
+			this.publishEffect(
+				context,
+				result.value?.effect ?? null,
+				result.value ? undefined : (result.errorCategory ?? "protocol"),
+				capability ?? undefined,
+			);
+		} finally {
+			release?.();
+			this.effectRequests.delete(context);
+			this.publish();
 		}
 	}
 	private async refreshTransition(context: string, message: InspectorMessage): Promise<void> {
@@ -751,6 +952,7 @@ export class InspectorController {
 					status: "available",
 					entries: catalog.value.presets.map((entry) => ({
 						id: entry.id,
+						...(entry.builtIn === undefined ? {} : { builtIn: entry.builtIn }),
 						label: (this.diagnostics?.text(entry.label) ?? entry.label)
 							.split("")
 							.filter((char) => char.charCodeAt(0) >= 32 && !(char.charCodeAt(0) >= 127 && char.charCodeAt(0) <= 159))

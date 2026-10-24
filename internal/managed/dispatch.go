@@ -44,6 +44,7 @@ var safeCodes = map[Code]bool{
 	"invalid_identity": true, "invalid_settings": true, "proposal_expired": true,
 	"confirmation_required": true, "unconfigured": true, "control_busy": true,
 	"import_missing": true, "import_unreadable": true, "import_size": true, "import_file": true,
+	"preset_exists": true, "preset_not_found": true, "preset_too_large": true,
 	"binary_missing": true, "binary_incompatible": true, "permission_denied": true,
 	"bluetooth_unavailable": true, "backend_restart_required": true,
 }
