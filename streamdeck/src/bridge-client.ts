@@ -3,6 +3,7 @@ import { request } from "node:http";
 import { type ErrorCategory, requestId } from "./diagnostics.js";
 import { type Clock, type OperationRecord, type OperationResult, systemClock } from "./operation-store.js";
 import { type EffectEnvelope, effectSnapshot } from "./preset-effects.js";
+import { SCENE_ROUTE, sceneSelector } from "./scenes.js";
 import { type Connection, object, connection as validateConnection } from "./validation.js";
 
 export type TransitionSnapshot = {
@@ -32,6 +33,10 @@ export function transitionSnapshot(value: unknown, secret = ""): value is Transi
 		value.elapsedMs <= value.durationMs &&
 		value.physical_state_verified === false
 	);
+}
+function sceneRoute(route: string): boolean {
+	const match = SCENE_ROUTE.exec(route);
+	return match !== null && sceneSelector(match[1]!) === match[1];
 }
 const transitionRoute =
 	/^transition\/[A-F0-9]{6}\/(?:100|[1-9]?[0-9])\/[A-F0-9]{6}\/(?:100|[1-9]?[0-9])\/(?:[1-9]|[1-5][0-9]|60)$/;
@@ -133,7 +138,8 @@ export class BridgeClient {
 		const route = record.snapshot.route;
 		if (
 			!/^(on|off|color\/[A-F0-9]{6}|brightness\/(?:[0-9]|[1-9][0-9]|100)|preset\/[a-z0-9_-]{1,40})$/.test(route) &&
-			!transitionRoute.test(route)
+			!transitionRoute.test(route) &&
+			!sceneRoute(route)
 		)
 			return { status: "rejected", errorCategory: "validation" };
 		const result = await this.read(

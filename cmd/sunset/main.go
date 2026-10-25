@@ -41,6 +41,11 @@ func (l lampLink) CanRetry(err error) bool {
 }
 
 func usage() {
+	scenes := protocol.Scenes()
+	slugs := make([]string, len(scenes))
+	for i, scene := range scenes {
+		slugs[i] = scene.Slug
+	}
 	fmt.Fprintln(os.Stderr, `MeRGBW LT-06 / Stream Deck — Go
 
 ./sunset [--data-dir PATH] --identity AA:BB:CC:DD:EE:FF init
@@ -51,12 +56,14 @@ func usage() {
 ./sunset [--data-dir PATH] send color FF5000
 ./sunset [--data-dir PATH] send brightness 40
 ./sunset [--data-dir PATH] send preset sunset
+./sunset [--data-dir PATH] send scene disco
 ./sunset [--data-dir PATH] send transition FF5000 100 FF5000 0 30
-./sunset [--data-dir PATH] dry-run on|off|color HEX|brightness N|preset NAME
+./sunset [--data-dir PATH] dry-run on|off|color HEX|brightness N|preset NAME|scene NAME|ID
 ./sunset --version
 
 send использует уже работающий HTTP-сервис. Перед inspect остановите serve.
 По умолчанию настройки и пресеты находятся рядом с исполняемым sunset.`)
+	fmt.Fprintf(os.Stderr, "Сцены: %s, или ID 80–93\n", strings.Join(slugs, ", "))
 }
 
 func main() {

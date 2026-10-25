@@ -245,6 +245,9 @@ func URLs(settings Settings, presets map[string]protocol.Preset) string {
 	for _, level := range []int{25, 50, 100} {
 		add(fmt.Sprintf("Яркость %d%%", level), fmt.Sprintf("brightness/%d", level))
 	}
+	for _, s := range protocol.Scenes() {
+		add("Сцена "+s.Label, "scene/"+s.Slug)
+	}
 	return out.String()
 }
 

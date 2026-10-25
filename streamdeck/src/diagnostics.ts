@@ -104,7 +104,7 @@ export class Diagnostics {
 		)
 			return;
 		const fields: Record<string, number | string> = { event };
-		if (["on", "off", "color", "brightness", "preset", "transition"].includes(input.actionKind ?? ""))
+		if (["on", "off", "color", "brightness", "preset", "scene", "transition"].includes(input.actionKind ?? ""))
 			fields.actionKind = input.actionKind!;
 		if (["accepted", "pending", "sent", "rejected", "unknown"].includes(input.outcome ?? ""))
 			fields.outcome = input.outcome!;

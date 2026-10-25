@@ -32,12 +32,19 @@ func TestRoutesPassExpectedPackets(t *testing.T) {
 		method  string
 		route   string
 		packets []string
+		action  string
 	}{
-		{http.MethodGet, "off", []string{"5501ff0600a3"}},
-		{http.MethodPost, "on", []string{"5501ff0601a2"}},
-		{http.MethodGet, "preset/sunset", []string{"5501ff0601a2", "5503ff08ff50004f", "5505ff06326d"}},
+		{http.MethodGet, "off", []string{"5501ff0600a3"}, "off"},
+		{http.MethodPost, "on", []string{"5501ff0601a2"}, "on"},
+		{http.MethodGet, "preset/sunset", []string{"5501ff0601a2", "5503ff08ff50004f", "5505ff06326d"}, "preset/sunset"},
+		{http.MethodGet, "scene/disco", []string{"5501ff0601a2", "5506ff068717"}, "scene/disco"},
+		{http.MethodPost, "scene/disco", []string{"5501ff0601a2", "5506ff068717"}, "scene/disco"},
+		{http.MethodGet, "scene/8a", []string{"5501ff0601a2", "5506ff068a14"}, "scene/8A"},
+		{http.MethodPost, "scene/8a", []string{"5501ff0601a2", "5506ff068a14"}, "scene/8A"},
+		{http.MethodGet, "scene/0x8A", []string{"5501ff0601a2", "5506ff068a14"}, "scene/8A"},
+		{http.MethodPost, "scene/0x8A", []string{"5501ff0601a2", "5506ff068a14"}, "scene/8A"},
 	} {
-		t.Run(test.route, func(t *testing.T) {
+		t.Run(test.method+"_"+test.route, func(t *testing.T) {
 			handler, controller, settings := testHandler(t)
 			var action protocol.Action
 			controller.EXPECT().Execute(gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, got protocol.Action) error {
@@ -56,6 +63,7 @@ func TestRoutesPassExpectedPackets(t *testing.T) {
 			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &result))
 			assert.Equal(t, false, result["physical_state_verified"])
 			assert.Equal(t, true, result["sent"])
+			assert.Equal(t, test.action, result["action"])
 			assert.Equal(t, "no-store", recorder.Header().Get("Cache-Control"))
 		})
 	}
@@ -84,6 +92,13 @@ func TestRejectedRequestsNeverExecute(t *testing.T) {
 		{"empty_query", "GET", "/TOKEN/off?", "", "", 400},
 		{"trailing_slash", "GET", "/TOKEN/off/", "", "", 400},
 		{"body", "POST", "/TOKEN/off", "", "ignored", 400},
+		{"scene_body", "POST", "/TOKEN/scene/disco", "", "ignored", 400},
+		{"scene_head", "HEAD", "/TOKEN/scene/disco", "", "", 405},
+		{"scene_out_of_range", "GET", "/TOKEN/scene/94", "", "", 400},
+		{"scene_uppercase", "GET", "/TOKEN/scene/Disco", "", "", 400},
+		{"scene_spaced", "GET", "/TOKEN/scene/green%20prairie", "", "", 400},
+		{"scene_extra_segment", "GET", "/TOKEN/scene/disco/extra", "", "", 404},
+		{"scene_wrong_token", "GET", "/wrong-token/scene/disco", "", "", 403},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			handler, _, settings := testHandler(t)

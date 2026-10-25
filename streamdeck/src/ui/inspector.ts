@@ -7,6 +7,7 @@ import {
 	type PresetKind,
 	presetKinds,
 } from "../preset-effects.js";
+import { RAW_SCENE_IDS, sceneHex, SCENES } from "../scenes.js";
 import {
 	type ActionKind,
 	colorInput,
@@ -115,6 +116,16 @@ function option(value: string, label: string): HTMLOptionElement {
 	result.value = value;
 	result.textContent = label;
 	return result;
+}
+function renderSceneChoices(selected: string): void {
+	const catalog = document.createElement("optgroup");
+	catalog.label = translate(language, "scene");
+	catalog.replaceChildren(...SCENES.map((scene) => option(scene.slug, scene.label)));
+	const raw = document.createElement("optgroup");
+	raw.label = translate(language, "sceneRawIds");
+	raw.replaceChildren(...RAW_SCENE_IDS.map((id) => option(sceneHex(id), `ID ${sceneHex(id)}`)));
+	select("scene-select").replaceChildren(catalog, raw);
+	select("scene-select").value = selected;
 }
 function renderPresetChoices(selected: string): void {
 	const counts = new Map<string, number>();
@@ -401,14 +412,18 @@ client.sendToPropertyInspector.subscribe((event) => {
 	if (!view) showView(configured ? "main" : "setup");
 	if (snapshot.language === "en" || snapshot.language === "ru") language = snapshot.language;
 	localize();
-	if (["on", "off", "color", "brightness", "preset", "transition"].includes(String(snapshot.actionKind)))
+	if (["on", "off", "color", "brightness", "preset", "scene", "transition"].includes(String(snapshot.actionKind)))
 		actionKind = snapshot.actionKind as ActionKind;
 	const configurable =
-		actionKind === "color" || actionKind === "brightness" || actionKind === "preset" || actionKind === "transition";
+		actionKind === "color" ||
+		actionKind === "brightness" ||
+		actionKind === "preset" ||
+		actionKind === "scene" ||
+		actionKind === "transition";
 	element("assignment-controls").hidden = !configurable;
 	element("power-action").hidden = configurable;
 	if (actionKind) text("power-action", actionKind);
-	for (const kind of ["color", "brightness", "preset", "transition"])
+	for (const kind of ["color", "brightness", "preset", "scene", "transition"])
 		element(`${kind}-controls`).hidden = actionKind !== kind;
 	if (actionKind) text("action-name", actionKind);
 	const assignment = isObject(snapshot.assignment) ? snapshot.assignment : {};
@@ -433,6 +448,10 @@ client.sendToPropertyInspector.subscribe((event) => {
 		input("percent").value = reconcile("percent", String(assignment.percent));
 		if (input("percent").validity.valid && input("percent").value !== "")
 			input("percent-slider").value = input("percent").value;
+	}
+	if (actionKind === "scene") {
+		const assigned = typeof assignment.sceneId === "string" ? assignment.sceneId : "";
+		renderSceneChoices(reconcile("scene-select", assigned));
 	}
 	if (actionKind === "preset") {
 		const assigned = typeof assignment.presetId === "string" ? assignment.presetId : "";
@@ -1046,6 +1065,12 @@ function saveAssignment(): void {
 			if (!catalogAvailable || !presetId || select("preset-select").selectedOptions[0]?.disabled !== false)
 				throw new Error("validation");
 			settings = { schemaVersion: 1, presetId };
+		} else if (actionKind === "scene") {
+			settings = validateAssignment("scene", { schemaVersion: 1, sceneId: select("scene-select").value });
+			queueAssignment(settings, {
+				"scene-select": { value: String(settings.sceneId), draft: select("scene-select").value },
+			});
+			return;
 		} else if (actionKind === "transition") {
 			settings = validateAssignment("transition", {
 				schemaVersion: 1,
@@ -1092,6 +1117,7 @@ function queueAssignment(settings: Record<string, unknown>, drafts: Drafts): voi
 	text("assignment-status", assignmentStatusKey);
 	void send("assignment.save", { settings }, drafts);
 }
+element("scene-select").addEventListener("change", saveAssignment);
 element("color-picker").addEventListener("change", () => {
 	input("rgb").value = input("color-picker").value.slice(1).toUpperCase();
 	saveAssignment();

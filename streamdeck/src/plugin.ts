@@ -7,6 +7,7 @@ import { Color } from "./actions/color.js";
 import { PowerOff } from "./actions/power-off.js";
 import { PowerOn } from "./actions/power-on.js";
 import { Preset } from "./actions/preset.js";
+import { Scene } from "./actions/scene.js";
 import { Transition } from "./actions/transition.js";
 import { BridgeClient } from "./bridge-client.js";
 import { Diagnostics, type ErrorCategory } from "./diagnostics.js";
@@ -53,6 +54,7 @@ const services = { settings, operations, client, inspector, diagnostics, runtime
 streamDeck.actions.registerAction(new PowerOn(services));
 streamDeck.actions.registerAction(new PowerOff(services));
 streamDeck.actions.registerAction(new Color(services));
+streamDeck.actions.registerAction(new Scene(services));
 streamDeck.actions.registerAction(new Brightness(services));
 streamDeck.actions.registerAction(new Preset(services));
 streamDeck.actions.registerAction(new Transition(services));

@@ -1,5 +1,7 @@
 // Package protocol implements the MeRGBW LT-06 protocol whose power packets
 // were confirmed on the user's lamp. RGB and brightness still need hardware QA.
+// Built-in scene IDs come from a reference controller; most names do not match
+// their observed LT-06 effects (specs/009-full-command-scene-support/hardware-verification.md).
 package protocol
 
 import (
@@ -85,7 +87,7 @@ func ValidatePresets(presets map[string]Preset) error {
 // All supported commands are absolute, so a reconnect can safely repeat them.
 func Resolve(args []string, presets map[string]Preset) (Action, error) {
 	if len(args) == 0 {
-		return Action{}, fmt.Errorf("нужна команда: on, off, color, brightness или preset")
+		return Action{}, fmt.Errorf("нужна команда: on, off, color, brightness, preset или scene")
 	}
 	name := args[0]
 	if name == "transition" {
@@ -102,7 +104,7 @@ func Resolve(args []string, presets map[string]Preset) (Action, error) {
 		return Action{Route: name, Packets: [][]byte{packet(0x01, value)}}, nil
 	}
 	if len(args) != 2 {
-		return Action{}, fmt.Errorf("команды color, brightness и preset принимают один параметр")
+		return Action{}, fmt.Errorf("команды color, brightness, preset и scene принимают один параметр")
 	}
 	value := args[1]
 	on := packet(0x01, 1)
@@ -145,7 +147,13 @@ func Resolve(args []string, presets map[string]Preset) (Action, error) {
 			return Action{Route: "preset/" + value, Effect: &spec}, nil
 		}
 		return Action{Route: "preset/" + value, Packets: [][]byte{on, packet(0x03, rgb...), packet(0x05, byte(preset.Brightness))}}, nil
+	case "scene":
+		route, id, err := parseScene(value)
+		if err != nil {
+			return Action{}, err
+		}
+		return Action{Route: route, Packets: [][]byte{on, packet(sceneCommand, id)}}, nil
 	default:
-		return Action{}, fmt.Errorf("неизвестная команда; допустимы on, off, color, brightness, preset")
+		return Action{}, fmt.Errorf("неизвестная команда; допустимы on, off, color, brightness, preset, scene")
 	}
 }

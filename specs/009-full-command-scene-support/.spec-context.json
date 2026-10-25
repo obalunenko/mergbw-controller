@@ -1,0 +1,709 @@
+{
+  "workflow": "companion",
+  "specName": "Полная поддержка команд и встроенных сцен LT-06",
+  "branch": "feature/missed-scenes",
+  "currentStep": "implement",
+  "status": "completed",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T00:23:09.000Z"
+    },
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-25T00:25:43.980Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T00:26:20.482Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-25T00:28:38.897Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T00:30:47.638Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-25T00:32:18.048Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T00:43:55.961Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T001",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:44:07.467Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T002",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:44:48.889Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T003",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:44:48.976Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T004",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:44:49.055Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T011",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:45:46.655Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T013",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:45:46.716Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T009",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:03.070Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T010",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:03.135Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T005",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:03.195Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T023",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:05.167Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T024",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:05.251Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T025",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:05.334Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T006",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:19.858Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T007",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:31.409Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T014",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:40.346Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T015",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:40.405Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T016",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:40.465Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T017",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:40.525Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T008",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:46:53.891Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T012",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:53:05.728Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T019",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:53:05.788Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T020",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:53:05.846Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T021",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:53:05.904Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T018",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:53:05.967Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T022",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:54:17.481Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T026",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:55:50.628Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T027",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T00:55:50.708Z"
+    },
+    {
+      "step": "converge",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T08:33:02.018Z"
+    },
+    {
+      "step": "converge",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-25T08:33:44.992Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T030",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T08:46:40.591Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T031",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T08:46:40.659Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T028",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T08:50:59.233Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T029",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T12:15:52.880Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T12:15:52.896Z"
+    }
+  ],
+  "currentTask": null,
+  "task_summaries": {
+    "T001": {
+      "status": "DONE",
+      "did": "Confirmed packet(0x06,0x87)=55 06 FF 06 87 17; no checksum change",
+      "files": [
+        "internal/protocol/protocol.go"
+      ]
+    },
+    "T002": {
+      "status": "DONE",
+      "did": "Scene type, 20-entry catalog, Scenes() copy, scene constants",
+      "files": [
+        "internal/protocol/scenes.go"
+      ]
+    },
+    "T003": {
+      "status": "DONE",
+      "did": "parseScene: exact slug or optional 0x + two hex digits 80-93",
+      "files": [
+        "internal/protocol/scenes.go"
+      ]
+    },
+    "T004": {
+      "status": "DONE",
+      "did": "Catalog pin, copy isolation, accept/reject selector tables",
+      "files": [
+        "internal/protocol/scenes_test.go"
+      ]
+    },
+    "T011": {
+      "status": "DONE",
+      "did": "Added TestURLsListScenesAfterExistingLines pinning prior URL text then 20 scene blocks; updated URL count to 11+scenes",
+      "files": [
+        "internal/config/config_test.go"
+      ]
+    },
+    "T013": {
+      "status": "DONE",
+      "did": "URLs appends Сцена <Label> scene/<slug> blocks from protocol.Scenes() after brightness",
+      "files": [
+        "internal/config/config.go"
+      ]
+    },
+    "T009": {
+      "status": "DONE",
+      "did": "Added scene case to Resolve via parseScene; updated error strings and package doc",
+      "files": [
+        "internal/protocol/protocol.go"
+      ]
+    },
+    "T010": {
+      "status": "DONE",
+      "did": "Added scene examples and catalog line built from protocol.Scenes() to usage()",
+      "files": [
+        "cmd/sunset/main.go"
+      ]
+    },
+    "T005": {
+      "status": "DONE",
+      "did": "Added TestResolveScenePackets (20 slugs, 20 hex IDs, 0x8a) and invalid scene cases",
+      "files": [
+        "internal/protocol/protocol_test.go"
+      ]
+    },
+    "T023": {
+      "status": "DONE",
+      "did": "Verification record: 20 ID rows + 3 behaviour checks, all pending",
+      "files": [
+        "specs/009-full-command-scene-support/hardware-verification.md"
+      ]
+    },
+    "T024": {
+      "status": "DONE",
+      "did": "README Scenes section, table, HTTP route, Scene action, compatibility note",
+      "files": [
+        "README.md"
+      ]
+    },
+    "T025": {
+      "status": "DONE",
+      "did": "README_RU Сцены section mirroring README",
+      "files": [
+        "README_RU.md"
+      ]
+    },
+    "T006": {
+      "status": "DONE",
+      "did": "Extended bridge route and rejection tests with scene GET/POST, hex canonical route and invalid cases",
+      "files": [
+        "internal/bridge/http_test.go"
+      ]
+    },
+    "T007": {
+      "status": "DONE",
+      "did": "Added scene log-capture test: command=scene/disco, packet_count=2, token and URL absent",
+      "files": [
+        "internal/bridge/logging_test.go"
+      ]
+    },
+    "T014": {
+      "status": "DONE",
+      "did": "Added scenes.ts with SCENES catalog, RAW_SCENE_IDS, sceneSelector, SCENE_ROUTE_SOURCE and SCENE_ROUTE",
+      "files": [
+        "streamdeck/src/scenes.ts"
+      ]
+    },
+    "T015": {
+      "status": "DONE",
+      "did": "validation: scene ActionKind, default disco assignment, sceneId canonicalization, scene routes in connection-link regexes plus sceneSelector check",
+      "files": [
+        "streamdeck/src/validation.ts"
+      ]
+    },
+    "T016": {
+      "status": "DONE",
+      "did": "bridge-client command accepts canonical scene routes only (SCENE_ROUTE + sceneSelector identity)",
+      "files": [
+        "streamdeck/src/bridge-client.ts"
+      ]
+    },
+    "T017": {
+      "status": "DONE",
+      "did": "Added Scene action (com.obalunenko.mergbw.scene) and registered it after Color",
+      "files": [
+        "streamdeck/src/actions/scene.ts",
+        "streamdeck/src/plugin.ts"
+      ]
+    },
+    "T008": {
+      "status": "DONE",
+      "did": "Added TestSceneCommandCancelsRunningEffectBeforeWrite: effect cancelled, last frames on+scene",
+      "files": [
+        "internal/controller/effects_test.go"
+      ]
+    },
+    "T012": {
+      "status": "DONE",
+      "did": "Added scenes.test.ts covering catalog table, assignment canonicalization, bridge-client canonical routes, connection links and Scene key press",
+      "files": [
+        "streamdeck/tests/scenes.test.ts"
+      ]
+    },
+    "T019": {
+      "status": "DONE",
+      "did": "Inspector scene-controls select (catalog optgroup with duplicate note, ID optgroup 80-93), scene save branch via validateAssignment, EN/RU strings, inspector UI test",
+      "files": [
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/ui/index.html",
+        "streamdeck/src/ui/inspector.ts",
+        "streamdeck/src/i18n.ts",
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "T020": {
+      "status": "DONE",
+      "did": "Feedback ready shows scene label or ID <HEX>, keeps action name when invalid; feedback-scene.test.ts",
+      "files": [
+        "streamdeck/src/feedback.ts",
+        "streamdeck/tests/feedback-scene.test.ts"
+      ]
+    },
+    "T021": {
+      "status": "DONE",
+      "did": "Diagnostics accepts actionKind scene; test pins scene record",
+      "files": [
+        "streamdeck/src/diagnostics.ts",
+        "streamdeck/tests/diagnostics.test.ts"
+      ]
+    },
+    "T018": {
+      "status": "DONE",
+      "did": "Manifest Scene action (Keypad, imgs/scene) plus generated 144/288 sparkle icons; package check expects seven actions",
+      "files": [
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/manifest.json",
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/imgs/scene.png",
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/imgs/scene@2x.png",
+        "streamdeck/scripts/check-package.mjs"
+      ]
+    },
+    "T022": {
+      "status": "DONE",
+      "did": "task plugin:check:software passes (lint, format, typecheck, 273 tests, build, validate, package check, native tests); updated package/inspector tests and check-package for seven actions",
+      "files": [
+        "streamdeck/tests/package.test.ts",
+        "streamdeck/tests/inspector-ui.test.ts",
+        "streamdeck/scripts/check-package.mjs"
+      ]
+    },
+    "T026": {
+      "status": "DONE",
+      "did": "gofmt clean; test:core, test:race, vet, build pass"
+    },
+    "T027": {
+      "status": "DONE",
+      "did": "Dry-runs disco/8a/0x8A match contract; 94 and 'green prairie' exit 1; urls lists 20 scene links after brightness"
+    },
+    "T030": {
+      "status": "DONE",
+      "did": "CLI help scenes line says not verified on LT-06 and marks forest=sunset, aurora=rubyglow",
+      "files": [
+        "cmd/sunset/main.go"
+      ]
+    },
+    "T031": {
+      "status": "DONE",
+      "did": "Rejected-body case for POST scene/disco returns 400 without Execute",
+      "files": [
+        "internal/bridge/http_test.go"
+      ]
+    },
+    "T028": {
+      "status": "DONE",
+      "did": "Skipped by owner decision: personal project, no Linux run; task check NOT executed"
+    },
+    "T029": {
+      "status": "DONE",
+      "did": "Owner LT-06 run: all 20 IDs observed, transition preemption pass, brightness ignored during scene, Stream Deck Scene key persists across restart; READMEs updated from record",
+      "files": [
+        "specs/009-full-command-scene-support/hardware-verification.md",
+        "README.md",
+        "README_RU.md",
+        "cmd/sunset/main.go",
+        "internal/protocol/protocol.go",
+        "internal/protocol/scenes.go"
+      ]
+    }
+  },
+  "verified": [
+    {
+      "what": "task test:core",
+      "command": "task test:core",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 22.7,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/managed\t2.099s · ok  \tgithub.com/obalunenko/mergbw-controller/cmd/sunset/supervisor\t21.993s · task: [test:core] go test ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble ./internal/managed ./cmd/sunset/supervisor"
+    },
+    {
+      "what": "task test:race",
+      "command": "task test:race",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 23.5,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/managed\t3.070s · ok  \tgithub.com/obalunenko/mergbw-controller/cmd/sunset/supervisor\t22.537s · task: [test:race] go test -race ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble ./internal/managed ./cmd/sunset/supervisor"
+    },
+    {
+      "what": "task vet",
+      "command": "task vet",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.4,
+      "result": "task: [vet] go vet ./..."
+    },
+    {
+      "what": "task build",
+      "command": "task build",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.9,
+      "result": "task: [build] go build -trimpath -buildvcs=false -o sunset ./cmd/sunset"
+    },
+    {
+      "what": "plugin checks",
+      "command": "task plugin:check:software",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 52.2,
+      "result": "---------------------------------------------------------------------- · Ran 27 tests in 0.360s · OK"
+    },
+    {
+      "what": "dry-run scene disco",
+      "command": "./sunset dry-run scene disco",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.1,
+      "result": "55 01 FF 06 01 A2 · 55 06 FF 06 87 17 · Пакеты показаны; подключение к лампе и отправка не выполнялись."
+    },
+    {
+      "what": "dry-run rejects 94",
+      "command": "! ./sunset dry-run scene 94",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.0,
+      "result": "time=2026-10-25T04:56:51.167+04:00 level=ERROR msg=application.failed error=\"неизвестная сцена; доступны: fantasy, greenprairie, sunset, forest, sunrise, ghost, midsummer, tropicaltwilight, disco, alarm, rubyglow, aurora, savanah, lakeplacid, neon, sundowner, bluestar, redrose, rating, autumn или ID 80–93\""
+    },
+    {
+      "what": "LT-06 scene IDs 80-93 (owner observation)",
+      "command": "./sunset send scene <ID>",
+      "result": "every ID shows an effect: 80-86 static, 87-8A color change, 8B-93 pulse; most names do not match"
+    },
+    {
+      "what": "Scene stops a running transition (owner observation)",
+      "command": "./sunset send transition FF0000 100 0000FF 100 60; ./sunset send scene disco",
+      "result": "pass"
+    },
+    {
+      "what": "brightness during a scene (owner observation, FR-012)",
+      "command": "./sunset send scene 8C; ./sunset send brightness 20",
+      "result": "ignored, pulse unchanged"
+    },
+    {
+      "what": "Stream Deck Scene key (owner observation)",
+      "command": "spike plugin dist/plugin-local-scenes-20261025 linked",
+      "result": "Aurora key ran 89 and kept selection after restart"
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "scenes_test.go is an internal test package so it can test the unexported parseScene",
+      "why": "tasks.md keeps parseScene unexported",
+      "rejected": "exporting parseScene only for tests"
+    },
+    {
+      "decision": "T007 scene log test is a separate mocked-controller test",
+      "why": "the existing log test uses a real controller with exact Connect/Write counts",
+      "rejected": "adding a case to the existing test"
+    },
+    {
+      "decision": "check-package.mjs, inspector-ui.test.ts and package.test.ts updated for seven actions",
+      "why": "they pinned six actions, which made T022 fail",
+      "rejected": "leaving plugin checks red"
+    },
+    {
+      "decision": "Duplicates appear in CLI help as forest=sunset and aurora=rubyglow",
+      "why": "keeps the help to one line and shows the shared ID",
+      "rejected": "listing hex IDs next to every slug"
+    },
+    {
+      "decision": "T028 Linux task check skipped",
+      "why": "owner: personal project, Linux not needed for now",
+      "rejected": "keeping T028 open"
+    },
+    {
+      "decision": "README LT-06 column shows the observed effect instead of a verified/not-verified flag",
+      "why": "IDs work but names mostly do not match, so a yes/no flag would mislead",
+      "rejected": "marking names as verified"
+    },
+    {
+      "decision": "Scenes renamed after observed LT-06 effects, one entry per ID 80-93; duplicates and reference flags removed",
+      "why": "owner request after hardware run: reference names mostly did not match",
+      "rejected": "keeping reference names, or keeping them as aliases"
+    }
+  ],
+  "concerns": [
+    {
+      "note": "tasks.md says 22 hex IDs in 80-93; the range holds 20. Tests use 20 IDs plus 0x8a (41 rows), and the verification record has 20 ID rows",
+      "step": "implement"
+    },
+    {
+      "note": "T028 task check (Linux) not run: only macOS is available here",
+      "step": "implement"
+    },
+    {
+      "note": "T029 LT-06 hardware checks pending; no scene is verified on the device, and the READMEs say not verified",
+      "step": "implement"
+    },
+    {
+      "note": "T028 (Linux task check) and T029 (LT-06 hardware checks) still open; the spec stays implemented",
+      "step": "implement"
+    },
+    {
+      "note": "Effect-preset preemption not tested on hardware: local presets.json has no effect presets; a transition was used instead",
+      "step": "implement"
+    }
+  ],
+  "coverage": {
+    "FR-005": {
+      "tests": [
+        "internal/controller/effects_test.go::TestSceneCommandCancelsRunningEffectBeforeWrite"
+      ]
+    },
+    "FR-007": {
+      "tests": [
+        "internal/bridge/logging_test.go::TestSceneRequestLogsCommandAndPacketCountWithoutSecrets"
+      ]
+    }
+  },
+  "step_summaries": {
+    "implement": {
+      "summary": "Scenes shipped for CLI, HTTP and Stream Deck, with hardware verification on LT-06"
+    }
+  },
+  "last_action": "scene rename done; Go and plugin checks pass"
+}

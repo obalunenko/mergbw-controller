@@ -1,6 +1,7 @@
 import { translate } from "./i18n.js";
 import { type InspectorController, presetOptions } from "./inspector-messages.js";
 import type { OperationRecord } from "./operation-store.js";
+import { sceneLabel } from "./scenes.js";
 import type { Settings } from "./settings.js";
 import type { ActionKind } from "./validation.js";
 
@@ -22,6 +23,7 @@ export class Feedback {
 				const value = this.settings.getAction(context);
 				if (kind === "color") title = value.rgb!;
 				if (kind === "brightness") title = `${value.percent!}%`;
+				if (kind === "scene") title = sceneLabel(value.sceneId!) ?? title;
 				if (kind === "preset" && value.presetId && this.inspector?.isSafePresetId(value.presetId) !== false)
 					title =
 						presetOptions(this.inspector?.catalog.entries ?? []).find((entry) => entry.id === value.presetId)?.label ??

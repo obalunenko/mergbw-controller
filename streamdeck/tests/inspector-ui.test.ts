@@ -7,6 +7,7 @@ import ts from "typescript";
 
 import * as i18n from "../src/i18n.js";
 import * as presetEffects from "../src/preset-effects.js";
+import * as scenes from "../src/scenes.js";
 import * as validation from "../src/validation.js";
 
 // Run the actual inspector entry point with DOM and SDPI facades, without SDK startup.
@@ -92,6 +93,7 @@ function inspector(autoSummary = true) {
 		require: (name: string) => {
 			if (name === "../i18n.js") return i18n;
 			if (name === "../preset-effects.js") return presetEffects;
+			if (name === "../scenes.js") return scenes;
 			assert.equal(name, "../validation.js");
 			return validation;
 		},
@@ -589,6 +591,36 @@ test("brightness draft and slider survive publications and a change saves the dr
 	assert.equal(
 		JSON.stringify(ui.sent.at(-1)!.payload),
 		JSON.stringify({ settings: { schemaVersion: 1, percent: 75 } }),
+	);
+});
+
+test("scene select lists catalog scenes then raw IDs and saves the canonical selection", () => {
+	const ui = inspector();
+	const saved = snapshot("scene", { sceneId: "disco" });
+	ui.reply(saved);
+	assert.equal(ui.get("scene-controls").hidden, false);
+	assert.equal(ui.get("assignment-controls").hidden, false);
+	const select = ui.get("scene-select");
+	assert.equal(select.value, "disco");
+	const [catalog, raw] = select.children;
+	assert.equal(catalog!.children.length, 20);
+	assert.equal(catalog!.children.find((option) => option.value === "rgbfade")!.textContent, "RGB Fade");
+	assert.deepEqual(
+		raw!.children.slice(0, 3).map((option) => [option.value, option.textContent]),
+		[
+			["80", "ID 80"],
+			["81", "ID 81"],
+			["82", "ID 82"],
+		],
+	);
+	assert.equal(raw!.children.length, 20);
+	select.value = "8A";
+	select.fire("change");
+	ui.reply({ ...saved, operation: { status: "pending" } });
+	assert.equal(select.value, "8A");
+	assert.equal(
+		JSON.stringify(ui.sent.filter((message) => message.type === "assignment.save").at(-1)!.payload),
+		JSON.stringify({ settings: { schemaVersion: 1, sceneId: "8A" } }),
 	);
 });
 
