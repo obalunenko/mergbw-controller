@@ -285,7 +285,9 @@ task speckit:update:check
 task speckit:update:test
 ```
 
-В Taskfile.yml закреплены Spec Kit 1.1.3, Companion 0.25.0, Brownfield 1.0.0, Bugfix 1.1.0 и локальное расширение feature-numbering 1.0.0. Установщик ставит Specify CLI через `uv tool install`, затем все четыре расширения проекта со skills для Codex. Существующая инициализация Spec Kit сохраняется; новый проект автоматически инициализируется для Codex. После установки перезапустите Codex, чтобы загрузить созданные skills.
+В Taskfile.yml закреплены Spec Kit 1.1.3, Companion 0.25.0, Brownfield 1.0.0, Bugfix 1.1.0 и локальное расширение feature-numbering 1.0.0. Установщик ставит Specify CLI через `uv tool install`, затем все интеграции агентов из `SPECKIT_INTEGRATIONS` (по умолчанию `codex claude`: skills Codex в `.agents/skills/`, skills Claude Code в `.claude/skills/`) и регистрирует все четыре расширения проекта для каждой из них. Первая интеграция используется по умолчанию и задаёт написание команд в общих скриптах Spec Kit. Другие агенты выбираются, например, так: `SPECKIT_INTEGRATIONS="claude gemini" task speckit:install`; список поддерживаемых ключей показывает `specify integration list`. Существующая инициализация Spec Kit сохраняется; новый проект инициализируется для интеграции по умолчанию. После установки перезапустите агента, чтобы загрузить созданные skills.
+
+Инструкции для агентов находятся в `AGENTS.md`; `CLAUDE.md` только импортирует его для Claude Code.
 
 Каталоги новых возможностей имеют вид `specs/NNN-feature-name`, начиная с `001`. Обязательный hook `before_specify` выбирает следующий номер для стандартного Specify и Companion. Исходники расширения находятся в `.speckit/feature-numbering/`.
 

@@ -42,6 +42,9 @@ go.work.sum
 *.log
 .DS_Store
 
+# Machine-local coding agent settings
+/.claude/settings.local.json
+
 # Python tooling caches
 __pycache__/
 *.pyc

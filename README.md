@@ -283,7 +283,9 @@ task speckit:update:check
 task speckit:update:test
 ```
 
-The Taskfile.yml pins Spec Kit 1.1.3, Companion 0.25.0, Brownfield 1.0.0, Bugfix 1.1.0, and the local feature-numbering extension 1.0.0. Installation uses `uv tool install` for the Specify CLI and installs all four project extensions with Codex skills. Existing Spec Kit initialization is preserved; a fresh project is initialized for Codex automatically. Restart Codex after installation to reload the generated skills.
+The Taskfile.yml pins Spec Kit 1.1.3, Companion 0.25.0, Brownfield 1.0.0, Bugfix 1.1.0, and the local feature-numbering extension 1.0.0. Installation uses `uv tool install` for the Specify CLI, installs every agent integration listed in `SPECKIT_INTEGRATIONS` (default `codex claude`: Codex skills in `.agents/skills/`, Claude Code skills in `.claude/skills/`), and registers all four project extensions for each of them. The first integration is the default and sets the command spelling in shared Spec Kit scripts. Choose other agents with, for example, `SPECKIT_INTEGRATIONS="claude gemini" task speckit:install`; `specify integration list` shows the supported keys. Existing Spec Kit initialization is preserved; a fresh project is initialized for the default integration. Restart your agent after installation to reload the generated skills.
+
+Agent instructions live in `AGENTS.md`; `CLAUDE.md` only imports it for Claude Code.
 
 New feature directories use `specs/NNN-feature-name`, starting at `001`. The mandatory `before_specify` hook selects the next number for both stock Specify and Companion; its source lives in `.speckit/feature-numbering/`.
 

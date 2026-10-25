@@ -14,9 +14,12 @@ Go modules for Task and mockgen development tooling.
   Tool dependencies belong in their separate module. `make tools` installs
   tools; Taskfile owns the project workflows.
 - Spec Kit work: `.specify/`, `.speckit/feature-numbering/`, and generated
-  `.agents/skills/`. The local feature-numbering extension source is
-  `.speckit/feature-numbering/`. Preserve installed hooks and project
-  customizations when refreshing tooling.
+  agent skills (`.agents/skills/` for Codex, `.claude/skills/` for Claude Code).
+  The local feature-numbering extension source is
+  `.speckit/feature-numbering/`. Regenerate skills for every integration in
+  `SPECKIT_INTEGRATIONS` through `task speckit:install`; do not edit one agent's
+  generated copy alone. Preserve installed hooks and project customizations
+  when refreshing tooling.
 - User documentation: maintain both `README.md` and `README_RU.md` when
   documented behavior changes.
 
