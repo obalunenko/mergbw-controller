@@ -296,7 +296,7 @@ are covered offline.
       `python3 scripts/test_plugin_native.py`, `task test:core`, `task vet`
       and `task build`, and check them against SC-001, SC-003 and SC-005.
       Skip Linux `task check` by owner decision. · repo
-- [ ] **T030** Owner observation:
+- [x] **T030** Owner observation:
       - push a prerelease tag and install its installer from the browser
         download;
       - simulate N→N+1 with a local build and a later release;

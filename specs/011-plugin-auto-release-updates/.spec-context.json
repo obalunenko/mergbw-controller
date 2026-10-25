@@ -3,7 +3,7 @@
   "specName": "Авторелиз плагина и предложение обновления",
   "branch": "feature/lightning-effect",
   "currentStep": "implement",
-  "status": "implementing",
+  "status": "completed",
   "history": [
     {
       "step": "specify",
@@ -352,6 +352,21 @@
       "kind": "complete",
       "by": "ai",
       "at": "2026-10-25T19:29:03.172Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T030",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T22:11:54.510Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T22:11:54.530Z"
     }
   ],
   "decisions": [
@@ -661,7 +676,7 @@
       ]
     }
   },
-  "currentTask": "T034",
+  "currentTask": null,
   "task_summaries": {
     "T001": {
       "status": "DONE",
@@ -900,6 +915,13 @@
       "files": [
         "streamdeck/src/updates.ts",
         "streamdeck/tests/updates.test.ts"
+      ]
+    },
+    "T030": {
+      "status": "DONE",
+      "did": "Owner verified v1.0.0 release, local 1.0.0.3 build and v1.0.0→v1.0.2 banner update with lamp OK; prompt-on-its-own and quarantine path recorded as accepted gaps",
+      "files": [
+        "specs/011-plugin-auto-release-updates/hardware-verification.md"
       ]
     }
   },
