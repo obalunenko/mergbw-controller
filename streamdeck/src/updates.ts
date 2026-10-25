@@ -200,7 +200,8 @@ export class UpdateService {
 	// Validates synchronously, then returns the running download.
 	public install(tag: unknown): Promise<void> {
 		const offer = this.offer;
-		if (!offer || offer.tag !== tag || !["available", "dismissed"].includes(this.state)) throw new Error("validation");
+		if (!offer || offer.tag !== tag || !["available", "dismissed", "handed"].includes(this.state))
+			throw new Error("validation");
 		this.state = "downloading";
 		this.error = undefined;
 		this.notify();

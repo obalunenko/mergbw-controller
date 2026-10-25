@@ -1346,7 +1346,7 @@ test("update banner shows available, downloading, handed and install failures wi
 	assert.equal(ui.get("update-later").hidden, true);
 	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "handed" } });
 	assert.equal(ui.get("update-banner-text").textContent, i18n.en.updateHanded);
-	assert.equal(ui.get("update-install").hidden, true, "a handed installer is not offered again");
+	assert.equal(ui.get("update-install").hidden, false, "a cancelled prompt can be reopened");
 	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "failed", errorCategory: "checksum" } });
 	assert.equal(ui.get("update-banner").hidden, false);
 	assert.equal(ui.get("update-banner-error").textContent, i18n.en.update_checksum);

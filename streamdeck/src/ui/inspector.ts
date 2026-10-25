@@ -122,7 +122,7 @@ function renderUpdate(raw: unknown, completing: boolean): void {
 	const banner =
 		!!latest &&
 		(["available", "downloading", "handed"].includes(state) || (state === "failed" && installable && !!category));
-	updateTag = installable && (state === "available" || state === "dismissed") ? latest : undefined;
+	updateTag = installable && ["available", "dismissed", "handed"].includes(state) ? latest : undefined;
 	laterTag = banner && state !== "downloading" ? latest : undefined;
 	element("update-banner").hidden = !banner;
 	const bannerKey = state === "failed" ? "updateAvailable" : (UPDATE_STATUS[state] ?? "updateAvailable");

@@ -181,7 +181,7 @@ following entries are appended to `messageTypes`:
 |---|---|---|
 | `update.status` | empty | Return the snapshot with `update` |
 | `update.check` | empty | Run a check now (joins one already running), then return the snapshot |
-| `update.install` | `tag` (`vX.Y.Z`) | Allowed only when the offer state is `available` or `dismissed` for that same `tag`; otherwise `validation`. Starts §5. |
+| `update.install` | `tag` (`vX.Y.Z`) | Allowed only when the offer state is `available`, `dismissed` or `handed` for that same `tag`; otherwise `validation`. `handed` re-opens the installer after a cancelled Stream Deck prompt. Starts §5. |
 | `update.dismiss` | `tag` (`vX.Y.Z`) | "Later": hide the banner for that tag until restart. A newer tag shows the banner again. |
 | `update.autoCheck` | `autoCheck` (boolean) | Save `updates.autoCheck`. `true` restarts the 24 h timer; `false` stops it. |
 
