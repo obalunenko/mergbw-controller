@@ -52,16 +52,16 @@ class Runner:
         self.minimum = "13.5"
         self.dependencies = "runtime\nfixture/internal/managed"
         self.goroot = None
-        self.describe = None
+        self.tags = None
 
     def __call__(self, command, *, cwd, env=None):
         self.calls.append((command, env))
         if command[:3] == ["git", "rev-parse", "HEAD"]:
             return "a" * 40
-        if command[:2] == ["git", "describe"]:
-            if self.describe is None:
+        if command[:2] == ["git", "tag"]:
+            if self.tags is None:
                 raise native.BuildError("native build/inspection failed: git")
-            return self.describe
+            return self.tags
         if command[:2] == ["git", "ls-files"]:
             return "internal/bridge/http.go\ngo.mod"
         if command[:2] == ["go", "build"]:
@@ -288,7 +288,7 @@ class CompleteTests(SpikeTests):
                 self.assertEqual(json.loads((target / "manifest.json").read_text())["Name"], "MeRGBW")
                 shutil.rmtree(target)
         self.assertFalse((self.root / "dist/plugin-build-number").exists())
-        self.assertFalse(any(command[:2] == ["git", "describe"] for command, _ in self.runner.calls))
+        self.assertFalse(any(command[:2] == ["git", "tag"] for command, _ in self.runner.calls))
         self.assertEqual(self.manifest.read_bytes(), source)
 
     def test_invalid_release_tag_fails_before_staging(self):
@@ -302,23 +302,24 @@ class CompleteTests(SpikeTests):
     def test_local_build_uses_nearest_tag_and_atomic_counter(self):
         source = self.manifest.read_bytes()
         slices = self.slices()
-        self.runner.describe = "v1.2.0"
+        # Same-commit and out-of-order tags: the highest semver wins, not the first listed.
+        self.runner.tags = "v0.1.0\nv1.2.0-rc.1\nv1.2.0\nv1.10.0-rc.1\nv1.9.0\nnext"
         for build in (1, 2):
             target = self.assemble(slices)
-            self.assertEqual(self.stamp(target), (f"1.2.0.{build}", {"tag": "v1.2.0", "build": build}))
+            self.assertEqual(self.stamp(target), (f"1.10.0.{build}", {"tag": "v1.10.0-rc.1", "build": build}))
             self.assertEqual((self.root / "dist/plugin-build-number").read_text().strip(), str(build))
             shutil.rmtree(target)
-        describe = [command for command, _ in self.runner.calls if command[:2] == ["git", "describe"]]
-        self.assertEqual(describe[0], ["git", "describe", "--tags", "--abbrev=0", "--match", "v*"])
+        listed = [command for command, _ in self.runner.calls if command[:2] == ["git", "tag"]]
+        self.assertEqual(listed[0], ["git", "tag", "--merged", "HEAD", "--list", "v*"])
         self.assertEqual(sorted(path.name for path in (self.root / "dist").iterdir()), ["plugin-build-number"])
         self.assertEqual(self.manifest.read_bytes(), source)
 
     def test_local_build_without_valid_tag_falls_back_to_source_manifest(self):
         slices = self.slices()
-        for describe in (None, "vnext", "v1.2"):
-            with self.subTest(describe=describe):
+        for tags in (None, "", "vnext\nv1.2"):
+            with self.subTest(tags=tags):
                 shutil.rmtree(self.root / "dist", ignore_errors=True)
-                self.runner.describe = describe
+                self.runner.tags = tags
                 target = self.assemble(slices)
                 self.assertEqual(self.stamp(target), ("0.2.0.1", {"tag": "v0.2.0", "build": 1}))
                 shutil.rmtree(target)

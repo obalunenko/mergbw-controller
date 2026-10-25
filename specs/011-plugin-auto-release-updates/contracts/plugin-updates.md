@@ -38,7 +38,7 @@ are unchanged.
 
 - Exactly two keys. `tag` is the full semver tag, including any prerelease
   suffix. `build` is `0` for a release and `N ≥ 1` for a local build.
-- Local build (assemble without `--release-tag`): `tag` is the nearest
+- Local build (assemble without `--release-tag`): `tag` is the highest
   reachable valid tag, or is derived from the source manifest. `build` is the
   previous `dist/plugin-build-number` plus 1. The manifest `Version` is
   `X.Y.Z.build`.

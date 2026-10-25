@@ -35,7 +35,7 @@ task release:archive RELEASE_TAG=v1.0.0
 task release:notes RELEASE_TAG=v1.0.0 RELEASE_REPOSITORY=obalunenko/mergbw-controller
 ```
 
-Generated files are written to `dist/`; local commands do not publish a release. The plugin version follows the tag: a release installer is `X.Y.Z.0` for `vX.Y.Z` (and for `vX.Y.Z-rc.N`, whose exact tag is kept in `release.json`). A local assembly is `X.Y.Z.N`, where `X.Y.Z` is the nearest reachable tag and `N` grows with every local build (`dist/plugin-build-number`). A local build therefore sorts after its release and before the next one. `RELEASE_TAG=vX.Y.Z task plugin:native:assemble` stamps a release build instead; deleting `dist/` restarts the counter at 1. Set `MERGBW_EXPECTED_TAG` to make the package check require that exact tag. The controller version is still defined in its source.
+Generated files are written to `dist/`; local commands do not publish a release. The plugin version follows the tag: a release installer is `X.Y.Z.0` for `vX.Y.Z` (and for `vX.Y.Z-rc.N`, whose exact tag is kept in `release.json`). A local assembly is `X.Y.Z.N`, where `X.Y.Z` is the highest reachable tag and `N` grows with every local build (`dist/plugin-build-number`). A local build therefore sorts after its release and before the next one. `RELEASE_TAG=vX.Y.Z task plugin:native:assemble` stamps a release build instead; deleting `dist/` restarts the counter at 1. Set `MERGBW_EXPECTED_TAG` to make the package check require that exact tag. The controller version is still defined in its source.
 
 ## Quick start on macOS from source
 

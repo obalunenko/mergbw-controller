@@ -42,17 +42,27 @@ class BuildError(Exception):
     """An allowlisted developer-facing builder failure."""
 
 
+def tag_order(tag):
+    """Semver precedence: core numbers, then a release above its prereleases."""
+    core, _, pre = tag[1:].partition("-")
+    identifiers = [(0, int(part), "") if part.isdigit() else (1, 0, part) for part in pre.replace("-", ".").split(".")] if pre else []
+    return (*map(int, core.split(".")), not pre, identifiers)
+
+
 def release_stamp(root, runner, release_tag=None):
     """Return (tag, build); a release is build 0, a local build is the next counter value."""
     if release_tag is not None:
         if not TAG.fullmatch(release_tag):
             raise BuildError("release tag must be vX.Y.Z or vX.Y.Z-prerelease")
         return release_tag, 0
+    # Several tags can share a commit (v0.1.0 and v1.0.0), so take the highest reachable one.
     try:
-        tag = runner(["git", "describe", "--tags", "--abbrev=0", "--match", "v*"], cwd=root)
+        tags = [tag for tag in runner(["git", "tag", "--merged", "HEAD", "--list", "v*"], cwd=root).split()
+                if TAG.fullmatch(tag)]
     except BuildError:
-        tag = ""
-    if not TAG.fullmatch(tag):
+        tags = []
+    tag = max(tags, key=tag_order, default="")
+    if not tag:
         source = root / "streamdeck" / PLUGIN / "manifest.json"
         no_symlinks(source)
         version = json.loads(source.read_text()).get("Version")
