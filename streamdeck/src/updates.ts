@@ -200,8 +200,7 @@ export class UpdateService {
 	// Validates synchronously, then returns the running download.
 	public install(tag: unknown): Promise<void> {
 		const offer = this.offer;
-		if (!offer || offer.tag !== tag || !["available", "dismissed", "handed"].includes(this.state))
-			throw new Error("validation");
+		if (!offer || offer.tag !== tag || !["available", "dismissed"].includes(this.state)) throw new Error("validation");
 		this.state = "downloading";
 		this.error = undefined;
 		this.notify();
@@ -377,7 +376,7 @@ export class UpdateService {
 				throw new UpdateError("network");
 			}
 			if (api && (response.status === 403 || response.status === 429)) throw new UpdateError("rate_limited");
-			if (!response.ok) throw new UpdateError(api ? "http" : "network");
+			if (!response.ok) throw new UpdateError("http");
 			if (response.url && !response.url.startsWith("https:")) throw new UpdateError(api ? "malformed" : "network");
 			if (Number(response.headers.get("content-length") ?? 0) > cap) throw new UpdateError(over);
 			const chunks: Uint8Array[] = [];

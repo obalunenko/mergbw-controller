@@ -311,3 +311,10 @@ are covered offline.
 - US3: T018–T020 together, then T021, then T022–T024 together, then T025.
 - Polish: T026–T028 together, then T029, then T030 on the device.
 - US3 reads `release.json` but does not need US1 code to pass its tests, because the stamp is injected. T030 needs every story.
+
+## Phase 6: Convergence
+
+- [x] T031 Keep a dismissed ("Later") offer installable from the Lamp and connection → Updates row: show an Install control there for the dismissed tag that sends `update.install`, and cover it in `streamdeck/tests/inspector-ui.test.ts` · streamdeck/src/ui/inspector.ts, streamdeck/com.obalunenko.mergbw.sdPlugin/ui/index.html per US3/AC3 (partial)
+- [x] T032 Render the release page in the banner and the Updates row as an openable link (validated `releaseUrl`, text-only label), not as plain URL text, including after a failed install, and cover it in `streamdeck/tests/inspector-ui.test.ts` · streamdeck/src/ui/inspector.ts per FR-007, US3/AC2 (partial)
+- [x] T033 Restrict `UpdateService.install` to the `available` and `dismissed` states (reject `handed` with `validation`) and stop offering Install in the `handed` banner, with tests in `streamdeck/tests/updates.test.ts` and `streamdeck/tests/inspector-ui.test.ts` · streamdeck/src/updates.ts, streamdeck/src/ui/inspector.ts per contracts/plugin-updates.md §6 update.install (contradicts)
+- [x] T034 Report a non-2xx `SHA256SUMS` or installer download response as `http` instead of `network`, with a test in `streamdeck/tests/updates.test.ts` · streamdeck/src/updates.ts per contracts/plugin-updates.md UpdateErrorCategory (partial)

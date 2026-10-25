@@ -82,6 +82,7 @@ function inspector(autoSummary = true) {
 		return elements.get(id)!;
 	};
 	const sent: Message[] = [];
+	const opened: unknown[] = [];
 	const summaries: Message[] = [];
 	let active: Message;
 	let lastSnapshot: Record<string, unknown> = {};
@@ -118,6 +119,7 @@ function inspector(autoSummary = true) {
 			SDPIComponents: {
 				streamDeckClient: {
 					send: async (event: string, message: Message) => {
+						if (event === "openUrl") return void opened.push(structuredClone(message));
 						assert.equal(event, "sendToPlugin");
 						active = message;
 						if (
@@ -165,6 +167,7 @@ function inspector(autoSummary = true) {
 	return {
 		get,
 		sent,
+		opened,
 		summaries,
 		reply,
 		save: () => {
@@ -1327,7 +1330,9 @@ test("update banner shows available, downloading, handed and install failures wi
 	assert.equal(ui.get("update-notes").textContent, offer.notes);
 	assert.deepEqual(ui.get("update-notes").children, []);
 	assert.equal(ui.get("update-notes-details").hidden, false);
-	assert.ok(ui.get("update-release-url").textContent.endsWith(offer.releaseUrl));
+	assert.equal(ui.get("update-release-url").hidden, false);
+	ui.get("update-release-url").fire("click");
+	assert.deepEqual(ui.opened, [{ url: offer.releaseUrl }]);
 	assert.equal(ui.get("update-install").hidden, false);
 	assert.equal(ui.get("update-later").hidden, false);
 	ui.get("update-install").fire("click");
@@ -1341,12 +1346,12 @@ test("update banner shows available, downloading, handed and install failures wi
 	assert.equal(ui.get("update-later").hidden, true);
 	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "handed" } });
 	assert.equal(ui.get("update-banner-text").textContent, i18n.en.updateHanded);
-	assert.equal(ui.get("update-install").hidden, false);
+	assert.equal(ui.get("update-install").hidden, true, "a handed installer is not offered again");
 	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "failed", errorCategory: "checksum" } });
 	assert.equal(ui.get("update-banner").hidden, false);
 	assert.equal(ui.get("update-banner-error").textContent, i18n.en.update_checksum);
 	assert.equal(ui.get("update-install").hidden, true);
-	assert.ok(ui.get("update-release-url").textContent.includes(offer.releaseUrl));
+	assert.equal(ui.get("update-release-url").hidden, false, "a failed install still links the release page");
 	ui.get("update-later").fire("click");
 	assert.equal(ui.sent.at(-1)?.type, "update.dismiss");
 	assert.deepEqual(ui.sent.at(-1)?.payload, { tag: "v1.3.0" });
@@ -1362,7 +1367,9 @@ test("update banner shows available, downloading, handed and install failures wi
 	}
 	const hostile = inspector();
 	hostile.reply({ ...snapshot("off", {}), update: { ...offer, releaseUrl: "https://evil.example/x" } });
-	assert.equal(hostile.get("update-release-url").textContent, "");
+	assert.equal(hostile.get("update-release-url").hidden, true);
+	hostile.get("update-release-url").fire("click");
+	assert.deepEqual(hostile.opened, []);
 });
 
 test("the updates row toggles automatic checks, runs Check now and shows the last check", () => {
@@ -1411,9 +1418,32 @@ test("the updates row toggles automatic checks, runs Check now and shows the las
 			},
 		});
 		assert.ok(ui.get("update-status").textContent.endsWith(i18n.translate(language, "update_no_asset")));
-		assert.ok(ui.get("update-setup-release").textContent.endsWith("/releases/tag/v1.4.0"));
+		assert.equal(ui.get("update-setup-release").hidden, false);
+		ui.get("update-setup-release").fire("click");
+		assert.deepEqual(ui.opened.at(-1), {
+			url: "https://github.com/obalunenko/mergbw-controller/releases/tag/v1.4.0",
+		});
+		assert.equal(ui.get("update-setup-install").hidden, true, "no installer, no Install");
 		assert.equal(ui.get("update-banner").hidden, true);
 	}
+});
+
+test("a dismissed offer stays installable from the updates row", () => {
+	const ui = inspector();
+	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "dismissed" } });
+	assert.equal(ui.get("update-banner").hidden, true);
+	assert.equal(ui.get("update-status").textContent, i18n.format("en", "updateDismissed", { latest: "1.3.0" }));
+	assert.equal(ui.get("update-setup-release").hidden, false);
+	assert.equal(ui.get("update-setup-install").hidden, false);
+	ui.get("update-setup-install").fire("click");
+	ui.get("update-setup-install").fire("click");
+	assert.equal(ui.sent.filter((message) => message.type === "update.install").length, 1);
+	assert.deepEqual(ui.sent.at(-1)?.payload, { tag: "v1.3.0" });
+	assert.equal(ui.get("update-setup-install").disabled, true);
+	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "downloading" } });
+	assert.equal(ui.get("update-setup-install").hidden, true);
+	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "dismissed", installable: false } });
+	assert.equal(ui.get("update-setup-install").hidden, true);
 });
 
 test("a quarantined controller launch shows the exact xattr help", () => {

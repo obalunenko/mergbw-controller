@@ -27,7 +27,9 @@
 						<summary data-i18n="updateReleaseNotes">Release notes</summary>
 						<p id="update-notes"></p>
 					</details>
-					<p id="update-release-url" class="help"></p>
+					<button id="update-release-url" class="link" type="button" data-i18n="updateReleasePage" hidden>
+						Release page
+					</button>
 					<div class="buttons">
 						<button id="update-install" class="primary" type="button" data-i18n="updateInstall" hidden>Install</button
 						><button id="update-later" type="button" data-i18n="updateLater" hidden>Later</button>
@@ -295,8 +297,14 @@
 					>
 					<p id="update-status" role="status" aria-live="polite"></p>
 					<p id="update-last-check" class="help"></p>
-					<p id="update-setup-release" class="help"></p>
-					<button id="update-check" type="button" data-i18n="updateCheckNow">Check now</button>
+					<button id="update-setup-release" class="link" type="button" data-i18n="updateReleasePage" hidden>
+						Release page
+					</button>
+					<div class="buttons">
+						<button id="update-setup-install" class="primary" type="button" data-i18n="updateInstall" hidden>
+							Install</button
+						><button id="update-check" type="button" data-i18n="updateCheckNow">Check now</button>
+					</div>
 				</div>
 				<label for="setup-method" data-i18n="setupMethod">Setup method</label
 				><select id="setup-method">

@@ -354,6 +354,7 @@ test("install verifies the streamed installer before opening it", async () => {
 	assert.deepEqual(h.execs.at(-1), { file: "/usr/bin/open", args: [target] });
 	assert.deepEqual(await readdir(join(h.root, "mergbw-update", "v1.3.0")), [INSTALLER]);
 	assert.equal(h.service.snapshot()!.state, "handed");
+	assert.throws(() => h.service.install("v1.3.0"), /validation/, "a handed installer is not downloaded again");
 	assert.ok(h.requests.slice(1).every((request) => request.init.headers === undefined));
 	await h.service.check();
 	assert.equal(h.requests.length, 3, "checks are skipped after hand-off");
@@ -371,7 +372,8 @@ test("install verifies the streamed installer before opening it", async () => {
 			},
 			"network",
 		],
-		[INSTALLER, () => json({}, 404), "network"],
+		[INSTALLER, () => json({}, 404), "http"],
+		[CHECKSUMS, () => json({}, 500), "http"],
 	];
 	for (const [asset, route, category] of failures) {
 		const f = await harness();

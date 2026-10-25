@@ -20,7 +20,7 @@ import {
 type Message = { v: 2; sessionId: string; requestId: string; type: string; payload: Record<string, unknown> };
 type Drafts = Record<string, { value: string; draft: string }>;
 type SDPIClient = {
-	send: (event: string, payload: Message) => Promise<void>;
+	send: (event: string, payload: Message | { url: string }) => Promise<void>;
 	sendToPropertyInspector: { subscribe: (listener: (event: { payload: unknown }) => void) => void };
 };
 declare global {
@@ -63,6 +63,7 @@ let applyTimeout: ReturnType<typeof setTimeout> | undefined;
 let proposal: { transactionId: string; expectedGeneration: string | null; requiresConfirmation: boolean } | undefined;
 let updateTag: string | undefined;
 let laterTag: string | undefined;
+let releaseUrl = "";
 const PLUGIN_DIR = "~/Library/Application Support/com.elgato.StreamDeck/Plugins/com.obalunenko.mergbw.sdPlugin";
 const RELEASE_PAGE = "https://github.com/obalunenko/mergbw-controller/";
 const UPDATE_STATUS: Record<string, string> = {
@@ -121,7 +122,7 @@ function renderUpdate(raw: unknown, completing: boolean): void {
 	const banner =
 		!!latest &&
 		(["available", "downloading", "handed"].includes(state) || (state === "failed" && installable && !!category));
-	updateTag = banner && installable && ["available", "handed"].includes(state) ? latest : undefined;
+	updateTag = installable && (state === "available" || state === "dismissed") ? latest : undefined;
 	laterTag = banner && state !== "downloading" ? latest : undefined;
 	element("update-banner").hidden = !banner;
 	const bannerKey = state === "failed" ? "updateAvailable" : (UPDATE_STATUS[state] ?? "updateAvailable");
@@ -130,14 +131,16 @@ function renderUpdate(raw: unknown, completing: boolean): void {
 		banner && state === "failed" && category ? translate(language, category) : "";
 	element("update-notes").textContent = banner ? notes : "";
 	element("update-notes-details").hidden = !banner || !notes;
-	element("update-release-url").textContent =
-		banner && url ? `${translate(language, "updateReleasePage")}: ${url}` : "";
-	element("update-install").hidden = !updateTag;
+	releaseUrl = url;
+	element("update-release-url").hidden = !banner || !url;
+	element("update-install").hidden = !banner || !updateTag;
 	element("update-later").hidden = !laterTag;
 	const installing = requests.some(
 		(request, index) => !(completing && index === 0) && request.message.type === "update.install",
 	);
 	element("update-install").toggleAttribute("disabled", installing);
+	element("update-setup-install").hidden = state !== "dismissed" || !updateTag;
+	element("update-setup-install").toggleAttribute("disabled", installing);
 	if (!update) return;
 	input("update-auto-check").checked = update.autoCheck !== false;
 	const key = state === "failed" ? (category ?? "updateIdle") : (UPDATE_STATUS[state] ?? "updateIdle");
@@ -150,8 +153,7 @@ function renderUpdate(raw: unknown, completing: boolean): void {
 		checked && !Number.isNaN(checked.getTime())
 			? format(language, "updateLastCheck", { time: checked.toLocaleString(language) })
 			: "";
-	element("update-setup-release").textContent =
-		url && !banner ? `${translate(language, "updateReleasePage")}: ${url}` : "";
+	element("update-setup-release").hidden = !url || banner;
 	const checking = requests.some(
 		(request, index) => !(completing && index === 0) && request.message.type === "update.check",
 	);
@@ -1276,11 +1278,18 @@ element("setup-open").addEventListener("click", () => {
 	showView("setup");
 	void send("update.status");
 });
-element("update-install").addEventListener("click", () => {
+function install(button: string): void {
 	if (!updateTag || requests.some((request) => request.message.type === "update.install")) return;
-	element("update-install").toggleAttribute("disabled", true);
+	element(button).toggleAttribute("disabled", true);
 	void send("update.install", { tag: updateTag });
-});
+}
+element("update-install").addEventListener("click", () => install("update-install"));
+element("update-setup-install").addEventListener("click", () => install("update-setup-install"));
+// Stream Deck opens the validated release page in the default browser.
+for (const id of ["update-release-url", "update-setup-release"])
+	element(id).addEventListener("click", () => {
+		if (releaseUrl) void client.send("openUrl", { url: releaseUrl });
+	});
 element("update-later").addEventListener("click", () => {
 	if (laterTag) void send("update.dismiss", { tag: laterTag });
 });

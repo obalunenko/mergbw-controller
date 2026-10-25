@@ -306,6 +306,52 @@
       "kind": "complete",
       "by": "ai",
       "at": "2026-10-25T15:36:23.741Z"
+    },
+    {
+      "step": "converge",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T19:22:47.426Z"
+    },
+    {
+      "step": "converge",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-25T19:25:02.951Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T031",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T19:29:02.908Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T032",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T19:29:02.993Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T033",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T19:29:03.080Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T034",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T19:29:03.172Z"
     }
   ],
   "decisions": [
@@ -373,6 +419,16 @@
       "decision": "Added scene to staged image KINDS",
       "why": "Pre-existing gap: scene icons were never staged, so full package checks would reject the payload",
       "rejected": "Leaving it for a separate fix"
+    },
+    {
+      "decision": "Release page opens through the Stream Deck openUrl event from the PI",
+      "why": "A PI anchor does not reliably reach the default browser; openUrl is the SDK event and needs no new plugin message",
+      "rejected": "a new update.openRelease message type outside the contract"
+    },
+    {
+      "decision": "Install is rejected once the installer was handed to Stream Deck",
+      "why": "Contract section 6 allows install only from available or dismissed",
+      "rejected": "keeping re-open after a cancelled Stream Deck prompt (would need a contract change)"
     }
   ],
   "step_summaries": {
@@ -384,7 +440,7 @@
       "summary": "30 tasks: Setup, Foundational (6), US1 versioned installer (8), US2 notes (2), US3 update offer (8), Polish (5)"
     },
     "implement": {
-      "summary": "29/30 tasks: tag-stamped plugin versions (release X.Y.Z.0, local X.Y.Z.N), stable-range release notes, in-plugin update check/notification/banner/verified install, launch_blocked quarantine help, READMEs"
+      "summary": "Convergence T031-T034: Install from Updates row after Later, clickable release page, no re-install after hand-off, http category for download errors"
     }
   },
   "approach": "Stamp the tag into the staged manifest and a release.json at assembly, and tighten stable release notes. Add one plugin UpdateService that polls GitHub releases/latest, notifies once via osascript, offers the update in the panel and installs it by downloading, verifying SHA256SUMS and opening the installer in Stream Deck.",
@@ -447,6 +503,14 @@
       "exitCode": 0,
       "durationSeconds": 0.1,
       "result": "task: [build] go build -trimpath -buildvcs=false -o sunset ./cmd/sunset"
+    },
+    {
+      "what": "plugin software check (lint, format, typecheck, 298 tests)",
+      "command": "task plugin:check:software",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 52.9,
+      "result": "---------------------------------------------------------------------- · Ran 33 tests in 0.564s · OK"
     }
   ],
   "planBlocks": [
@@ -525,6 +589,11 @@
         "T022",
         "T023",
         "T025"
+      ],
+      "tests": [
+        "streamdeck/tests/inspector-ui.test.ts::update banner shows available",
+        "downloading",
+        "handed and install failures with inert notes"
       ]
     },
     "FR-007a": {
@@ -585,9 +654,14 @@
         "T026",
         "T027"
       ]
+    },
+    "US3/AC3": {
+      "tests": [
+        "streamdeck/tests/inspector-ui.test.ts::a dismissed offer stays installable from the updates row"
+      ]
     }
   },
-  "currentTask": "T029",
+  "currentTask": "T034",
   "task_summaries": {
     "T001": {
       "status": "DONE",
@@ -791,6 +865,42 @@
       "files": [
         "repo"
       ]
+    },
+    "T031": {
+      "status": "DONE",
+      "did": "Updates row shows Install for a dismissed installable offer",
+      "files": [
+        "streamdeck/src/ui/inspector.ts",
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/ui/index.html",
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "T032": {
+      "status": "DONE",
+      "did": "Release page is a link button that sends Stream Deck openUrl for the validated URL",
+      "files": [
+        "streamdeck/src/ui/inspector.ts",
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/ui/index.html",
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "T033": {
+      "status": "DONE",
+      "did": "Install accepted only in available/dismissed; handed banner has no Install",
+      "files": [
+        "streamdeck/src/updates.ts",
+        "streamdeck/src/ui/inspector.ts",
+        "streamdeck/tests/updates.test.ts",
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "T034": {
+      "status": "DONE",
+      "did": "Non-2xx download responses report http",
+      "files": [
+        "streamdeck/src/updates.ts",
+        "streamdeck/tests/updates.test.ts"
+      ]
     }
   },
   "concerns": [
@@ -805,7 +915,11 @@
     {
       "note": "Linux task check skipped by owner decision",
       "step": "implement"
+    },
+    {
+      "note": "T030 owner observation on the Mac is still open, so the spec stays at implementing; openUrl in the real Property Inspector is unobserved",
+      "step": "implement"
     }
   ],
-  "last_action": "All software checks green; T030 owner device verification pending"
+  "last_action": "T031-T034 done, 298/298 plugin tests pass; T030 awaits owner"
 }
