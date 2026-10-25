@@ -67,7 +67,7 @@ async function harness(runtime?: ManagedController) {
 }
 
 test("preset first press admits each selected mode without a preliminary status read", async () => {
-	for (const kind of ["palette", "strobe", "breathing", "candle"] as const) {
+	for (const kind of ["palette", "strobe", "breathing", "candle", "lightning"] as const) {
 		const h = await harness();
 		h.client.command = async (record) => {
 			h.calls.starts.push(record);

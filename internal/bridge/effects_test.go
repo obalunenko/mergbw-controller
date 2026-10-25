@@ -37,6 +37,7 @@ func TestEffectHTTPDynamicPresetsAccepted(t *testing.T) {
 		{Kind: "strobe", OnMS: 500, OffMS: 750, Loop: true},
 		{Kind: "breathing", MinBrightness: 5, CycleMS: 4000},
 		{Kind: "candle", Depth: 35, FlickerMS: 500, DurationMS: 30000},
+		{Kind: "lightning", BackgroundRGB: []int{26, 42, 108}, BackgroundBrightness: 15, MinPauseMS: 2000, MaxPauseMS: 15000, MaxFlashes: 3, Loop: true},
 	} {
 		for _, method := range []string{http.MethodGet, http.MethodPost} {
 			t.Run(definition.Kind+"/"+method, func(t *testing.T) {

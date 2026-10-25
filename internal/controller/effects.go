@@ -8,6 +8,15 @@ import (
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
 )
 
+// Lightning flash timing, confirmed on the LT-06 in
+// specs/010-lightning-effect/hardware-verification.md. Every write still waits
+// for the shared packet gap, so real edges are longer.
+const (
+	lightningMinHold, lightningMaxHold = 100 * time.Millisecond, 180 * time.Millisecond
+	lightningMinGap, lightningMaxGap   = 60 * time.Millisecond, 250 * time.Millisecond
+	lightningMinIntensity              = 0.7
+)
+
 func (c *Controller) StartEffect(ctx context.Context, action protocol.EffectAction) (protocol.EffectSnapshot, error) {
 	if err := action.Validate(); err != nil {
 		return protocol.EffectSnapshot{}, err
@@ -84,8 +93,21 @@ func (c *Controller) runEffect(ctx context.Context, job *transitionJob, action p
 	}
 	preset, effect := action.Preset, action.Preset.Effect
 	rgb, brightness := [3]int(preset.RGB), preset.Brightness
-	if effect.Kind == "breathing" {
+	random := func() float64 { return min(1.0, max(0.0, c.random())) }
+	scale := func(color []int, factor float64) [3]int {
+		var out [3]int
+		for i := range out {
+			out[i] = int(math.Round(float64(color[i]) * factor))
+		}
+		return out
+	}
+	switch effect.Kind {
+	case "breathing":
 		brightness = effect.MinBrightness
+	case "lightning":
+		// The brightness register stays at the flash level, so each edge is
+		// one color packet and the background is a dimmed color.
+		rgb = scale(effect.BackgroundRGB, float64(effect.BackgroundBrightness)/float64(preset.Brightness))
 	}
 	write := func(frame []byte) bool { return c.writeJobFrame(ctx, frame, &state) }
 	initial := protocol.Transition{FromRGB: rgb, FromBrightness: brightness}
@@ -192,11 +214,46 @@ func (c *Controller) runEffect(ctx context.Context, job *transitionJob, action p
 			}
 			target := preset.Brightness
 			if preset.Brightness > 0 && effect.Depth > 0 {
-				fraction := min(1.0, max(0.0, c.random()))
+				fraction := random()
 				target = int(math.Round(float64(preset.Brightness) * (1 - float64(effect.Depth)/100*fraction*fraction)))
 			}
 			if !segment(rgb, min(100, max(0, target)), duration, deadline) {
 				return
+			}
+		}
+	case "lightning":
+		var deadline *time.Time
+		if !effect.Loop {
+			deadline = new(started.Add(milliseconds(effect.DurationMS)))
+		}
+		background := protocol.TransitionPackets(rgb, brightness)[0]
+		draw := func(low, high time.Duration) time.Duration { return low + time.Duration(random()*float64(high-low)) }
+		// wait sits on the background for a random delay clipped to the
+		// deadline, and reports whether another strike or flash may follow.
+		wait := func(low, high time.Duration) bool {
+			if deadline != nil && !c.now().Before(*deadline) {
+				return false
+			}
+			delay := draw(low, high)
+			if deadline != nil {
+				delay = min(delay, deadline.Sub(c.now()))
+			}
+			return c.pause(ctx, delay) == nil && (deadline == nil || c.now().Before(*deadline))
+		}
+		// Draw order: pause and flash count per strike; then gap (from the
+		// second flash), intensity and hold per flash.
+	storm:
+		for wait(milliseconds(effect.MinPauseMS), milliseconds(effect.MaxPauseMS)) {
+			flashes := min(effect.MaxFlashes, 1+int(random()*float64(effect.MaxFlashes)))
+			for i := range flashes {
+				if i > 0 && !wait(lightningMinGap, lightningMaxGap) {
+					break storm
+				}
+				flash := scale(preset.RGB, lightningMinIntensity+(1-lightningMinIntensity)*random())
+				// A started flash always returns to the background, even past the deadline.
+				if !write(protocol.TransitionPackets(flash, brightness)[0]) || c.pause(ctx, draw(lightningMinHold, lightningMaxHold)) != nil || !write(background) {
+					return
+				}
 			}
 		}
 	}

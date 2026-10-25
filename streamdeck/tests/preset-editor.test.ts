@@ -124,8 +124,8 @@ async function setup() {
 	};
 }
 
-test("editor messages allow exact fields and validate all five definition kinds", () => {
-	for (const kind of ["static", "palette", "strobe", "breathing", "candle"] as const) {
+test("editor messages allow exact fields and validate all six definition kinds", () => {
+	for (const kind of ["static", "palette", "strobe", "breathing", "candle", "lightning"] as const) {
 		const preset = { ...defaultPreset(kind), label: kind };
 		assert.equal(
 			parseMessage(

@@ -234,11 +234,12 @@ function renderPalette(position = Number(select("palette-select").value) || 0): 
 }
 function editorFields(): void {
 	const kind = select("editor-kind").value;
-	for (const type of ["palette", "strobe", "breathing", "candle"])
+	for (const type of ["palette", "strobe", "breathing", "candle", "lightning"])
 		element(`editor-${type}-controls`).hidden = kind !== type;
 	element("editor-rgb-controls").hidden = kind === "palette";
 	element("editor-loop-controls").hidden = kind === "static";
-	element("editor-duration-controls").hidden = kind !== "candle" || input("editor-loop").checked;
+	element("editor-duration-controls").hidden =
+		(kind !== "candle" && kind !== "lightning") || input("editor-loop").checked;
 	element("editor-once-help").hidden = input("editor-loop").checked;
 	editorLabels();
 }
@@ -263,7 +264,16 @@ function loadDraft(preset: PresetDefinition, id: string, operation: "create" | "
 	input("editor-cycle").value = String(e?.kind === "breathing" ? e.cycleMs / 1000 : 4);
 	input("editor-depth").value = String(e?.kind === "candle" ? e.depth : 35);
 	input("editor-flicker").value = String(e?.kind === "candle" ? e.flickerMs / 1000 : 0.5);
-	input("editor-duration").value = String(e?.kind === "candle" ? (e.durationMs ?? 30000) / 1000 : 30);
+	input("editor-duration").value = String(
+		e?.kind === "candle" || e?.kind === "lightning" ? (e.durationMs ?? 30000) / 1000 : 30,
+	);
+	const background = rgbHex(e?.kind === "lightning" ? e.backgroundRgb : [26, 42, 108]);
+	input("editor-background-rgb").value = background;
+	input("editor-background-color").value = `#${background}`;
+	input("editor-background-brightness").value = String(e?.kind === "lightning" ? e.backgroundBrightness : 15);
+	input("editor-min-pause").value = String(e?.kind === "lightning" ? e.minPauseMs / 1000 : 2);
+	input("editor-max-pause").value = String(e?.kind === "lightning" ? e.maxPauseMs / 1000 : 15);
+	input("editor-max-flashes").value = String(e?.kind === "lightning" ? e.maxFlashes : 3);
 	element("preset-editor").hidden = false;
 	element("editor-review").toggleAttribute(
 		"disabled",
@@ -314,6 +324,18 @@ function readDraft(): PresetDefinition {
 				loop,
 				depth: input("editor-depth").valueAsNumber,
 				flickerMs: milliseconds("editor-flicker"),
+				...(loop ? {} : { durationMs: milliseconds("editor-duration") }),
+			};
+			break;
+		case "lightning":
+			preset.effect = {
+				kind,
+				loop,
+				backgroundRgb: rgbValue(input("editor-background-rgb").value),
+				backgroundBrightness: input("editor-background-brightness").valueAsNumber,
+				minPauseMs: milliseconds("editor-min-pause"),
+				maxPauseMs: milliseconds("editor-max-pause"),
+				maxFlashes: input("editor-max-flashes").valueAsNumber,
 				...(loop ? {} : { durationMs: milliseconds("editor-duration") }),
 			};
 			break;
@@ -1009,6 +1031,12 @@ element("editor-review").addEventListener("click", () => {
 			input("editor-min").valueAsNumber >= input("editor-brightness").valueAsNumber
 		)
 			throw new Error("minimumBelowPeak");
+		if (select("editor-kind").value === "lightning") {
+			if (input("editor-min-pause").valueAsNumber > input("editor-max-pause").valueAsNumber)
+				throw new Error("pauseOrder");
+			if (input("editor-background-brightness").valueAsNumber >= input("editor-brightness").valueAsNumber)
+				throw new Error("backgroundBelowFlash");
+		}
 		const preset = readDraft(),
 			id = input("editor-id").value;
 		reviewedPreset = { id, operation: editorOperation, preset };
@@ -1023,7 +1051,10 @@ element("editor-review").addEventListener("click", () => {
 	} catch (error) {
 		text(
 			"editor-error",
-			error instanceof Error && ["invalidPresetName", "minimumBelowPeak", "invalidPresetTiming"].includes(error.message)
+			error instanceof Error &&
+				["invalidPresetName", "minimumBelowPeak", "pauseOrder", "backgroundBelowFlash", "invalidPresetTiming"].includes(
+					error.message,
+				)
 				? error.message
 				: "validation",
 		);
@@ -1147,17 +1178,22 @@ for (const end of ["from", "to"]) {
 		}
 	});
 }
-element("editor-color").addEventListener("input", () => {
-	input("editor-rgb").value = input("editor-color").value.slice(1).toUpperCase();
-});
-element("editor-rgb").addEventListener("change", () => {
-	try {
-		input("editor-color").value = `#${colorInput(input("editor-rgb").value)}`;
-		element("editor-error").textContent = "";
-	} catch {
-		text("editor-error", "validation");
-	}
-});
+for (const [picker, hex] of [
+	["editor-color", "editor-rgb"],
+	["editor-background-color", "editor-background-rgb"],
+] as const) {
+	element(picker).addEventListener("input", () => {
+		input(hex).value = input(picker).value.slice(1).toUpperCase();
+	});
+	element(hex).addEventListener("change", () => {
+		try {
+			input(picker).value = `#${colorInput(input(hex).value)}`;
+			element("editor-error").textContent = "";
+		} catch {
+			text("editor-error", "validation");
+		}
+	});
+}
 element("editor-brightness-slider").addEventListener("input", () => {
 	input("editor-brightness").value = input("editor-brightness-slider").value;
 });
