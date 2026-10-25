@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -76,9 +77,9 @@ func createJSON(path string, value any, mode os.FileMode) error {
 // Init creates only missing files. The first initialization requires an explicit
 // manufacturer identity. Existing settings, tokens and presets are retained.
 func Init(directory, identity string) (Settings, map[string]protocol.Preset, error) {
-	identity = strings.ToUpper(strings.TrimSpace(identity))
-	if identity != "" && !identityPattern.MatchString(identity) {
-		return Settings{}, nil, fmt.Errorf("--identity: нужны шесть HEX-байтов через двоеточие, например AA:BB:CC:DD:EE:FF")
+	identity, err := NormalizeIdentity(identity)
+	if err != nil {
+		return Settings{}, nil, err
 	}
 	settingsPath := filepath.Join(directory, "settings.json")
 	_, statErr := os.Stat(settingsPath)
@@ -92,11 +93,10 @@ func Init(directory, identity string) (Settings, map[string]protocol.Preset, err
 		return Settings{}, nil, err
 	}
 	if os.IsNotExist(statErr) {
-		secret := make([]byte, 24)
-		if _, err := rand.Read(secret); err != nil {
+		settings, err := PrepareManualSettings(identity, nil)
+		if err != nil {
 			return Settings{}, nil, err
 		}
-		settings := Settings{DeviceIdentity: identity, Port: DefaultPort, AccessToken: base64.RawURLEncoding.EncodeToString(secret)}
 		if err := createJSON(settingsPath, settings, 0600); err != nil {
 			return Settings{}, nil, err
 		}
@@ -112,18 +112,14 @@ func Init(directory, identity string) (Settings, map[string]protocol.Preset, err
 }
 
 func Load(directory string) (Settings, map[string]protocol.Preset, error) {
-	var settings Settings
 	data, err := os.ReadFile(filepath.Join(directory, "settings.json"))
 	if err != nil {
-		return settings, nil, fmt.Errorf("прочитать settings.json: %w; сначала выполните ./sunset init", err)
+		return Settings{}, nil, fmt.Errorf("прочитать settings.json: %w; сначала выполните ./sunset init", err)
 	}
-	if err := json.Unmarshal(data, &settings); err != nil {
-		return settings, nil, fmt.Errorf("settings.json: %w", err)
-	}
-	if err := settings.Validate(); err != nil {
+	settings, err := DecodeSettings(data)
+	if err != nil {
 		return settings, nil, err
 	}
-	settings.DeviceIdentity = strings.ToUpper(settings.DeviceIdentity)
 	presets, err := LoadPresets(directory)
 	return settings, presets, err
 }
@@ -133,11 +129,78 @@ func LoadPresets(directory string) (map[string]protocol.Preset, error) {
 	if err != nil {
 		return nil, fmt.Errorf("прочитать presets.json: %w", err)
 	}
+	return DecodePresets(data)
+}
+
+// DecodeSettings applies the existing standalone settings format and rules.
+func DecodeSettings(data []byte) (Settings, error) {
+	var settings Settings
+	if err := json.Unmarshal(data, &settings); err != nil {
+		return settings, fmt.Errorf("settings.json: %w", err)
+	}
+	if err := settings.Validate(); err != nil {
+		return settings, err
+	}
+	settings.DeviceIdentity = strings.ToUpper(settings.DeviceIdentity)
+	return settings, nil
+}
+
+// NormalizeIdentity accepts the CLI's optional identity; callers creating new
+// settings must additionally reject an empty value.
+func NormalizeIdentity(identity string) (string, error) {
+	identity = strings.ToUpper(strings.TrimSpace(identity))
+	if identity != "" && !identityPattern.MatchString(identity) {
+		return "", fmt.Errorf("--identity: нужны шесть HEX-байтов через двоеточие, например AA:BB:CC:DD:EE:FF")
+	}
+	return identity, nil
+}
+
+// PrepareManualSettings prepares a candidate, without saving or changing a lamp.
+// Existing port and secret are retained, including for an explicitly reviewed
+// identity replacement. The caller owns confirmation and commit.
+func PrepareManualSettings(identity string, previous *Settings) (Settings, error) {
+	identity, err := NormalizeIdentity(identity)
+	if err != nil || identity == "" {
+		return Settings{}, fmt.Errorf("invalid_identity")
+	}
+	if previous != nil {
+		if err := previous.Validate(); err != nil {
+			return Settings{}, fmt.Errorf("invalid_settings")
+		}
+		candidate := *previous
+		candidate.DeviceIdentity = identity
+		return candidate, nil
+	}
+	secret := make([]byte, 24)
+	if _, err := rand.Read(secret); err != nil {
+		return Settings{}, fmt.Errorf("secret_generation_failed")
+	}
+	return Settings{DeviceIdentity: identity, Port: DefaultPort, AccessToken: base64.RawURLEncoding.EncodeToString(secret)}, nil
+}
+
+// DefaultPresets returns a fresh catalog, never a merge into an existing one.
+func DefaultPresets() map[string]protocol.Preset { return defaults() }
+
+// PreloadedPresetIDs identifies unchanged stock entries. Copies and overrides
+// remain user presets, even when they reuse a stock label or ID.
+func PreloadedPresetIDs(presets map[string]protocol.Preset) map[string]bool {
+	ids := make(map[string]bool)
+	for id, preset := range defaults() {
+		if current, ok := presets[id]; ok && reflect.DeepEqual(current, preset) {
+			ids[id] = true
+		}
+	}
+	return ids
+}
+
+// DecodePresets preserves the standalone catalog's missing-field validation.
+func DecodePresets(data []byte) (map[string]protocol.Preset, error) {
 	// Pointers distinguish missing/null brightness from the valid value zero.
 	var raw map[string]struct {
-		Label      string `json:"label"`
-		RGB        []int  `json:"rgb"`
-		Brightness *int   `json:"brightness"`
+		Label      string          `json:"label"`
+		RGB        []int           `json:"rgb"`
+		Brightness *int            `json:"brightness"`
+		Effect     json.RawMessage `json:"effect"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("presets.json: %w", err)
@@ -147,7 +210,17 @@ func LoadPresets(directory string) (map[string]protocol.Preset, error) {
 		if value.Brightness == nil {
 			return nil, fmt.Errorf("пресет %s: поле brightness обязательно", slug)
 		}
-		presets[slug] = protocol.Preset{Label: value.Label, RGB: value.RGB, Brightness: *value.Brightness}
+		preset := protocol.Preset{Label: value.Label, RGB: value.RGB, Brightness: *value.Brightness}
+		if len(value.Effect) != 0 {
+			if string(value.Effect) == "null" {
+				return nil, fmt.Errorf("пресет %s: effect не может быть null", slug)
+			}
+			preset.Effect = new(protocol.Effect)
+			if err := json.Unmarshal(value.Effect, preset.Effect); err != nil {
+				return nil, fmt.Errorf("пресет %s: некорректный effect", slug)
+			}
+		}
+		presets[slug] = preset
 	}
 	if err := protocol.ValidatePresets(presets); err != nil {
 		return nil, err
@@ -157,7 +230,7 @@ func LoadPresets(directory string) (map[string]protocol.Preset, error) {
 
 func URLs(settings Settings, presets map[string]protocol.Preset) string {
 	var out strings.Builder
-	out.WriteString("MeRGBW LT-06 — кнопки Stream Deck\n\nSystem → Website → URL: скопируйте ссылку целиком.\nВключите GET request in background.\nПеред использованием запустите run.command или ./sunset serve.\n\n")
+	out.WriteString("MeRGBW LT-06 — кнопки Stream Deck\n\nSystem → Website → URL: скопируйте ссылку целиком.\nВключите GET request in background.\nПеред использованием запустите task run из папки проекта.\n\n")
 	add := func(label, route string) { fmt.Fprintf(&out, "%s\n%s/%s\n\n", label, settings.BaseURL(), route) }
 	add("Включить", "on")
 	add("Выключить", "off")

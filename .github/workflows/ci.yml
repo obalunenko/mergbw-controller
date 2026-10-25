@@ -2,7 +2,9 @@ name: CI
 
 "on":
   push:
+    tags-ignore: ["**"] # Tag checks are called by release.yml.
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -25,25 +27,68 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ["1.25.x", "stable"]
+        go: ["1.27.x", "stable"]
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Set up Go for tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/task/go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/task/go.sum
+            tools/mockgen/go.sum
+      - name: Install pinned repository tools
+        run: make tools
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
-          cache-dependency-path: go.sum
+          # Both setups share the same Go cache directories; restore only once.
+          cache: false
       - name: Run all tests without Bluetooth hardware
-        run: make test
+        run: task test
       - name: Check core concurrency with the race detector
-        run: make test-race
+        run: task test:race
       - name: Vet all packages
-        run: make vet
+        run: task vet
       - name: Build Linux controller
-        run: make build
+        run: task build
+      - name: Check release tooling without Bluetooth
+        run: task release:test
+
+
+  plugin-software:
+    name: Plugin / Linux / Node 24 / BLE-free fixtures
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go for tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/task/go.mod
+          cache-dependency-path: tools/task/go.sum
+      - name: Install pinned repository tools
+        run: make tools
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: streamdeck/package-lock.json
+      - name: Install locked plugin dependencies
+        run: task plugin:deps
+      - name: Check software and synthetic payload fixtures without native execution
+        run: task plugin:check:software
+      - name: Check Task ordering and native-input forwarding
+        run: task workflows:test
 
   macos:
     name: macOS / CoreBluetooth build
@@ -54,12 +99,23 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Set up Go for tools
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: tools/task/go.mod
+          cache-dependency-path: |
+            go.sum
+            tools/task/go.sum
+            tools/mockgen/go.sum
+      - name: Install pinned repository tools
+        run: make tools
       - name: Set up minimum Go version
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache-dependency-path: go.sum
+          # Both setups share the same Go cache directories; restore only once.
+          cache: false
       # Importing the native BLE package at runtime can prompt for Bluetooth
       # access. Compile/link with CGO here; do not run the binary or BLE tests.
-      - name: Build macOS controller with CGO
-        run: make build
+      - name: Build and inspect macOS native slice with CGO worker and pure supervisor
+        run: task plugin:native:build

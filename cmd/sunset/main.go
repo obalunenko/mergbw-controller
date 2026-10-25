@@ -20,10 +20,12 @@ import (
 	"time"
 
 	"github.com/obalunenko/mergbw-controller/internal/ble"
+	"github.com/obalunenko/mergbw-controller/internal/ble/native"
 	"github.com/obalunenko/mergbw-controller/internal/bridge"
 	"github.com/obalunenko/mergbw-controller/internal/config"
 	"github.com/obalunenko/mergbw-controller/internal/controller"
 	"github.com/obalunenko/mergbw-controller/internal/logging"
+	"github.com/obalunenko/mergbw-controller/internal/managed"
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
 )
 
@@ -35,15 +37,7 @@ func (l lampLink) Connect(ctx context.Context) error {
 }
 
 func (l lampLink) CanRetry(err error) bool {
-	for _, permanent := range []error{
-		context.Canceled, context.DeadlineExceeded, ble.ErrIncompatible,
-		ble.ErrPermission, ble.ErrNeedsRestart, ble.ErrWriteUncertain, ble.ErrInvalidPacket,
-	} {
-		if errors.Is(err, permanent) {
-			return false
-		}
-	}
-	return true
+	return ble.CanRetry(err)
 }
 
 func usage() {
@@ -57,6 +51,7 @@ func usage() {
 ./sunset [--data-dir PATH] send color FF5000
 ./sunset [--data-dir PATH] send brightness 40
 ./sunset [--data-dir PATH] send preset sunset
+./sunset [--data-dir PATH] send transition FF5000 100 FF5000 0 30
 ./sunset [--data-dir PATH] dry-run on|off|color HEX|brightness N|preset NAME
 ./sunset --version
 
@@ -90,12 +85,24 @@ func run(args []string) error {
 	directory := flags.String("data-dir", filepath.Dir(executable), "папка settings.json и presets.json")
 	identity := flags.String("identity", "", "identity лампы из manufacturer data; обязательна при первой настройке")
 	version := flags.Bool("version", false, "версия контроллера")
+	managedMode := flags.Bool("managed", false, "private plugin-owned worker mode")
+	listenerFD := flags.Int("listener-fd", -1, "private inherited loopback listener")
+	lockFD := flags.Int("lock-fd", -1, "private inherited installation lock")
 	flags.Usage = usage
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
+	}
+	if *managedMode {
+		if *version || *identity != "" || len(flags.Args()) != 1 || flags.Args()[0] != "serve" {
+			return managed.ProtocolIncompatible
+		}
+		return runManaged(*directory, *listenerFD, *lockFD)
+	}
+	if *listenerFD != -1 || *lockFD != -1 {
+		return managed.ProtocolIncompatible
 	}
 	if *version {
 		fmt.Println(bridge.Version)
@@ -131,6 +138,22 @@ func run(args []string) error {
 			return err
 		}
 		fmt.Println("Команда:", action.Route)
+		if action.Transition != nil {
+			fmt.Printf("Плавный переход между явно заданными RGB/яркостью за %d секунд; не более четырёх обновлений в секунду.\n", action.Transition.DurationSeconds)
+			fmt.Println("Проверка параметров завершена; переход и подключение не запускались.")
+			return nil
+		}
+		if action.Effect != nil {
+			effect := action.Effect
+			fmt.Printf("Эффект %s: RGB %v, яркость %d%%.\n", effect.Preset.Effect.Kind, effect.Preset.RGB, effect.Preset.Brightness)
+			if duration := effect.DurationMS(); duration != nil {
+				fmt.Printf("Целевая длительность: %d мс; фактические интервалы зависят от Bluetooth.\n", *duration)
+			} else {
+				fmt.Println("Повтор до остановки; фактические интервалы зависят от Bluetooth.")
+			}
+			fmt.Println("Проверка параметров завершена; эффект и подключение не запускались.")
+			return nil
+		}
 		for _, frame := range action.Packets {
 			fmt.Printf("% X\n", frame)
 		}
@@ -197,7 +220,7 @@ func run(args []string) error {
 func newBackend(settings config.Settings) (*ble.Backend, error) {
 	return ble.New(ble.Config{
 		Identity: settings.DeviceIdentity, ScanTimeout: 12 * time.Second, ConnectTimeout: 12 * time.Second,
-	})
+	}, native.DefaultAdapter())
 }
 
 func send(settings config.Settings, action protocol.Action) (result error) {
@@ -225,11 +248,10 @@ func send(settings config.Settings, action protocol.Action) (result error) {
 	response, err := client.Get(settings.BaseURL() + "/" + action.Route)
 	if err != nil {
 		// url.Error includes the local secret; show only its underlying error.
-		var urlErr *url.Error
-		if errors.As(err, &urlErr) {
+		if urlErr, ok := errors.AsType[*url.Error](err); ok {
 			err = urlErr.Err
 		}
-		return fmt.Errorf("HTTP-контроллер недоступен: %w; запустите run.command", err)
+		return fmt.Errorf("HTTP-контроллер недоступен: %w; запустите task run", err)
 	}
 	defer response.Body.Close()
 	requestID = response.Header.Get("X-Request-ID")
@@ -237,7 +259,7 @@ func send(settings config.Settings, action protocol.Action) (result error) {
 	if err != nil {
 		return err
 	}
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode != http.StatusOK && !((action.Transition != nil || action.Effect != nil) && response.StatusCode == http.StatusAccepted) {
 		return fmt.Errorf("HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 	}
 	fmt.Print(string(body))
@@ -251,13 +273,17 @@ func serve(settings config.Settings, presets map[string]protocol.Preset) error {
 		return fmt.Errorf("не удалось открыть %s: %w; проверьте, не запущен ли другой контроллер", settings.Address(), err)
 	}
 	defer listener.Close()
+	return serveOnListener(context.Background(), settings, presets, listener, nil, nil)
+}
+
+func serveOnListener(parent context.Context, settings config.Settings, presets map[string]protocol.Preset, listener net.Listener, ready func() error, bluetooth func(bool, error)) error {
 	backend, err := newBackend(settings)
 	if err != nil {
 		return err
 	}
-	lamp := controller.New(lampLink{backend})
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	lamp := controller.NewWithContext(ctx, lampLink{backend})
 	server := &http.Server{
 		Handler: bridge.New(settings, presets, lamp), ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout: 10 * time.Second, WriteTimeout: 75 * time.Second, IdleTimeout: 60 * time.Second,
@@ -267,6 +293,13 @@ func serve(settings config.Settings, presets map[string]protocol.Preset) error {
 	}
 	serverErrors := make(chan error, 1)
 	go func() { serverErrors <- server.Serve(listener) }()
+	var readyErr error
+	if ready != nil {
+		readyErr = ready()
+		if readyErr != nil {
+			stop()
+		}
+	}
 	slog.Info("service.started", "address", settings.Address(), "identity", settings.DeviceIdentity, "version", bridge.Version)
 	slog.Info("service.instructions", "hint", "URL кнопок — в streamdeck-buttons.txt. Отключите nRF Connect и закройте MeRGBW на телефоне. Для остановки — Ctrl+C.")
 	// Preconnect through the same gate used by HTTP commands. No light commands.
@@ -274,14 +307,20 @@ func serve(settings config.Settings, presets map[string]protocol.Preset) error {
 		connectCtx, cancel := context.WithTimeout(ctx, bridge.RequestTimeout)
 		defer cancel()
 		if err := lamp.Connect(connectCtx); err != nil {
+			if bluetooth != nil {
+				bluetooth(false, err)
+			}
 			if ctx.Err() == nil {
 				hint := "Следующая команда попробует подключиться."
 				if errors.Is(err, ble.ErrNeedsRestart) {
-					hint = "Остановите и снова запустите run.command."
+					hint = "Остановите и снова запустите task run."
 				}
 				slog.Warn("bluetooth.unavailable", "identity", settings.DeviceIdentity, "error", err, "hint", hint)
 			}
 			return
+		}
+		if bluetooth != nil {
+			bluetooth(true, nil)
 		}
 	}()
 	var serveErr error
@@ -312,6 +351,9 @@ func serve(settings config.Settings, presets map[string]protocol.Preset) error {
 		}
 	case <-closeCtx.Done():
 		slog.Warn("bluetooth.shutdown.timeout", "error", closeCtx.Err(), "hint", "Завершаю процесс: Bluetooth ещё ожидает ответ ОС.")
+	}
+	if readyErr != nil {
+		return readyErr
 	}
 	if serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
 		return serveErr

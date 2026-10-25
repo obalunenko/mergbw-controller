@@ -1,0 +1,873 @@
+{
+  "workflow": "companion",
+  "specName": "Настраиваемые пресеты и динамические эффекты",
+  "branch": "develop",
+  "currentStep": "implement",
+  "status": "completed",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-24T17:51:10.788Z"
+    },
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-24T18:02:58.451Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-24T18:06:16.286Z"
+    },
+    {
+      "step": "plan",
+      "substep": "research",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:09:52.248Z"
+    },
+    {
+      "step": "plan",
+      "substep": "design",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:13:18.559Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:13:42.081Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-24T18:21:32.881Z"
+    },
+    {
+      "step": "tasks",
+      "substep": "generate",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:24:23.968Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:24:24.722Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-24T18:24:24.914Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T001",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:24:25.151Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T002",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:26:47.462Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T004",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:30:43.368Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T005",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:31:02.257Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T003",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:32:41.103Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T006",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:39:06.067Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T009",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:41:16.411Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T010",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:41:43.173Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T011",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:41:56.546Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T012",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:42:21.444Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T007",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:44:00.072Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T013",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:48:31.033Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T008",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:48:33.475Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T014",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:50:19.557Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T015",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:53:44.473Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T016",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:55:06.746Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T017",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:58:01.537Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-24T18:58:01.553Z"
+    }
+  ],
+  "telemetryInstanceId": "1b50fc8e-6253-4dc6-8685-d5e6876a0d7d",
+  "last_action": "All 17 tasks complete. Updated local linked payload; new effects await ordinary owner use, with no physical readback claim.",
+  "expectations": [
+    "No hardware state readback, music synchronization or time-of-day scheduling",
+    "No automatic effect start from save/open/restart",
+    "Additional suggested modes are not committed until owner selection",
+    "Rainbow, sunrise/sunset and signal are excluded from this release",
+    "No Developer ID signing, publication or long manual fault qualification sequence"
+  ],
+  "context": [
+    "area: internal/protocol and internal/controller preset/transition lifecycle, whole-action admission and cooperative cancellation",
+    "area: internal/config and internal/managed immutable catalog generation, validation, preservation and restart-on-apply",
+    "area: internal/bridge current catalog/static-preset responses and asynchronous transition contract",
+    "area: streamdeck preset action, PI v2 editor/messages, owned-capability and accepted-job UI",
+    "constraint: preserve existing static presets, assignments, private settings/token and no automatic command replay",
+    "constraint: home-use acceptance without another long manual qualification sequence",
+    "scope: owner selected pulse, strobe, breathing and candle; four independent effect settings share existing preset workflow",
+    "pattern: internal/config/config.go DecodePresets reconstructs static fields and must retain new effect definitions",
+    "pattern: internal/managed/control.go frame limit 64 KiB; catalog import limit 1 MiB; use bounded entry operations",
+    "pattern: cmd/sunset/main.go send/dry-run need explicit effect acceptance rather than empty packet success",
+    "pattern: OperationStore removes finished invisible records; ephemeral effect ownership must be independent of visibility"
+  ],
+  "coverage": {
+    "FR-001": {
+      "title": "Владелец MUST создавать, редактировать и удалять пресеты через панель Stream Deck.",
+      "tasks": [
+        "T005",
+        "T007",
+        "T008"
+      ],
+      "tests": [
+        "internal/managed/presets_test.go",
+        "streamdeck/tests/preset-editor.test.ts",
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "FR-002": {
+      "title": "Существующие статические пресеты и назначения MUST сохранять совместимость.",
+      "tasks": [
+        "T002",
+        "T004",
+        "T006",
+        "T013"
+      ],
+      "tests": [
+        "internal/config/effects_test.go",
+        "streamdeck/tests/preset-catalog.test.ts"
+      ]
+    },
+    "FR-003": {
+      "title": "Сохранение MUST проверять весь изменённый каталог и сохранять прежние данные при ошибке.",
+      "tasks": [
+        "T002",
+        "T005",
+        "T007"
+      ],
+      "tests": [
+        "internal/managed/presets_test.go",
+        "internal/config/managed_store_test.go"
+      ]
+    },
+    "FR-004": {
+      "title": "Переименование пресета MUST сохранять его назначения.",
+      "tasks": [
+        "T005",
+        "T008",
+        "T013"
+      ],
+      "tests": [
+        "streamdeck/tests/preset-catalog.test.ts",
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "FR-005": {
+      "title": "Палитра MUST поддерживать заданный порядок минимум двух цветов, яркость и длительность плавного перехода.",
+      "tasks": [
+        "T002",
+        "T003",
+        "T009"
+      ],
+      "tests": [
+        "internal/controller/palette_effect_test.go",
+        "internal/protocol/effects_test.go"
+      ]
+    },
+    "FR-006": {
+      "title": "Повтор палитры MUST плавно соединять последний цвет с первым; одиночный проход завершается на последнем цвете.",
+      "tasks": [
+        "T003",
+        "T009"
+      ],
+      "tests": [
+        "internal/controller/palette_effect_test.go"
+      ]
+    },
+    "FR-007": {
+      "title": "Стробоскоп MUST поддерживать цвет, яркость и отдельные интервалы включения и выключения.",
+      "tasks": [
+        "T002",
+        "T003",
+        "T010"
+      ],
+      "tests": [
+        "internal/controller/strobe_effect_test.go",
+        "internal/protocol/effects_test.go"
+      ]
+    },
+    "FR-008": {
+      "title": "Палитра, стробоскоп и дыхание MUST поддерживать один проход/цикл и повтор до остановки; свеча MUST поддерживать ограниченную длительность и работу до остановки.",
+      "tasks": [
+        "T002",
+        "T003",
+        "T009",
+        "T010",
+        "T011",
+        "T012"
+      ],
+      "tests": [
+        "internal/controller/palette_effect_test.go",
+        "internal/controller/strobe_effect_test.go",
+        "internal/controller/breathing_effect_test.go",
+        "internal/controller/candle_effect_test.go"
+      ]
+    },
+    "FR-009": {
+      "title": "Остановка режима MUST прекращать дальнейшие шаги без автоматического продолжения; обычный Off остаётся явным выключением света.",
+      "tasks": [
+        "T003",
+        "T013"
+      ],
+      "tests": [
+        "internal/controller/effects_test.go",
+        "streamdeck/tests/preset-effects.test.ts"
+      ]
+    },
+    "FR-010": {
+      "title": "Новая допустимая команда MUST прерывать прежний эффект перед собственным выполнением, сохраняя сериализацию целых действий.",
+      "tasks": [
+        "T003",
+        "T013"
+      ],
+      "tests": [
+        "internal/controller/effects_test.go",
+        "streamdeck/tests/preset-effects.test.ts"
+      ]
+    },
+    "FR-011": {
+      "title": "Выход из приложения MUST завершать повторение; перезапуск MUST NOT возобновлять его.",
+      "tasks": [
+        "T003",
+        "T013"
+      ],
+      "tests": [
+        "internal/controller/effects_test.go",
+        "streamdeck/tests/preset-effects.test.ts"
+      ]
+    },
+    "FR-012": {
+      "title": "Неактуальная панель MUST NOT отменять новый экземпляр эффекта.",
+      "tasks": [
+        "T004",
+        "T006",
+        "T007",
+        "T013"
+      ],
+      "tests": [
+        "internal/bridge/effects_test.go",
+        "streamdeck/tests/preset-editor.test.ts",
+        "streamdeck/tests/preset-effects.test.ts"
+      ]
+    },
+    "FR-013": {
+      "title": "Интерфейс MUST различать принятие, выполнение, завершение, остановку, отказ и неизвестный исход на EN/RU.",
+      "tasks": [
+        "T006",
+        "T008",
+        "T013"
+      ],
+      "tests": [
+        "streamdeck/tests/effect-contract.test.ts",
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "FR-014": {
+      "title": "Редактирование пресетов MUST сохранять настройки лампы, секрет и остальные назначения без раскрытия секретов в профилях или диагностике.",
+      "tasks": [
+        "T002",
+        "T005",
+        "T007"
+      ],
+      "tests": [
+        "internal/managed/presets_test.go",
+        "internal/config/effects_test.go",
+        "streamdeck/tests/preset-editor.test.ts"
+      ]
+    },
+    "FR-015": {
+      "title": "Сохранение, открытие панели и просмотр параметров MUST NOT запускать эффект.",
+      "tasks": [
+        "T007",
+        "T008"
+      ],
+      "tests": [
+        "streamdeck/tests/preset-editor.test.ts",
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "FR-016": {
+      "title": "Применение изменений, способное прервать работающий эффект, MUST явно показывать это последствие до применения.",
+      "tasks": [
+        "T007",
+        "T008"
+      ],
+      "tests": [
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "FR-017": {
+      "title": "Дыхание MUST поддерживать цвет, нижнюю и верхнюю границы яркости и длительность полного плавного нарастания и спада.",
+      "tasks": [
+        "T002",
+        "T003",
+        "T011"
+      ],
+      "tests": [
+        "internal/controller/breathing_effect_test.go",
+        "internal/protocol/effects_test.go"
+      ]
+    },
+    "FR-018": {
+      "title": "Свеча MUST поддерживать тёплый начальный цвет, базовую яркость, силу и скорость нерегулярного мерцания без выхода за допустимую яркость.",
+      "tasks": [
+        "T002",
+        "T003",
+        "T012"
+      ],
+      "tests": [
+        "internal/controller/candle_effect_test.go",
+        "internal/protocol/effects_test.go"
+      ]
+    },
+    "FR-019": {
+      "title": "Нажатие кнопки динамического пресета MUST запускать эффект; повторное нажатие во время принадлежащего этой кнопке запуска MUST останавливать его. Завершённый запуск не препятствует новому запуску; статические пресеты сохраняют прежнее поведение.",
+      "tasks": [
+        "T013"
+      ],
+      "tests": [
+        "streamdeck/tests/preset-effects.test.ts"
+      ]
+    }
+  },
+  "intent": "Editable persistent home presets with palette pulse, strobe, breathing and candle effects",
+  "classification": {
+    "projectedFiles": 30,
+    "projectedTasks": 26,
+    "scopeSignal": "none",
+    "verdict": "oversized"
+  },
+  "size": "oversized",
+  "decisions": [
+    {
+      "decision": "First release includes palette pulse, strobe, breathing and candle",
+      "why": "Owner explicitly selected these four modes",
+      "rejected": "Rainbow, sunrise/sunset and signal in this release"
+    },
+    {
+      "decision": "Use the proposed one-button start/stop default for dynamic presets",
+      "why": "Keeps the existing preset action convenient; explicit assumption rather than an independently confirmed preference",
+      "rejected": "Requiring a separate stop action"
+    },
+    {
+      "decision": "Owner approved the feature specification before planning",
+      "why": "User replied approve after committing feature 007",
+      "rejected": "Assuming approval for a future unwritten implementation plan"
+    },
+    {
+      "decision": "Use one controller-owned active job with separate compatible transition/effect snapshots",
+      "why": "Serialized cancellation and native draining already exist; loops cannot use finite transition progress",
+      "rejected": "Per-effect plugin timers or per-segment transition starts"
+    },
+    {
+      "decision": "Extend legacy label/rgb/brightness presets with an optional tagged effect",
+      "why": "Preserve JSON, IDs and common color/brightness fields",
+      "rejected": "A separate catalog or data migration"
+    },
+    {
+      "decision": "Edit one preset per generation-guarded managed proposal with bounded paged reads",
+      "why": "Catalog files allow 1 MiB but private frames allow 64 KiB",
+      "rejected": "Sending whole catalogs through PI or bypassing atomic apply"
+    },
+    {
+      "decision": "Keep static preset 200 receipts; add effect 202/status/exact-ID cancellation",
+      "why": "Preserve old command behavior and represent long or looping execution honestly",
+      "rejected": "Treating admission as completed transmission"
+    },
+    {
+      "decision": "Use ephemeral key-context and runtime-capability ownership for repeat-press stop",
+      "why": "Stale panels and unknown replies must not cancel another run or replay effects",
+      "rejected": "Persisted run IDs or a local running boolean"
+    },
+    {
+      "decision": "Expose changed-save interruption before Apply and retain last commanded state on stop",
+      "why": "Current configuration apply restarts the worker; explicit Off remains separate",
+      "rejected": "Hot reload or automatic playback after saving"
+    },
+    {
+      "decision": "Keep home-use software checks and brief positive owner observations",
+      "why": "The owner explicitly excluded a lengthy manual qualification series",
+      "rejected": "New signing, fault-injection or multi-machine acceptance requirements"
+    },
+    {
+      "decision": "Owner approved the implementation plan",
+      "why": "User replied approve at review-plan gate",
+      "rejected": "Another approval before tasks/implementation"
+    },
+    {
+      "decision": "Keep the shared engine in Foundational and independently verify each mode in its story phase",
+      "why": "All modes share serialized job ownership; the editor and key-control phases then have disjoint ownership",
+      "rejected": "Separate competing schedulers per effect"
+    },
+    {
+      "decision": "Build three foundation areas with workers and the fourth TypeScript wire area inline",
+      "why": "The environment has three worker slots plus the root agent",
+      "rejected": "Exceeding the available concurrent slots"
+    },
+    {
+      "decision": "Clear ambiguous admission after any terminal run, keeping the resolving press read-only",
+      "why": "A completed different preset must not trap the key permanently",
+      "rejected": "Automatically replaying a start from status recovery"
+    }
+  ],
+  "step_summaries": {
+    "specify": {
+      "summary": "Four-mode preset specification finalized with editor, compatibility and lifecycle requirements",
+      "key_finding": "Effects must share serialized command admission and existing generation-aware persistence; no automatic playback"
+    },
+    "plan": {
+      "summary": "Implementation plan, research, data model and execution/editor contracts completed for four configurable preset effects",
+      "key_finding": "Reuse the existing runtime and transaction barriers; bound editor frames without reducing valid catalog file limits",
+      "risks": "BLE timing remains nominal; changed preset saves stop the active effect by restarting the controller"
+    },
+    "tasks": {
+      "summary": "17 tasks, setup/foundation, six story phases and one-owner integrated validation"
+    },
+    "implement": {
+      "summary": "Four configurable effects, EN/RU editor and exact-run repeat stop implemented; integrated gates and backed-up local installation pass",
+      "key_finding": "All 254 Node tests and 27 native fixtures pass; installed owned runtime/BLE is healthy and all 20 assignments/private config are preserved"
+    }
+  },
+  "verified": [
+    {
+      "what": "plan blocks check out",
+      "command": "python3 .specify/extensions/companion/scripts/check_plan.py --feature-dir specs/008-configurable-preset-effects --strict",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.0,
+      "result": "[plan-check] plan.md: 2 screens, 21 parts. Every screen holds to its grammar."
+    },
+    {
+      "what": "Plan block validation",
+      "command": "python3 .specify/extensions/companion/scripts/check_plan.py --feature-dir specs/008-configurable-preset-effects --no-record --strict",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.0,
+      "result": "[plan-check] plan.md: 2 screens, 21 parts. Every screen holds to its grammar."
+    },
+    {
+      "what": "Design artifact check",
+      "command": "python3 /private/tmp/mergbw-feature008-plan-check.py",
+      "source": "derived",
+      "exitCode": 1,
+      "durationSeconds": 0.0,
+      "result": "    raise CalledProcessError(retcode, process.args, ·                              output=stdout, stderr=stderr) · subprocess.CalledProcessError: Command '['git', 'diff', '--no-index', '--check', '/dev/null', 'specs/008-configurable-preset-effects/plan.md']' returned non-zero exit status 1.",
+      "warnings": [
+        "exited 1"
+      ]
+    },
+    {
+      "what": "Design artifact check with no-index exit handling",
+      "command": "python3 /private/tmp/mergbw-feature008-plan-check.py",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.1,
+      "result": "PASS: four design artifacts present, no unresolved markers, whitespace clean."
+    },
+    {
+      "what": "Effect schema and config focused tests",
+      "command": "go test ./internal/protocol ./internal/config",
+      "source": "derived",
+      "exitCode": 1,
+      "durationSeconds": 0.1,
+      "result": "FAIL · # ./internal/config · open /Users/olegbalunenko/Library/Caches/go-build/a6/a635608f4ccce0afb9d833a7e5de4de4ae6de74a094d9ca641068e280da17dc6-d: operation not permitted",
+      "warnings": [
+        "exited 1"
+      ]
+    },
+    {
+      "what": "Effects integrated Go core",
+      "command": "task test:core",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 22.8,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/managed\t1.544s · ok  \tgithub.com/obalunenko/mergbw-controller/cmd/sunset/supervisor\t21.871s · task: [test:core] go test ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble ./internal/managed ./cmd/sunset/supervisor"
+    },
+    {
+      "what": "Effects integrated Go race",
+      "command": "task test:race",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 23.5,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/managed\t3.188s · ok  \tgithub.com/obalunenko/mergbw-controller/cmd/sunset/supervisor\t22.499s · task: [test:race] go test -race ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble ./internal/managed ./cmd/sunset/supervisor"
+    },
+    {
+      "what": "Effects integrated Go vet",
+      "command": "task vet",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.4,
+      "result": "task: [vet] go vet ./..."
+    },
+    {
+      "what": "Effects integrated Go build",
+      "command": "task build",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.2,
+      "result": "task: [build] go build -trimpath -buildvcs=false -o sunset ./cmd/sunset"
+    },
+    {
+      "what": "Effects integrated plugin software",
+      "command": "task plugin:check:software > /private/tmp/mergbw-feature008-plugin-software.log 2>&1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 9.7,
+      "result": "no output"
+    },
+    {
+      "what": "Effects current-Mac payload build",
+      "command": "python3 scripts/plugin-native.py spike --output-root /private/tmp/mergbw-feature008-effects-20261024",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 2.1,
+      "result": "Native payload prepared (not launched): /private/tmp/mergbw-feature008-effects-20261024/com.obalunenko.mergbw.sdPlugin"
+    },
+    {
+      "what": "Effects current-Mac payload inspection",
+      "command": "python3 /private/tmp/mergbw-effects-artifact-check.py",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.2,
+      "result": "{\"task\": \"T017\", \"result\": \"pass\", \"path\": \"/private/tmp/mergbw-feature008-effects-20261024/com.obalunenko.mergbw.sdPlugin\", \"buildMode\": \"spike\", \"architectures\": [\"arm64\"], \"sourceRevision\": \"8a38bacbb264ef91e8368be83a45d51f72885c50\", \"sourceTreeSHA256\": \"f206027f8e7c23e18794446a542ad402c8a70c6cdfd2fc8189da767cebc8546a\", \"artifactTreeSHA256\": \"c39d63bb3351fcbcbc251ec0c6e0c0eacea2e3e4685fea61efb474ed61c34edf\", \"files\": 39, \"dirtyWorktree\": true, \"nativeExecuted\": false}"
+    },
+    {
+      "what": "Effects backed-up local installation",
+      "command": "python3 /private/tmp/mergbw-effects-local-install.py",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.4,
+      "result": "  \"linked\": true, ·   \"restartRequested\": true · }"
+    },
+    {
+      "what": "Effects local host ownership and health",
+      "command": "python3 /private/tmp/mergbw-effects-host-check.py",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.6,
+      "result": "{\"oneSupervisor\": true, \"oneOwnedWorker\": true, \"tccResponsibleBundle\": \"com.obalunenko.mergbw.controller\", \"tccRequestReturnedWithoutError\": true, \"health\": {\"bluetooth_connected\": true, \"ok\": true, \"physical_state_verified\": false, \"version\": \"2.0.0-go\"}, \"privatePluginReadinessVisuallyVerified\": false, \"physicalCommandsSent\": 0}"
+    },
+    {
+      "what": "Effects local profile and private-config preservation",
+      "command": "python3 /private/tmp/mergbw-effects-preservation.py",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.1,
+      "result": "PASS: 20 current MeRGBW assignment records, source bytes and imported settings/token/presets preserved; private managed modes intact"
+    },
+    {
+      "what": "Effect home-use physical observation boundary",
+      "result": "No new physical effect observation claimed. Software and read-only local-host evidence close this milestone; the owner may try the modes normally without another qualification series."
+    }
+  ],
+  "planBlocks": [
+    "screens"
+  ],
+  "concerns": [
+    {
+      "note": "Installed plan-blocks.py lacks call-paths/states/screens grammar resources and fails before recording its selection. Equivalent calls and state-to-screen sketches were authored directly; check_plan validates the two screen blocks successfully.",
+      "step": "plan",
+      "kind": "tooling"
+    },
+    {
+      "note": "Initial artifact helper treated git diff --no-index exit 1 for new files as a whitespace failure despite empty diagnostics. The helper was corrected to accept that documented difference result only when diagnostics are empty; corrected validation passes. Design content did not change.",
+      "step": "plan",
+      "kind": "verification"
+    }
+  ],
+  "approach": "Add compatible tagged effects to existing presets and run them through one serialized controller job lifecycle. Add generation-aware single-entry editing through the current managed transaction, with exact-ID key ownership and the existing home-use validation scope.",
+  "currentTask": null,
+  "task_summaries": {
+    "T001": {
+      "status": "DONE",
+      "did": "Recorded approved plan and disjoint ownership with all 19 requirements mapped",
+      "files": [
+        "specs/008-configurable-preset-effects/tasks.md"
+      ]
+    },
+    "T002": {
+      "status": "DONE",
+      "did": "Added strict tagged effect definitions, accepted action metadata and deep-copy preservation; protocol/config suites pass",
+      "files": [
+        "internal/protocol/protocol.go",
+        "internal/protocol/effects.go",
+        "internal/protocol/effects_test.go",
+        "internal/config/config.go",
+        "internal/config/managed_config.go",
+        "internal/config/managed_import.go",
+        "internal/config/effects_test.go"
+      ]
+    },
+    "T004": {
+      "status": "DONE",
+      "did": "Added dynamic preset 202 receipts, exact-ID effect status/cancel HTTP contracts, CLI effect acceptance/dry-run descriptions and generated mocks; bridge tests, CLI compile and 15 workflow fixtures pass.",
+      "files": [
+        "internal/bridge/http.go",
+        "internal/bridge/effects.go",
+        "internal/bridge/effects_test.go",
+        "internal/bridge/mock_effect_controller_test.go",
+        "cmd/sunset/main.go",
+        "Taskfile.yml"
+      ]
+    },
+    "T005": {
+      "status": "DONE",
+      "did": "Added bounded generation-aware preset editor reads and one-entry proposals preserving settings and legacy catalogs; managed and supervisor tests pass",
+      "files": [
+        "internal/managed/control.go",
+        "internal/managed/presets.go",
+        "internal/managed/presets_test.go",
+        "internal/managed/dispatch.go",
+        "cmd/sunset/supervisor/main.go"
+      ]
+    },
+    "T003": {
+      "status": "DONE",
+      "did": "Implemented four root-owned effects with shared transition admission/drain, retained separate snapshots, immutable definitions and exact cancellation; controller tests and race checks pass.",
+      "files": [
+        "internal/controller/controller.go",
+        "internal/controller/transition.go",
+        "internal/controller/effects.go",
+        "internal/controller/effects_test.go"
+      ]
+    },
+    "T006": {
+      "status": "DONE",
+      "did": "Added strict effect and preset TypeScript validation, 202 receipts, status/cancel and operation metadata; four client fixtures pass",
+      "files": [
+        "streamdeck/src/preset-effects.ts",
+        "streamdeck/src/bridge-client.ts",
+        "streamdeck/src/operation-store.ts",
+        "streamdeck/tests/effect-contract.test.ts"
+      ]
+    },
+    "T009": {
+      "status": "DONE",
+      "did": "Proved exact three-color midpoint/endpoints, finite termination and smooth repeat closure with cancellation",
+      "files": [
+        "internal/controller/palette_effect_test.go"
+      ]
+    },
+    "T010": {
+      "status": "DONE",
+      "did": "Proved separate strobe phase timing, finite Off endpoint and cancellation retaining the current phase",
+      "files": [
+        "internal/controller/strobe_effect_test.go"
+      ]
+    },
+    "T011": {
+      "status": "DONE",
+      "did": "Proved fixed-color breathing through zero/peak endpoints across finite and repeated cycles",
+      "files": [
+        "internal/controller/breathing_effect_test.go"
+      ]
+    },
+    "T012": {
+      "status": "DONE",
+      "did": "Proved deterministic irregular candle targets, brightness/depth bounds, interval/deadline and zero-depth write suppression",
+      "files": [
+        "internal/controller/candle_effect_test.go"
+      ]
+    },
+    "T007": {
+      "status": "DONE",
+      "did": "Added strict private preset editor RPCs and PI snapshots with captured proposals, safe errors, exact-ID effect control and unknown-save reconciliation; five focused Node tests and scoped lint pass",
+      "files": [
+        "streamdeck/src/managed-controller.ts",
+        "streamdeck/src/inspector-messages.ts",
+        "streamdeck/tests/preset-editor.test.ts"
+      ]
+    },
+    "T013": {
+      "status": "DONE",
+      "did": "Added ephemeral exact-run key ownership, guarded repeat status/stop, unknown-admission and raw-flight fences, global lighting invalidation and unchanged static behavior; 24 focused Node tests plus compile, owned lint/format pass.",
+      "files": [
+        "streamdeck/src/actions/base-action.ts",
+        "streamdeck/src/actions/preset.ts",
+        "streamdeck/src/preset-runs.ts",
+        "streamdeck/tests/preset-effects.test.ts",
+        "streamdeck/tests/preset-catalog.test.ts"
+      ]
+    },
+    "T008": {
+      "status": "DONE",
+      "did": "Added EN/RU preset CRUD editor, ordered palette controls, type-specific timing and repeat, captured save review, stale-draft retention and exact-ID effect controls; 26 actual-panel cases and scoped lint/format/types pass",
+      "files": [
+        "streamdeck/src/ui/inspector.ts",
+        "streamdeck/src/i18n.ts",
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/ui/index.html",
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/ui/inspector.css",
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "T014": {
+      "status": "DONE",
+      "did": "Documented four effects, editor workflow, repeat stop, save interruption and nominal timing in both READMEs",
+      "files": [
+        "README.md",
+        "README_RU.md"
+      ]
+    },
+    "T015": {
+      "status": "DONE",
+      "did": "Reconciled shared APIs, delegated passing typecheck/lint, reviewed diff and fixed unknown-admission terminal recovery/default duration; recorded requirement/test matrix",
+      "files": [
+        "specs/008-configurable-preset-effects/validation.md"
+      ]
+    },
+    "T016": {
+      "status": "DONE",
+      "did": "Integrated Go core/race/vet/build and full plugin software gates pass on corrected tree",
+      "files": [
+        "specs/008-configurable-preset-effects/validation.md"
+      ]
+    },
+    "T017": {
+      "status": "DONE",
+      "did": "Built/inspected fresh arm64 payload and linked it with backup/drain barrier; owned runtime, TCC/BLE health and 20 assignment/private-config preservation checks pass",
+      "files": [
+        "specs/008-configurable-preset-effects/validation.md"
+      ]
+    }
+  }
+}

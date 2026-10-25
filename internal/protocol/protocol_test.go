@@ -2,8 +2,10 @@ package protocol_test
 
 import (
 	"encoding/hex"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
 )
@@ -30,19 +32,13 @@ func TestResolveKnownPackets(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.route, func(t *testing.T) {
 			action, err := protocol.Resolve(test.args, presets)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if action.Route != test.route {
-				t.Fatalf("route = %q, want %q", action.Route, test.route)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, test.route, action.Route)
 			got := make([]string, len(action.Packets))
 			for i, packet := range action.Packets {
 				got[i] = hex.EncodeToString(packet)
 			}
-			if !reflect.DeepEqual(got, test.packets) {
-				t.Fatalf("packets = %v, want %v", got, test.packets)
-			}
+			assert.Equal(t, test.packets, got)
 		})
 	}
 }
@@ -58,9 +54,8 @@ func TestInvalidCommandProducesNoPackets(t *testing.T) {
 		{"preset", "missing"},
 	} {
 		action, err := protocol.Resolve(args, nil)
-		if err == nil || len(action.Packets) != 0 {
-			t.Errorf("Resolve(%q) = %+v, %v; invalid input must produce no packets", args, action, err)
-		}
+		assert.Error(t, err, "Resolve(%q)", args)
+		assert.Empty(t, action.Packets, "invalid input must produce no packets: %q", args)
 	}
 }
 
@@ -76,12 +71,9 @@ func TestInvalidPresetProducesNoPackets(t *testing.T) {
 	} {
 		preset.Label = "Test"
 		presets := map[string]protocol.Preset{"bad": preset}
-		if err := protocol.ValidatePresets(presets); err == nil {
-			t.Errorf("ValidatePresets accepted %+v", preset)
-		}
+		assert.Error(t, protocol.ValidatePresets(presets), "preset: %+v", preset)
 		action, err := protocol.Resolve([]string{"preset", "bad"}, presets)
-		if err == nil || len(action.Packets) != 0 {
-			t.Errorf("Resolve accepted invalid preset %+v: %+v, %v", preset, action, err)
-		}
+		assert.Error(t, err, "preset: %+v", preset)
+		assert.Empty(t, action.Packets)
 	}
 }

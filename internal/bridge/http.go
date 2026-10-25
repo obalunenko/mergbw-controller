@@ -91,6 +91,28 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusBadRequest, "используйте ссылку из streamdeck-buttons.txt без дополнительных параметров")
 		return
 	}
+	// Catalog dispatch precedes legacy command method handling. It never calls
+	// the controller, including its connection-status accessor.
+	catalogPath := strings.Split(r.URL.Path, "/")
+	if len(catalogPath) == 3 && catalogPath[0] == "" && catalogPath[2] == "presets" {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", "GET")
+			fail(http.StatusMethodNotAllowed, "каталог принимает только GET")
+			return
+		}
+		if r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
+			fail(http.StatusBadRequest, "каталог не принимает тело запроса")
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(catalogPath[1]), []byte(h.settings.AccessToken)) != 1 {
+			fail(http.StatusForbidden, "неверная ссылка; используйте streamdeck-buttons.txt")
+			return
+		}
+		if err := respond(w, r, http.StatusOK, presetCatalog(h.presets)); err == nil {
+			logger.InfoContext(r.Context(), "http.presets.completed", "http_status", http.StatusOK, "duration_ms", time.Since(started).Milliseconds())
+		}
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodPost && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, POST")
 		fail(http.StatusMethodNotAllowed, "команды принимают GET или POST")
@@ -113,7 +135,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(r.URL.Path, "/"), "/")
-	if len(parts) != 2 && len(parts) != 3 {
+	if len(parts) != 2 && len(parts) != 3 && !(len(parts) > 1 && parts[1] == "transition" && (len(parts) == 4 || len(parts) == 7)) && !(len(parts) == 4 && parts[1] == "effect") {
 		fail(http.StatusNotFound, "неизвестный адрес команды")
 		return
 	}
@@ -121,9 +143,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(http.StatusForbidden, "неверная ссылка; используйте streamdeck-buttons.txt")
 		return
 	}
+	if h.serveTransition(w, r, parts[1:]) {
+		return
+	}
+	if h.serveEffect(w, r, parts[1:]) {
+		return
+	}
 	action, err := protocol.Resolve(parts[1:], h.presets)
 	if err != nil {
-		fail(http.StatusBadRequest, err.Error())
+		fail(http.StatusBadRequest, "некорректная команда или параметр")
+		return
+	}
+	if action.Effect != nil {
+		h.startEffect(w, r, action)
 		return
 	}
 	command = action.Route
@@ -133,10 +165,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Do not detach the native BLE write on timeout: it may still be in progress.
 	if err := h.controller.Execute(ctx, action); err != nil {
 		status := http.StatusServiceUnavailable
+		message := "ошибка контроллера или Bluetooth; исход команды неизвестен"
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			status = http.StatusGatewayTimeout
+			message = "ожидание операции завершено; возможен поздний эффект"
 		}
-		fail(status, err.Error())
+		fail(status, message)
 		return
 	}
 	if err := respond(w, r, http.StatusOK, map[string]any{

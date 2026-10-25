@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src ws://localhost:*; img-src 'self' data:;"
+		/>
+		<title>MeRGBW</title>
+		<link rel="stylesheet" href="inspector.css" />
+		<script src="vendor/sdpi-components.js" defer></script>
+		<script src="inspector.js" defer></script>
+	</head>
+	<body>
+		<main>
+			<header>
+				<h1>MeRGBW</h1>
+				<p id="connection-summary" role="status"></p>
+			</header>
+			<button id="back" class="link" type="button" data-i18n="backToKey" hidden>Back to key</button>
+			<section id="view-main" hidden>
+				<h2 data-i18n="keyBehavior">What this key does</h2>
+				<p id="power-action" hidden></p>
+				<div id="assignment-controls" hidden>
+					<h3 id="action-name"></h3>
+					<div id="color-controls" hidden>
+						<label for="color-picker" data-i18n="color">Color</label>
+						<div class="color-row">
+							<input id="color-picker" type="color" value="#ff5000" /><input
+								id="rgb"
+								type="text"
+								value="FF5000"
+								maxlength="7"
+								spellcheck="false"
+								aria-label="RGB HEX"
+								aria-describedby="assignment-error"
+							/>
+						</div>
+					</div>
+					<div id="brightness-controls" hidden>
+						<label for="percent-slider" data-i18n="brightness">Brightness</label>
+						<div class="range-row">
+							<input id="percent-slider" type="range" min="0" max="100" step="1" value="50" /><input
+								id="percent"
+								type="number"
+								min="0"
+								max="100"
+								step="1"
+								value="50"
+								aria-label="Brightness (%)"
+								aria-describedby="assignment-error"
+							/><span>%</span>
+						</div>
+						<details>
+							<summary data-i18n="dialDetails">Dial behavior</summary>
+							<p data-i18n="dialHelp"></p>
+						</details>
+					</div>
+					<div id="preset-controls" hidden>
+						<label for="preset-select" data-i18n="preset">Preset</label
+						><select id="preset-select" aria-describedby="catalog-status assignment-error"></select>
+						<p id="catalog-status" role="status"></p>
+						<div id="preset-summary" hidden>
+							<span id="preset-swatch" aria-hidden="true"></span>
+							<div>
+								<strong id="preset-label"></strong>
+								<p id="preset-description"></p>
+								<p id="preset-origin"></p>
+							</div>
+						</div>
+						<div class="buttons">
+							<button id="preset-copy" type="button" data-i18n="presetCopy" disabled>Customize a copy</button
+							><button id="preset-edit" type="button" data-i18n="editorEdit" hidden>Edit</button
+							><button id="preset-new" type="button" data-i18n="createPreset">Create preset</button
+							><button id="library-open" class="link" type="button" data-i18n="library">Library</button>
+						</div>
+						<p data-i18n="presetKeyHelp"></p>
+						<button id="refresh" class="link" type="button" data-i18n="refresh">Refresh presets</button>
+						<div id="active-effect" hidden>
+							<p id="active-effect-status" role="status"></p>
+							<button id="active-effect-cancel" type="button" data-i18n="effectCancel">Stop current effect</button>
+						</div>
+					</div>
+					<div id="transition-controls" hidden>
+						<label for="transition-from-color" data-i18n="transitionFromRGB">Start color</label>
+						<div class="color-row">
+							<input id="transition-from-color" type="color" value="#ff5000" /><input
+								id="transition-from-rgb"
+								type="text"
+								value="FF5000"
+								maxlength="7"
+								spellcheck="false"
+								aria-label="Start RGB HEX"
+							/>
+						</div>
+						<label for="transition-from-percent" data-i18n="transitionFromPercent">Start brightness (%)</label
+						><input id="transition-from-percent" type="number" min="0" max="100" step="1" value="100" />
+						<label for="transition-to-color" data-i18n="transitionToRGB">End color</label>
+						<div class="color-row">
+							<input id="transition-to-color" type="color" value="#ff5000" /><input
+								id="transition-to-rgb"
+								type="text"
+								value="FF5000"
+								maxlength="7"
+								spellcheck="false"
+								aria-label="End RGB HEX"
+							/>
+						</div>
+						<label for="transition-to-percent" data-i18n="transitionToPercent">End brightness (%)</label
+						><input id="transition-to-percent" type="number" min="0" max="100" step="1" value="0" />
+						<label for="transition-seconds" data-i18n="transitionSeconds">Duration (1–60 seconds)</label
+						><input id="transition-seconds" type="number" min="1" max="60" step="1" value="30" />
+						<details>
+							<summary data-i18n="transitionDetails">How transitions work</summary>
+							<p data-i18n="transitionHelp"></p>
+						</details>
+					</div>
+					<p id="assignment-error" class="error" role="alert"></p>
+					<p id="assignment-status" role="status" aria-live="polite"></p>
+					<p class="help" data-i18n="powersOn"></p>
+				</div>
+				<footer>
+					<button id="setup-open" class="link" type="button" data-i18n="lampConnection">Lamp and connection</button
+					><button id="diagnostics-open" class="link" type="button" data-i18n="diagnostics">Diagnostics</button>
+				</footer>
+			</section>
+			<section id="view-library" hidden>
+				<h2 data-i18n="customPresets">My presets</h2>
+				<p class="help" data-i18n="libraryHelp"></p>
+				<div id="preset-library">
+					<label for="editor-select" data-i18n="preset">Preset</label
+					><select id="editor-select"></select>
+					<p id="library-status" role="status"></p>
+					<div class="buttons">
+						<button id="editor-edit" type="button" data-i18n="editorEdit" disabled>Edit</button
+						><button id="editor-new" type="button" data-i18n="createPreset">Create preset</button>
+					</div>
+					<div class="buttons">
+						<button id="editor-delete" type="button" data-i18n="editorDelete" disabled>Delete</button
+						><button id="editor-load" class="link" type="button" data-i18n="refresh">Refresh presets</button
+						><button id="editor-next" class="link" type="button" data-i18n="editorNext" disabled>Next page</button>
+					</div>
+				</div>
+			</section>
+			<section id="view-editor" hidden>
+				<h2 id="editor-title"></h2>
+				<p id="editor-scope" class="help"></p>
+				<div id="preset-editor" hidden>
+					<input id="editor-id" type="hidden" />
+					<label for="editor-name" data-i18n="editorName">Name</label
+					><input id="editor-name" type="text" maxlength="128" autocomplete="off" aria-describedby="editor-error" />
+					<label for="editor-kind" data-i18n="editorKind">Effect</label
+					><select id="editor-kind"></select>
+					<div id="editor-rgb-controls">
+						<label for="editor-color" data-i18n="color">Color</label>
+						<div class="color-row">
+							<input id="editor-color" type="color" value="#ff5000" /><input
+								id="editor-rgb"
+								type="text"
+								maxlength="7"
+								spellcheck="false"
+								aria-label="RGB HEX"
+							/>
+						</div>
+					</div>
+					<label id="editor-brightness-label" for="editor-brightness" data-i18n="brightness">Brightness</label>
+					<div class="range-row">
+						<input id="editor-brightness-slider" type="range" min="0" max="100" step="1" value="75" /><input
+							id="editor-brightness"
+							type="number"
+							min="0"
+							max="100"
+							step="1"
+							aria-label="Brightness (%)"
+						/><span>%</span>
+					</div>
+					<div id="editor-palette-controls" hidden>
+						<label for="palette-select" data-i18n="editorPalette">Colors in order (2–16)</label
+						><select id="palette-select" size="4"></select>
+						<label for="palette-color" data-i18n="color">Color</label><input id="palette-color" type="color" />
+						<div class="buttons">
+							<button id="palette-add" type="button" data-i18n="editorAddColor">Add color</button
+							><button id="palette-remove" type="button" data-i18n="editorRemoveColor">Remove</button
+							><button id="palette-up" type="button" data-i18n="editorUp">Up</button
+							><button id="palette-down" type="button" data-i18n="editorDown">Down</button>
+						</div>
+						<label for="editor-transition" data-i18n="editorTransition">Transition (seconds)</label
+						><input id="editor-transition" type="number" min="0.5" max="60" step="0.001" />
+					</div>
+					<div id="editor-strobe-controls" hidden>
+						<label for="editor-on" data-i18n="editorOn">Light on (seconds)</label
+						><input id="editor-on" type="number" min="0.25" max="60" step="0.001" /><label
+							for="editor-off"
+							data-i18n="editorOff"
+							>Pause (seconds)</label
+						><input id="editor-off" type="number" min="0.25" max="60" step="0.001" />
+					</div>
+					<div id="editor-breathing-controls" hidden>
+						<label for="editor-min" data-i18n="editorMinimum">Minimum brightness (%)</label
+						><input id="editor-min" type="number" min="0" max="99" step="1" /><label
+							for="editor-cycle"
+							data-i18n="editorCycle"
+							>Full cycle (seconds)</label
+						><input id="editor-cycle" type="number" min="1" max="120" step="0.001" />
+					</div>
+					<div id="editor-candle-controls" hidden>
+						<label for="editor-depth" data-i18n="editorDepth">Flicker strength (%)</label
+						><input id="editor-depth" type="number" min="0" max="100" step="1" />
+						<details>
+							<summary data-i18n="fineTuning">Fine tuning</summary>
+							<label for="editor-flicker" data-i18n="editorFlicker">Flicker interval (seconds)</label
+							><input id="editor-flicker" type="number" min="0.25" max="5" step="0.001" />
+						</details>
+						<div id="editor-duration-controls" hidden>
+							<label for="editor-duration" data-i18n="editorDuration">Run duration (seconds)</label
+							><input id="editor-duration" type="number" min="1" max="3600" step="0.001" />
+						</div>
+					</div>
+					<div id="editor-loop-controls" hidden>
+						<label class="checkbox"
+							><input id="editor-loop" type="checkbox" checked /><span data-i18n="editorLoop"
+								>Repeat until stopped</span
+							></label
+						>
+						<p id="editor-once-help" class="help" hidden data-i18n="editorOnce">One pass / limited duration</p>
+						<p class="help" data-i18n="editorTiming"></p>
+					</div>
+					<p id="editor-error" class="error" role="alert"></p>
+					<div class="buttons">
+						<button id="editor-review" class="primary" type="button" data-i18n="createAndAssign">
+							Create and assign…</button
+						><button id="editor-discard" type="button" data-i18n="cancel">Cancel</button>
+					</div>
+				</div>
+			</section>
+			<section id="view-setup" hidden>
+				<h2 data-i18n="lampConnection">Lamp and connection</h2>
+				<p class="help" data-i18n="sharedConnection">One connection for all MeRGBW keys.</p>
+				<label for="language" data-i18n="language">Language</label
+				><select id="language">
+					<option value="en">English</option>
+					<option value="ru">Русский</option>
+				</select>
+				<label for="setup-method" data-i18n="setupMethod">Setup method</label
+				><select id="setup-method">
+					<option value="manual" data-i18n="manualSetup">Enter lamp code</option>
+					<option value="import" data-i18n="importFiles">Import settings</option>
+				</select>
+				<div id="manual-controls">
+					<label for="identity" data-i18n="identity">Lamp code</label
+					><input
+						id="identity"
+						type="text"
+						maxlength="17"
+						autocomplete="off"
+						spellcheck="false"
+						placeholder="AA:BB:CC:DD:EE:FF"
+						aria-describedby="identity-help identity-error"
+					/>
+					<details>
+						<summary data-i18n="identityDetails">Where do I find the lamp code?</summary>
+						<p id="identity-help" data-i18n="identityHelp"></p>
+					</details>
+				</div>
+				<div id="import-controls" hidden>
+					<label for="settings-file" data-i18n="settingsFile">Settings file (required)</label
+					><sdpi-file id="settings-file" accept=".json"></sdpi-file
+					><label for="presets-file" data-i18n="presetsFile">Presets file (optional)</label
+					><sdpi-file id="presets-file" accept=".json"></sdpi-file>
+					<p class="help" data-i18n="catalogWholeFile"></p>
+				</div>
+				<p id="migration-guidance" class="help"></p>
+				<p id="identity-error" class="error" role="alert"></p>
+				<p class="help" data-i18n="stopExternal"></p>
+				<button id="prepare" class="primary" type="button" data-i18n="continue">Continue</button>
+			</section>
+			<section id="view-review" hidden>
+				<h2 id="review-title" data-i18n="reviewChanges">Review changes</h2>
+				<section id="proposal" hidden aria-live="polite">
+					<p id="proposal-summary"></p>
+					<p id="proposal-diff"></p>
+					<p class="help" data-i18n="reviewExpiry"></p>
+					<p id="interruption-warning" class="notice" data-i18n="interruptionWarning" hidden></p>
+					<div class="buttons">
+						<button id="apply" class="primary" type="button" data-i18n="apply">Apply</button
+						><button id="confirm" class="primary" type="button" data-i18n="confirm" hidden>Confirm changes</button
+						><button id="cancel" type="button" data-i18n="backToParameters">Back to parameters</button>
+					</div>
+				</section>
+			</section>
+			<section id="view-diagnostics" hidden>
+				<h2 data-i18n="diagnostics">Diagnostics</h2>
+				<p id="controller-state" role="status"></p>
+				<div class="buttons">
+					<button id="check" type="button" data-i18n="check">Check connection</button
+					><button id="restart" type="button" data-i18n="restart">Restart controller</button>
+				</div>
+				<dl aria-live="polite">
+					<dt data-i18n="serviceStatus">Service</dt>
+					<dd id="service-status">Unknown</dd>
+					<dt data-i18n="authorizationStatus">Authorization</dt>
+					<dd id="authorization-status">Unknown</dd>
+					<dt data-i18n="bluetoothStatus">Bluetooth</dt>
+					<dd id="bluetooth-status">Unknown</dd>
+				</dl>
+				<p class="help" data-i18n="transitionUnverified"></p>
+				<h3 data-i18n="effectDetails">Effect</h3>
+				<p id="effect-status" role="status"></p>
+				<div class="buttons">
+					<button id="effect-refresh" type="button" data-i18n="effectRefresh">Check effect status</button
+					><button id="effect-cancel" type="button" data-i18n="effectCancel" disabled>Stop current effect</button>
+				</div>
+				<p class="help" data-i18n="effectHelp"></p>
+				<h3 data-i18n="transition">Transition</h3>
+				<p id="transition-status" role="status"></p>
+				<div class="buttons">
+					<button id="transition-refresh" type="button" data-i18n="transitionRefresh">Check transition status</button
+					><button id="transition-cancel" type="button" data-i18n="transitionCancel" disabled>
+						Cancel current transition
+					</button>
+				</div>
+			</section>
+			<div id="configuration-outcome">
+				<p id="save-outcome" role="status"></p>
+				<button id="configuration-check" class="link" type="button" data-i18n="configurationCheck" hidden>
+					Check saved configuration
+				</button>
+			</div>
+			<p id="message" class="error" role="status" aria-live="polite"></p>
+			<p id="operation" class="help" aria-live="polite"></p>
+		</main>
+	</body>
+</html>

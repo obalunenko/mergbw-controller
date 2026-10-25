@@ -11,14 +11,13 @@ import (
 	"io"
 	"log/slog"
 	"runtime"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/obalunenko/mergbw-controller/internal/logging"
-	"tinygo.org/x/bluetooth"
 )
 
 const (
@@ -37,12 +36,6 @@ var (
 	ErrNeedsRestart   = errors.New("Bluetooth-библиотеке требуется перезапуск процесса")
 	ErrWriteUncertain = errors.New("запись могла быть передана лампе; подтверждения состояния нет")
 	ErrInvalidPacket  = errors.New("BLE-пакет должен содержать от 1 до 20 байт")
-)
-
-var (
-	advertisingService = bluetooth.New16BitUUID(0x3519)
-	lampService        = bluetooth.New16BitUUID(0xfff0)
-	lampWrite          = bluetooth.New16BitUUID(0xfff3)
 )
 
 type Config struct {
@@ -77,11 +70,11 @@ type Backend struct {
 	mu        sync.Mutex
 	config    Config
 	identity  [6]byte
-	adapter   *bluetooth.Adapter
+	adapter   Adapter
 	enabled   bool
-	device    bluetooth.Device
+	device    Device
 	hasDevice bool
-	write     bluetooth.DeviceCharacteristic
+	write     Characteristic
 	hasWrite  bool
 	info      Info
 	lastWrite time.Time
@@ -90,7 +83,7 @@ type Backend struct {
 	target    atomic.Value // string; read by the CoreBluetooth callback
 }
 
-func New(config Config) (*Backend, error) {
+func New(config Config, adapter Adapter) (*Backend, error) {
 	if config.Identity == "" {
 		return nil, errors.New("identity обязательна: укажите идентификатор своей лампы в формате AA:BB:CC:DD:EE:FF")
 	}
@@ -113,7 +106,10 @@ func New(config Config) (*Backend, error) {
 	if config.ConnectTimeout < time.Millisecond || config.ConnectTimeout > 40*time.Second {
 		return nil, errors.New("ConnectTimeout должен быть от 1 ms до 40 s")
 	}
-	b := &Backend{config: config, identity: identity, adapter: bluetooth.DefaultAdapter}
+	if adapter == nil {
+		return nil, errors.New("Bluetooth adapter is required")
+	}
+	b := &Backend{config: config, identity: identity, adapter: adapter}
 	b.target.Store("")
 	return b, nil
 }
@@ -163,8 +159,8 @@ func (b *Backend) Inspect(ctx context.Context) (Info, error) { return b.Connect(
 func (b *Backend) infoLocked() Info {
 	info := b.info
 	info.Connected = b.connected.Load()
-	info.AdvertisedServices = append([]string(nil), info.AdvertisedServices...)
-	info.CharacteristicUUIDs = append([]string(nil), info.CharacteristicUUIDs...)
+	info.AdvertisedServices = slices.Clone(info.AdvertisedServices)
+	info.CharacteristicUUIDs = slices.Clone(info.CharacteristicUUIDs)
 	return info
 }
 
@@ -220,15 +216,13 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 	// a native connection operation alive after its caller had returned.
 	logging.FromContext(ctx).LogAttrs(ctx, slog.LevelInfo, "bluetooth.connecting",
 		append(deviceLogAttrs(match.info), slog.Int64("connect_timeout_ms", timeout.Milliseconds()))...)
-	device, err := b.adapter.Connect(match.address, bluetooth.ConnectionParams{
-		ConnectionTimeout: bluetooth.NewDuration(timeout),
-	})
+	device, err := b.adapter.Connect(match.address, timeout)
 	if err != nil {
 		return friendlyError("подключение к лампе", err)
 	}
 	// v0.16.0 Darwin can return Device{}, nil on an early connection failure.
 	// Calling Connected on that zero Device would dereference a nil internal.
-	if device.Address.String() != match.address.String() {
+	if device == nil || device.Address() != match.address.String() {
 		return fmt.Errorf("%w: библиотека вернула пустое или другое устройство", ErrNotConnected)
 	}
 	b.device, b.hasDevice = device, true
@@ -244,7 +238,7 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 		}
 		return ErrNotConnected
 	}
-	services, err := device.DiscoverServices([]bluetooth.UUID{lampService})
+	services, err := device.DiscoverServices([]string{ServiceUUID})
 	if err != nil {
 		return b.discoveryErrorLocked(ctx, "поиск сервиса FFF0", err)
 	}
@@ -252,7 +246,7 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 		_ = b.closeLocked(ctx)
 		return err
 	}
-	if len(services) != 1 || services[0].UUID() != lampService {
+	if len(services) != 1 || services[0].UUID() != ServiceUUID {
 		_ = b.closeLocked(ctx)
 		return fmt.Errorf("%w: сервис FFF0 не найден", ErrIncompatible)
 	}
@@ -269,8 +263,8 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 	found := 0
 	b.info.CharacteristicUUIDs = nil
 	for _, characteristic := range characteristics {
-		b.info.CharacteristicUUIDs = append(b.info.CharacteristicUUIDs, characteristic.UUID().String())
-		if characteristic.UUID() == lampWrite {
+		b.info.CharacteristicUUIDs = append(b.info.CharacteristicUUIDs, characteristic.UUID())
+		if characteristic.UUID() == WriteUUID {
 			b.write = characteristic
 			found++
 		}
@@ -287,7 +281,7 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 		}
 		return ErrNotConnected
 	}
-	sort.Strings(b.info.CharacteristicUUIDs)
+	slices.Sort(b.info.CharacteristicUUIDs)
 	b.hasWrite = true
 	b.connected.Store(true)
 	b.info.ServiceUUID = ServiceUUID
@@ -303,8 +297,8 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 
 // handleConnect runs on the native callback queue. It must not acquire b.mu,
 // read mutable b.info or retain a request logger after the request has ended.
-func (b *Backend) handleConnect(device bluetooth.Device, connected bool) {
-	address := device.Address.String()
+func (b *Backend) handleConnect(device Device, connected bool) {
+	address := device.Address()
 	if !connected && address == b.target.Load().(string) && b.connected.Swap(false) {
 		slog.Warn("bluetooth.disconnected", "identity", b.config.Identity,
 			"device_address", address, "reason", "link_lost")
@@ -322,15 +316,15 @@ func deviceLogAttrs(info Info) []slog.Attr {
 }
 
 type scanMatch struct {
-	address bluetooth.Address
+	address Address
 	info    Info
 }
 
-func matchAdvertisement(result bluetooth.ScanResult, identity [6]byte, normalized string) (scanMatch, bool) {
-	if result.AdvertisementPayload == nil || !result.HasServiceUUID(advertisingService) {
+func matchAdvertisement(result Advertisement, identity [6]byte, normalized string) (scanMatch, bool) {
+	if result.Address == nil || !result.HasAdvertisingService {
 		return scanMatch{}, false
 	}
-	for _, manufacturer := range result.ManufacturerData() {
+	for _, manufacturer := range result.ManufacturerData {
 		// Data excludes CompanyID on both macOS (cbgo strips its two bytes)
 		// and Linux (BlueZ supplies it separately). CompanyID is not identity.
 		data := manufacturer.Data
@@ -355,13 +349,10 @@ func matchAdvertisement(result bluetooth.ScanResult, identity [6]byte, normalize
 				continue
 			}
 		}
-		var services []string
-		for _, uuid := range result.ServiceUUIDs() {
-			services = append(services, uuid.String())
-		}
-		sort.Strings(services)
+		services := slices.Clone(result.Services)
+		slices.Sort(services)
 		return scanMatch{address: result.Address, info: Info{
-			Identity: normalized, Name: result.LocalName(), Address: result.Address.String(),
+			Identity: normalized, Name: result.Name, Address: result.Address.String(),
 			Model: model, DeviceType: deviceType, ManufacturerID: manufacturer.CompanyID,
 			RSSI: result.RSSI, AdvertisedServices: services,
 		}}, true
@@ -415,7 +406,7 @@ func (b *Backend) scanLocked(parent context.Context) (scanMatch, error) {
 			}
 		}
 	}()
-	err := b.adapter.Scan(func(_ *bluetooth.Adapter, result bluetooth.ScanResult) {
+	err := b.adapter.Scan(func(result Advertisement) {
 		if ctx.Err() != nil {
 			return
 		}
@@ -464,7 +455,7 @@ func (b *Backend) Write(ctx context.Context, packet []byte) error {
 	if len(packet) < 1 || len(packet) > 20 {
 		return ErrInvalidPacket
 	}
-	packet = append([]byte(nil), packet...)
+	packet = slices.Clone(packet)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if err := ctx.Err(); err != nil {
@@ -514,7 +505,7 @@ func (b *Backend) Close() error {
 func (b *Backend) closeLocked(ctx context.Context) error {
 	wasConnected := b.connected.Swap(false)
 	b.hasWrite = false
-	b.write = bluetooth.DeviceCharacteristic{}
+	b.write = nil
 	if !b.hasDevice {
 		return nil
 	}
@@ -525,7 +516,7 @@ func (b *Backend) closeLocked(ctx context.Context) error {
 	}
 	device := b.device
 	b.hasDevice = false
-	b.device = bluetooth.Device{}
+	b.device = nil
 	err := device.Disconnect()
 	if err == nil {
 		if wasConnected {

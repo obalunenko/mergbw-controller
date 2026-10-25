@@ -1,0 +1,664 @@
+{
+  "workflow": "companion",
+  "specName": "BLE Connection and Command Execution",
+  "branch": "develop",
+  "currentStep": "implement",
+  "status": "completed",
+  "history": [
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-20T19:26:59.086Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T032",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:28:52.923Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T033",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:29:55.699Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T034",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:30:35.438Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T035",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:31:15.348Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T036",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:31:50.840Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T037",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:32:29.124Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T038",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:32:57.447Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T039",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:33:25.899Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T040",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:33:52.369Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T041",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:34:50.197Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T042",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:35:20.798Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T043",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T19:36:08.800Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T044",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-20T21:09:08.949Z"
+    }
+  ],
+  "telemetryInstanceId": "fb213584-00eb-4419-b95b-2056f5e97152",
+  "verified": [
+    {
+      "what": "T032 connection stages",
+      "command": "go test ./internal/ble -run \"TestConnectRejectsFailedStages|TestConnectBoundsNativeTimeoutByContext\" -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.4,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t0.540s"
+    },
+    {
+      "what": "T033 scan ownership and races",
+      "command": "go test ./internal/ble -run \"TestScan\" -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.0,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t0.506s"
+    },
+    {
+      "what": "T034 write uncertainty and ownership",
+      "command": "go test ./internal/ble -run \"TestWriteReadiness|TestWriteCopies|TestWriteWaits\" -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.7,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t0.407s"
+    },
+    {
+      "what": "T035 backend cleanup and drain",
+      "command": "go test ./internal/ble -run \"TestBackendClose\" -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.9,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t0.612s"
+    },
+    {
+      "what": "T036 discovery classification and sticky fatal state",
+      "command": "go test ./internal/ble -run TestDiscoveryErrorClassificationAndStickyTimeout -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.0,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t0.379s"
+    },
+    {
+      "what": "T037 constructor identity and timeout boundaries",
+      "command": "go test ./internal/ble -run TestBackendConstructor -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.1,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t0.378s"
+    },
+    {
+      "what": "T038 length and early-error matrix",
+      "command": "go test ./internal/ble -run TestWriteLengthAndEarlyErrorPrecedence -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.8,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t0.451s"
+    },
+    {
+      "what": "T039 production retry delegation compiles",
+      "command": "go build -trimpath -buildvcs=false -o /private/tmp/mergbw-retry-policy-sunset ./cmd/sunset",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.1,
+      "result": "no output"
+    },
+    {
+      "what": "T040 production retry classifier",
+      "command": "go test ./internal/ble -run TestCanRetry -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.0,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t0.383s"
+    },
+    {
+      "what": "T041 retry failures pause and cancellation",
+      "command": "go test ./internal/controller -run \"TestRetryConnect|TestRetryCleanup|TestRetryReplays|TestRetryWait\" -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.5,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/controller\t1.202s"
+    },
+    {
+      "what": "T042 default completion-relative pacing",
+      "command": "go test ./internal/controller -run TestDefaultPacketGapFollowsWriteCompletion -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.0,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/controller\t0.732s"
+    },
+    {
+      "what": "T043 contended terminal Close",
+      "command": "go test ./internal/controller -run TestCloseDuringStartedWriteIsTerminalAndExclusive -count=1",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.9,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/controller\t0.564s"
+    },
+    {
+      "what": "Core suite",
+      "command": "task test:core",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 2.9,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/bridge\t(cached) · ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t0.704s · task: [test:core] go test ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble"
+    },
+    {
+      "what": "Core race suite",
+      "command": "task test:race",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 3.8,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/bridge\t(cached) · ok  \tgithub.com/obalunenko/mergbw-controller/internal/ble\t1.755s · task: [test:race] go test -race ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble"
+    },
+    {
+      "what": "Vet",
+      "command": "task vet",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.3,
+      "result": "task: [vet] go vet ./..."
+    },
+    {
+      "what": "Build",
+      "command": "task build",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.2,
+      "result": "task: [build] go build -trimpath -buildvcs=false -o sunset ./cmd/sunset"
+    },
+    {
+      "what": "Unit dependency graph",
+      "command": "python3 -c \"import subprocess; p=subprocess.run([\\\"go\\\",\\\"list\\\",\\\"-deps\\\",\\\"-test\\\",\\\"./internal/protocol\\\",\\\"./internal/config\\\",\\\"./internal/logging\\\",\\\"./internal/controller\\\",\\\"./internal/bridge\\\",\\\"./internal/ble\\\"],capture_output=True,text=True,check=True); blocked=[x for x in p.stdout.splitlines() if \\\"tinygo.org/x/bluetooth\\\" in x or \\\"tinygo-org/cbgo\\\" in x or \\\"/internal/ble/native\\\" in x]; assert not blocked,blocked; print(\\\"Core/race test graph excludes TinyGo, cbgo and ble/native\\\")\"",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.2,
+      "result": "Core/race test graph excludes TinyGo, cbgo and ble/native"
+    },
+    {
+      "what": "Go formatting",
+      "command": "python3 -c \"import subprocess; files=[\\\"cmd/sunset/main.go\\\",\\\"internal/ble/backend_test.go\\\",\\\"internal/ble/retry.go\\\",\\\"internal/ble/retry_test.go\\\",\\\"internal/controller/controller_test.go\\\"]; result=subprocess.run([\\\"gofmt\\\",\\\"-l\\\",*files],capture_output=True,text=True,check=True); assert not result.stdout,result.stdout; print(\\\"All changed Go files are formatted\\\")\"",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.0,
+      "result": "All changed Go files are formatted"
+    },
+    {
+      "what": "Whitespace integrity",
+      "command": "git diff --check",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.0,
+      "result": "no output"
+    }
+  ],
+  "currentTask": null,
+  "task_summaries": {
+    "T032": {
+      "status": "DONE",
+      "did": "Covered failed connection/GATT stages, readiness loss, cancellation, and deadline-bounded native connect requests",
+      "files": [
+        "internal/ble/backend_test.go"
+      ]
+    },
+    "T033": {
+      "status": "DONE",
+      "did": "Verified first-match selection, joined StopScan, startup cancellation retry, and scan error precedence",
+      "files": [
+        "internal/ble/backend_test.go"
+      ]
+    },
+    "T034": {
+      "status": "DONE",
+      "did": "Verified copied packets, readiness gates, synchronous canceled writes, and error/uncertainty precedence",
+      "files": [
+        "internal/ble/backend_test.go"
+      ]
+    },
+    "T035": {
+      "status": "DONE",
+      "did": "Covered backend drain, handle invalidation, tolerated disconnects, retained failed cleanup, and repeated close",
+      "files": [
+        "internal/ble/backend_test.go"
+      ]
+    },
+    "T036": {
+      "status": "DONE",
+      "did": "Injected service and characteristic errors; verified permission/incompatibility mapping and Darwin sticky timeout across Close",
+      "files": [
+        "internal/ble/backend_test.go"
+      ]
+    },
+    "T037": {
+      "status": "DONE",
+      "did": "Covered malformed and normalized identities, required adapter, timeout defaults, exact bounds, negative durations, and unbounded scan upper range",
+      "files": [
+        "internal/ble/backend_test.go"
+      ]
+    },
+    "T038": {
+      "status": "DONE",
+      "did": "Verified 0/1/20/21-byte gates across canceled, sticky-fatal, and missing-handle combinations with no native calls or state mutation",
+      "files": [
+        "internal/ble/backend_test.go"
+      ]
+    },
+    "T039": {
+      "status": "DONE",
+      "did": "Moved the unchanged typed-error retry policy to native-free ble.CanRetry and delegated the production lampLink method",
+      "files": [
+        "internal/ble/retry.go",
+        "cmd/sunset/main.go"
+      ]
+    },
+    "T040": {
+      "status": "DONE",
+      "did": "Tested the shared production retry helper against direct, wrapped, joined permanent/context errors and eligible ordinary errors",
+      "files": [
+        "internal/ble/retry_test.go"
+      ]
+    },
+    "T041": {
+      "status": "DONE",
+      "did": "Covered transient/persistent Connect failures, 200ms retry pause, full replay after a later failure, joined cleanup causes, and canceled retry wait",
+      "files": [
+        "internal/controller/controller_test.go"
+      ]
+    },
+    "T042": {
+      "status": "DONE",
+      "did": "Measured default 80ms gaps from completed slow writes within and across actions, including after failure, without adding a clock seam",
+      "files": [
+        "internal/controller/controller_test.go"
+      ]
+    },
+    "T043": {
+      "status": "DONE",
+      "did": "Verified terminal state before gate acquisition, exclusive Close after write completion, expired waits, rejected later work, and eventual cleanup",
+      "files": [
+        "internal/controller/controller_test.go"
+      ]
+    },
+    "T044": {
+      "status": "DONE",
+      "did": "Core/race, vet, build, formatting and native-free import graph passed; generated mocks unchanged; recorded automated evidence separately from H01",
+      "files": [
+        "internal/ble/backend_test.go",
+        "internal/ble/retry.go",
+        "internal/ble/retry_test.go",
+        "internal/controller/controller_test.go",
+        "cmd/sunset/main.go",
+        "specs/002-ble-command-execution/spec.md",
+        "specs/002-ble-command-execution/plan.md",
+        "specs/002-ble-command-execution/bugs/BUG-001.md",
+        "specs/002-ble-command-execution/bugs/BUG-002.md",
+        "specs/002-ble-command-execution/bugs/BUG-003.md"
+      ]
+    }
+  },
+  "decisions": [
+    {
+      "decision": "Keep the existing synchronous transport interfaces and generated mocks",
+      "why": "They already support all lifecycle and failure cases; no interface or generator change was needed"
+    },
+    {
+      "decision": "Expose the unchanged production retry policy through native-free ble.CanRetry",
+      "why": "Unit tests can exercise the real policy without importing the CLI or CoreBluetooth"
+    },
+    {
+      "decision": "Use monotonic elapsed-time lower bounds for the existing 80ms and 200ms contracts",
+      "why": "The tests proved completion-relative pacing without a clock abstraction or latency SLO"
+    }
+  ],
+  "concerns": [
+    {
+      "note": "H01 remains pending: actual Go-path lamp behavior, RGB and brightness were not physically verified; hardware tests remain an explicit local opt-in",
+      "step": "implement"
+    }
+  ],
+  "coverage": {
+    "SC-010": {
+      "tasks": [
+        "T032"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestConnectRejectsFailedStages",
+        "internal/ble/backend_test.go::TestConnectBoundsNativeTimeoutByContext",
+        "internal/ble/backend_test.go::TestConnectInspectAndWriteThroughAdapter"
+      ]
+    },
+    "SC-011": {
+      "tasks": [
+        "T033"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestScanKeepsFirstMatchAndJoinsStopper",
+        "internal/ble/backend_test.go::TestScanRetriesStopWhenCancellationRacesStartup",
+        "internal/ble/backend_test.go::TestScanCancellationBeforeOrAfterMatch",
+        "internal/ble/backend_test.go::TestScanTimeoutAndErrorPrecedence"
+      ]
+    },
+    "SC-012": {
+      "tasks": [
+        "T034"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestWriteReadinessAndPreWriteCancellation",
+        "internal/ble/backend_test.go::TestWriteCopiesPacketAndClassifiesResults",
+        "internal/ble/backend_test.go::TestWriteWaitsForStartedNativeOperation"
+      ]
+    },
+    "SC-013": {
+      "tasks": [
+        "T035",
+        "T036"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestBackendCloseClearsHandlesAndRetainsFailedCleanup",
+        "internal/ble/backend_test.go::TestBackendCloseDrainsSinceLastWrite",
+        "internal/ble/backend_test.go::TestDiscoveryErrorClassificationAndStickyTimeout"
+      ]
+    },
+    "SC-014": {
+      "tasks": [
+        "T037"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestBackendConstructorIdentityBoundaries",
+        "internal/ble/backend_test.go::TestBackendConstructorTimeoutBoundaries"
+      ]
+    },
+    "SC-015": {
+      "tasks": [
+        "T038"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestWriteLengthAndEarlyErrorPrecedence"
+      ]
+    },
+    "SC-016": {
+      "tasks": [
+        "T039",
+        "T040"
+      ],
+      "tests": [
+        "internal/ble/retry_test.go::TestCanRetryPermanentErrors",
+        "internal/ble/retry_test.go::TestCanRetryOrdinaryErrors"
+      ]
+    },
+    "SC-017": {
+      "tasks": [
+        "T041"
+      ],
+      "tests": [
+        "internal/controller/controller_test.go::TestRetryConnectFailuresAndPause",
+        "internal/controller/controller_test.go::TestRetryCleanupFailurePreservesBothCauses",
+        "internal/controller/controller_test.go::TestRetryReplaysFromFirstPacketAfterLaterFailure",
+        "internal/controller/controller_test.go::TestRetryWaitCancellationStopsReconnect"
+      ]
+    },
+    "SC-018": {
+      "tasks": [
+        "T042"
+      ],
+      "tests": [
+        "internal/controller/controller_test.go::TestDefaultPacketGapFollowsWriteCompletion"
+      ]
+    },
+    "SC-019": {
+      "tasks": [
+        "T043"
+      ],
+      "tests": [
+        "internal/controller/controller_test.go::TestCloseDuringStartedWriteIsTerminalAndExclusive"
+      ]
+    },
+    "FR-005": {
+      "tasks": [
+        "T037"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestBackendConstructorIdentityBoundaries",
+        "internal/ble/backend_test.go::TestBackendConstructorTimeoutBoundaries"
+      ]
+    },
+    "FR-008": {
+      "tasks": [
+        "T032"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestConnectBoundsNativeTimeoutByContext",
+        "internal/ble/backend_test.go::TestConnectInspectAndWriteThroughAdapter",
+        "internal/ble/backend_test.go::TestConnectRejectsFailedStages"
+      ]
+    },
+    "FR-009": {
+      "tasks": [
+        "T033"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestScanCancellationBeforeOrAfterMatch",
+        "internal/ble/backend_test.go::TestScanKeepsFirstMatchAndJoinsStopper",
+        "internal/ble/backend_test.go::TestScanRetriesStopWhenCancellationRacesStartup",
+        "internal/ble/backend_test.go::TestScanTimeoutAndErrorPrecedence"
+      ]
+    },
+    "FR-010": {
+      "tasks": [
+        "T032",
+        "T033"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestConnectBoundsNativeTimeoutByContext",
+        "internal/ble/backend_test.go::TestConnectInspectAndWriteThroughAdapter",
+        "internal/ble/backend_test.go::TestConnectRejectsFailedStages",
+        "internal/ble/backend_test.go::TestScanCancellationBeforeOrAfterMatch",
+        "internal/ble/backend_test.go::TestScanKeepsFirstMatchAndJoinsStopper",
+        "internal/ble/backend_test.go::TestScanRetriesStopWhenCancellationRacesStartup",
+        "internal/ble/backend_test.go::TestScanTimeoutAndErrorPrecedence"
+      ]
+    },
+    "FR-011": {
+      "tasks": [
+        "T034",
+        "T038"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestWriteCopiesPacketAndClassifiesResults",
+        "internal/ble/backend_test.go::TestWriteLengthAndEarlyErrorPrecedence",
+        "internal/ble/backend_test.go::TestWriteReadinessAndPreWriteCancellation",
+        "internal/ble/backend_test.go::TestWriteWaitsForStartedNativeOperation"
+      ]
+    },
+    "FR-012": {
+      "tasks": [
+        "T034"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestWriteCopiesPacketAndClassifiesResults",
+        "internal/ble/backend_test.go::TestWriteReadinessAndPreWriteCancellation",
+        "internal/ble/backend_test.go::TestWriteWaitsForStartedNativeOperation"
+      ]
+    },
+    "FR-013": {
+      "tasks": [
+        "T043"
+      ],
+      "tests": [
+        "internal/controller/controller_test.go::TestCloseDuringStartedWriteIsTerminalAndExclusive"
+      ]
+    },
+    "FR-014": {
+      "tasks": [
+        "T042"
+      ],
+      "tests": [
+        "internal/controller/controller_test.go::TestDefaultPacketGapFollowsWriteCompletion"
+      ]
+    },
+    "FR-015": {
+      "tasks": [
+        "T041"
+      ],
+      "tests": [
+        "internal/controller/controller_test.go::TestRetryCleanupFailurePreservesBothCauses",
+        "internal/controller/controller_test.go::TestRetryConnectFailuresAndPause",
+        "internal/controller/controller_test.go::TestRetryReplaysFromFirstPacketAfterLaterFailure",
+        "internal/controller/controller_test.go::TestRetryWaitCancellationStopsReconnect"
+      ]
+    },
+    "FR-016": {
+      "tasks": [
+        "T039",
+        "T040"
+      ],
+      "tests": [
+        "internal/ble/retry_test.go::TestCanRetryOrdinaryErrors",
+        "internal/ble/retry_test.go::TestCanRetryPermanentErrors"
+      ]
+    },
+    "FR-017": {
+      "tasks": [
+        "T034",
+        "T041",
+        "T043"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestWriteCopiesPacketAndClassifiesResults",
+        "internal/ble/backend_test.go::TestWriteReadinessAndPreWriteCancellation",
+        "internal/ble/backend_test.go::TestWriteWaitsForStartedNativeOperation",
+        "internal/controller/controller_test.go::TestCloseDuringStartedWriteIsTerminalAndExclusive",
+        "internal/controller/controller_test.go::TestRetryCleanupFailurePreservesBothCauses",
+        "internal/controller/controller_test.go::TestRetryConnectFailuresAndPause",
+        "internal/controller/controller_test.go::TestRetryReplaysFromFirstPacketAfterLaterFailure",
+        "internal/controller/controller_test.go::TestRetryWaitCancellationStopsReconnect"
+      ]
+    },
+    "FR-018": {
+      "tasks": [
+        "T043"
+      ],
+      "tests": [
+        "internal/controller/controller_test.go::TestCloseDuringStartedWriteIsTerminalAndExclusive"
+      ]
+    },
+    "FR-019": {
+      "tasks": [
+        "T035",
+        "T036"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestBackendCloseClearsHandlesAndRetainsFailedCleanup",
+        "internal/ble/backend_test.go::TestBackendCloseDrainsSinceLastWrite",
+        "internal/ble/backend_test.go::TestDiscoveryErrorClassificationAndStickyTimeout"
+      ]
+    },
+    "FR-020": {
+      "tasks": [
+        "T035",
+        "T036"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestBackendCloseClearsHandlesAndRetainsFailedCleanup",
+        "internal/ble/backend_test.go::TestBackendCloseDrainsSinceLastWrite",
+        "internal/ble/backend_test.go::TestDiscoveryErrorClassificationAndStickyTimeout"
+      ]
+    },
+    "FR-021": {
+      "tasks": [
+        "T032"
+      ],
+      "tests": [
+        "internal/ble/backend_test.go::TestConnectBoundsNativeTimeoutByContext",
+        "internal/ble/backend_test.go::TestConnectInspectAndWriteThroughAdapter",
+        "internal/ble/backend_test.go::TestConnectRejectsFailedStages"
+      ]
+    }
+  },
+  "step_summaries": {
+    "implement": {
+      "summary": "Completed T032-T044: controlled BLE lifecycle/boundary tests and production retry, pacing and Close verification; core/race/vet/build passed"
+    }
+  },
+  "last_action": "All 44 tasks complete; automated checks passed; H01 physical verification remains pending"
+}
