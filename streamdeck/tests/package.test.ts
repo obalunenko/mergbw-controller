@@ -32,17 +32,17 @@ function runtime(): { directory: string; clean: () => void } {
 	return { directory, clean: () => rmSync(temporary, { recursive: true, force: true }) };
 }
 
-test("package requires six actions and every runtime asset/license", () => {
+test("package requires seven actions and every runtime asset/license", () => {
 	const { directory, clean } = runtime();
 	try {
 		const files = checkRuntime(directory, { softwareOnly: true });
-		assert.equal(files.length, 30);
+		assert.equal(files.length, 32);
 		assert.equal(JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8")).Version, "0.2.0.0");
 		assert.ok(files.includes("licenses/ws.txt"));
 		const manifest = JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8"));
 		manifest.Actions.pop();
 		writeFileSync(join(directory, "manifest.json"), JSON.stringify(manifest));
-		assert.throws(() => checkRuntime(directory, { softwareOnly: true }), /six actions/);
+		assert.throws(() => checkRuntime(directory, { softwareOnly: true }), /seven actions/);
 	} finally {
 		clean();
 	}
@@ -144,7 +144,7 @@ test("pinned packer excludes synthetic private files from the actual installer",
 			{ stdio: "pipe", timeout: 30000 },
 		);
 		const files = checkArchive(join(output, "com.obalunenko.mergbw.streamDeckPlugin"), { softwareOnly: true });
-		assert.equal(files.length, 30);
+		assert.equal(files.length, 32);
 		assert.ok(!files.some((file) => /private|settings|presets.json|buttons|\.map$/.test(file)));
 	} finally {
 		clean();

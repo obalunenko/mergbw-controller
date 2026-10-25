@@ -9,6 +9,13 @@ import { OperationStore } from "../src/operation-store.js";
 import { Settings } from "../src/settings.js";
 import { ControlledClock, deferred, MemoryStorage, syntheticToken } from "./helpers.js";
 
+test("diagnostic records keep the scene action kind", () => {
+	const logs: Record<string, number | string>[] = [];
+	const diagnostics = new Diagnostics((fields) => logs.push(fields));
+	diagnostics.emit("action.sent", { actionKind: "scene", outcome: "sent", durationMs: 3 });
+	assert.deepEqual(logs, [{ event: "action.sent", actionKind: "scene", outcome: "sent", durationMs: 3 }]);
+});
+
 test("diagnostic runtime allowlist excludes raw fields, invalid identifiers, errors and nonfinite durations", () => {
 	const logs: Record<string, number | string>[] = [];
 	const diagnostics = new Diagnostics((fields) => logs.push(fields));

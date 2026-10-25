@@ -8,6 +8,7 @@ required_variables=(
 	SPECKIT_BROWNFIELD_VERSION
 	SPECKIT_BUGFIX_VERSION
 	SPECKIT_FEATURE_NUMBERING_VERSION
+	SPECKIT_INTEGRATIONS
 )
 for variable_name in "${required_variables[@]}"; do
 	if [[ -z "${!variable_name:-}" ]]; then
@@ -21,6 +22,12 @@ readonly spec_kit_source="git+https://github.com/github/spec-kit.git@${spec_kit_
 readonly companion_url="https://github.com/alfredoperez/speckit-companion/releases/download/speckit-ext-v${SPECKIT_COMPANION_VERSION}/companion-${SPECKIT_COMPANION_VERSION}.zip"
 readonly brownfield_url="https://github.com/Quratulain-bilal/spec-kit-brownfield/archive/refs/tags/v${SPECKIT_BROWNFIELD_VERSION}.zip"
 readonly bugfix_url="https://github.com/Quratulain-bilal/spec-kit-bugfix/archive/refs/tags/v${SPECKIT_BUGFIX_VERSION}.zip"
+
+read -r -a integrations <<<"${SPECKIT_INTEGRATIONS}"
+readonly integrations
+# The first integration is the default; shared scripts and templates use its
+# command spelling.
+readonly default_integration="${integrations[0]}"
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
@@ -64,10 +71,30 @@ if [[ ! -x "${specify_bin}" ]]; then
 	exit 1
 fi
 
+integration_options() {
+	case "$1" in
+	codex) printf '%s' '--skills' ;;
+	esac
+}
+
+integration_installed() {
+	python3 -c 'import json, sys; sys.exit(sys.argv[1] not in json.load(open(".specify/integration.json")).get("installed_integrations", []))' "$1"
+}
+
 if [[ ! -f .specify/integration.json ]]; then
 	"${specify_bin}" init --here --force --non-interactive \
-		--integration codex --integration-options="--skills" --script sh
+		--integration "${default_integration}" \
+		--integration-options="$(integration_options "${default_integration}")" --script sh
 fi
+
+for integration in "${integrations[@]}"; do
+	if integration_installed "${integration}"; then
+		continue
+	fi
+	"${specify_bin}" integration install "${integration}" \
+		--integration-options="$(integration_options "${integration}")" --script sh
+done
+"${specify_bin}" integration use "${default_integration}"
 
 install_extension() {
 	local extension_id="$1"
@@ -87,7 +114,20 @@ install_extension brownfield "${brownfield_url}" 10
 install_extension bugfix "${bugfix_url}" 10
 "${specify_bin}" extension add --dev --force --priority 5 .speckit/feature-numbering
 
+# Spec Kit registers extension commands only for the default integration and
+# adds them to another integration when it becomes the default.
+for integration in "${integrations[@]}"; do
+	if [[ "${integration}" != "${default_integration}" ]]; then
+		"${specify_bin}" integration use "${integration}"
+	fi
+done
+"${specify_bin}" integration use "${default_integration}"
+
+# Rescaffolding rewrites shared scripts without their executable bit.
+chmod +x .specify/scripts/bash/*.sh
+
 printf '\nInstalled Spec Kit and project extensions:\n'
 "${specify_bin}" version
+"${specify_bin}" integration status
 "${specify_bin}" extension list
-printf '\nRestart Codex so it reloads generated skills.\n'
+printf '\nRestart your coding agent so it reloads generated skills (%s).\n' "${integrations[*]}"

@@ -1,5 +1,7 @@
+import { SCENE_ROUTE_SOURCE, sceneSelector } from "./scenes.js";
+
 export type Language = "en" | "ru";
-export type ActionKind = "brightness" | "color" | "off" | "on" | "preset" | "transition";
+export type ActionKind = "brightness" | "color" | "off" | "on" | "preset" | "scene" | "transition";
 export type Connection = { port: number; accessToken: string };
 export type GlobalSettings = { schemaVersion: 1 | 2; connection?: Connection | null; language: Language };
 export type Assignment = {
@@ -7,6 +9,7 @@ export type Assignment = {
 	rgb?: string;
 	percent?: number;
 	presetId?: string;
+	sceneId?: string;
 	fromRGB?: string;
 	fromPercent?: number;
 	toRGB?: string;
@@ -66,6 +69,7 @@ export function assignment(kind: ActionKind, value: unknown): Assignment {
 			};
 		if (kind === "color") return { schemaVersion: 1, rgb: "FF5000" };
 		if (kind === "brightness") return { schemaVersion: 1, percent: 50 };
+		if (kind === "scene") return { schemaVersion: 1, sceneId: "disco" };
 		return { schemaVersion: 1 };
 	}
 	if (value.schemaVersion !== 1) throw new Error("validation");
@@ -114,24 +118,34 @@ export function assignment(kind: ActionKind, value: unknown): Assignment {
 			if (typeof value.presetId !== "string" || !/^[a-z0-9_-]{1,40}$/.test(value.presetId))
 				throw new Error("validation");
 			return { schemaVersion: 1, presetId: value.presetId };
+		case "scene": {
+			const sceneId = typeof value.sceneId === "string" ? sceneSelector(value.sceneId) : undefined;
+			if (sceneId === undefined) throw new Error("validation");
+			return { schemaVersion: 1, sceneId };
+		}
 		default:
 			return { schemaVersion: 1 };
 	}
 }
 
+const linkRoutes = `on|off|color\\/[A-Fa-f0-9]{6}|brightness\\/[0-9]{1,3}|preset\\/[a-z0-9_-]{1,40}|${SCENE_ROUTE_SOURCE}`;
+const linkPattern = new RegExp(
+	`^http:\\/\\/(localhost|127\\.0\\.0\\.1):([0-9]{1,5})\\/([A-Za-z0-9_-]{24,128})\\/(${linkRoutes})$`,
+	"i",
+);
+const routePattern = new RegExp(`^(${linkRoutes})$`);
+
 export function parseConnectionLink(value: unknown): Connection {
 	if (typeof value !== "string") throw new Error("validation");
 	const raw = value.trim();
 	// Match the raw spelling before URL normalization can hide an unsafe route.
-	const match =
-		/^http:\/\/(localhost|127\.0\.0\.1):([0-9]{1,5})\/([A-Za-z0-9_-]{24,128})\/(on|off|color\/[A-Fa-f0-9]{6}|brightness\/[0-9]{1,3}|preset\/[a-z0-9_-]{1,40})$/i.exec(
-			raw,
-		);
+	const match = linkPattern.exec(raw);
 	if (!match || /[\r\n\\%?#]/.test(raw)) throw new Error("validation");
 	const route = match[4]!;
-	if (!/^(on|off|color\/[A-Fa-f0-9]{6}|brightness\/[0-9]{1,3}|preset\/[a-z0-9_-]{1,40})$/.test(route))
-		throw new Error("validation");
+	if (!routePattern.test(route)) throw new Error("validation");
 	if (route.startsWith("brightness/") && Number(route.slice(11)) > 100) throw new Error("validation");
+	if (route.startsWith("scene/") && sceneSelector(route.slice("scene/".length)) === undefined)
+		throw new Error("validation");
 	return connection({ port: Number(match[2]), accessToken: match[3] });
 }
 

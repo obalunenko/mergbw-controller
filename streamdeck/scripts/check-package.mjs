@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { nativeFiles, validateNativePayload } from "../native/payload-validator.mjs";
 
-const kinds = ["on", "off", "color", "brightness", "preset", "transition"];
+const kinds = ["on", "off", "color", "brightness", "preset", "scene", "transition"];
 const runtimeName = "com.obalunenko.mergbw.sdPlugin";
 const licenses = ["elgato-streamdeck", "elgato-schemas", "elgato-utils", "ws", "zod", "tslib"];
 const required = [
@@ -139,7 +139,7 @@ export function checkRuntime(directory, options = {}) {
 		manifest.CategoryIcon !== "imgs/plugin"
 	)
 		fail("manifest runtime paths");
-	if (!Array.isArray(manifest.Actions) || manifest.Actions.length !== 6) fail("expected six actions");
+	if (!Array.isArray(manifest.Actions) || manifest.Actions.length !== 7) fail("expected seven actions");
 	const ids = new Set();
 	for (const action of manifest.Actions) {
 		const kind = action.UUID?.replace("com.obalunenko.mergbw.", "");
@@ -376,7 +376,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 			const entries = checkArchive(resolve(process.argv[3]), options);
 			console.log(`Installer checked: ${entries.length} files (${basename(process.argv[3])}).`);
 		} else if (process.argv[2] && !["--software", "--directory"].includes(process.argv[2])) fail("unknown argument");
-		console.log(`Runtime checked: ${files.length} files, six actions, local assets and licenses.`);
+		console.log(`Runtime checked: ${files.length} files, seven actions, local assets and licenses.`);
 	} catch (error) {
 		console.error(error instanceof Error ? error.message : "Package check failed");
 		process.exitCode = 1;

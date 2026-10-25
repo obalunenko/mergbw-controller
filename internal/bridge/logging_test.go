@@ -86,6 +86,22 @@ func TestRequestIDConnectsReceivedCommandPacketsAndResult(t *testing.T) {
 	assert.NotEqual(t, strconv.FormatUint(requestID, 10), recorder.Header().Get("X-Request-ID"))
 }
 
+func TestSceneRequestLogsCommandAndPacketCountWithoutSecrets(t *testing.T) {
+	handler, lamp, settings := testHandler(t)
+	lamp.EXPECT().Execute(gomock.Any(), gomock.Any()).Return(nil)
+	var output bytes.Buffer
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, captureRequest(httptest.NewRequest(http.MethodGet, settings.BaseURL()+"/scene/disco", nil), &output, settings.AccessToken))
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	records := readLogRecords(t, &output)
+	require.NotEmpty(t, records)
+	assert.Equal(t, "command.received", records[0]["msg"])
+	assert.Equal(t, "scene/disco", records[0]["command"])
+	assert.Equal(t, float64(2), records[0]["packet_count"])
+	assert.NotContains(t, output.String(), settings.AccessToken)
+	assert.NotContains(t, output.String(), settings.BaseURL())
+}
+
 func TestRequestFailureLogsStatusErrorAndDuration(t *testing.T) {
 	for _, status := range []int{http.StatusServiceUnavailable, http.StatusGatewayTimeout} {
 		t.Run(strconv.Itoa(status), func(t *testing.T) {

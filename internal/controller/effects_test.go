@@ -3,8 +3,10 @@ package controller
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -190,6 +192,33 @@ func TestOrdinaryCommandDrainsStartedEffectWriteBeforeExecuting(t *testing.T) {
 	require.NoError(t, <-done)
 	assert.Equal(t, "unknown", waitEffect(t, c, accepted.ID).State)
 	assert.Equal(t, int32(2), writes.Load())
+}
+
+func TestSceneCommandCancelsRunningEffectBeforeWrite(t *testing.T) {
+	link := NewMockLink(gomock.NewController(t))
+	link.EXPECT().Connect(gomock.Any()).Return(nil).MinTimes(1)
+	var mu sync.Mutex
+	var frames []string
+	link.EXPECT().Write(gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, frame []byte) error {
+		mu.Lock()
+		defer mu.Unlock()
+		frames = append(frames, hex.EncodeToString(frame))
+		return nil
+	}).MinTimes(3)
+	c := fastTransitionController(t, link)
+	paused := pauseJobUntilCancelled(c)
+	accepted, err := c.StartEffect(t.Context(), testEffectAction("strobe", true))
+	require.NoError(t, err)
+	awaitSignal(t, paused)
+	scene, err := protocol.Resolve([]string{"scene", "disco"}, nil)
+	require.NoError(t, err)
+	require.NoError(t, c.Execute(t.Context(), scene))
+	assert.Equal(t, "cancelled", waitEffect(t, c, accepted.ID).State)
+	mu.Lock()
+	defer mu.Unlock()
+	require.GreaterOrEqual(t, len(frames), 3)
+	// The scene frame is the last write: no effect frame follows it.
+	assert.Equal(t, []string{"5501ff0601a2", "5506ff068717"}, frames[len(frames)-2:])
 }
 
 func TestEffectWriteFailureIsUnknownAndNeverRetried(t *testing.T) {

@@ -9,7 +9,8 @@ A local Go controller for **MeRGBW LT-06 sunset lamps**, with Stream Deck button
 - Targets the LT-06 protocol: advertised service `3519`, GATT service `FFF0`, writes to `FFF3`.
 - **The Go BLE path was verified on one LT-06 on macOS on 2026-10-21:** ON/OFF, white and RGB colors, brightness 0/50/100%, and all six local presets, with user-confirmed visual effects. See the [hardware verification record](specs/002-ble-command-execution/hardware-verification.md). Power packets were also previously verified using nRF Connect.
 - Verification applies to that device and environment. Other devices using the MeRGBW app are not automatically compatible.
-- There is no physical power/color readback, music synchronization or built-in animation control. Software-driven RGB/brightness transitions and the owner-observed home-use results are described below.
+- Built-in [scenes](#scenes): **every ID `80`–`93` showed an effect on one LT-06 on 2026-10-25.** Scene names describe what this lamp showed. See the [scene verification record](specs/009-full-command-scene-support/hardware-verification.md).
+- There is no physical power/color readback or music synchronization. Software-driven RGB/brightness transitions and the owner-observed home-use results are described below.
 
 ## Prebuilt releases
 
@@ -90,7 +91,7 @@ Check ON/OFF first, then verify RGB and brightness. URLs contain the generated a
 
 ## Native Stream Deck plugin
 
-Version **0.2.0.0** provides six MeRGBW Keypad actions with one shared setup panel on macOS **13.5+** and Stream Deck **7.1+**. The installer contains the controller for Apple Silicon and Intel. Using a prebuilt installer requires no Terminal, Go, Node.js or separately running server. You need your lamp's manufacturer-data identity; automatic discovery of that identity is outside this feature.
+Version **0.2.0.0** provides seven MeRGBW Keypad actions with one shared setup panel on macOS **13.5+** and Stream Deck **7.1+**. The installer contains the controller for Apple Silicon and Intel. Using a prebuilt installer requires no Terminal, Go, Node.js or separately running server. You need your lamp's manufacturer-data identity; automatic discovery of that identity is outside this feature.
 
 Open `com.obalunenko.mergbw.development.streamDeckPlugin`, add a MeRGBW action and open its panel. First launch opens **Lamp and connection**; after setup, this screen is available from the link below key settings. Choose EN or RU and one setup method:
 
@@ -108,6 +109,7 @@ All keys share one owned controller and BLE connection. The plugin starts it aft
 | Brightness | Integer 0–100; default 50 |
 | Preset | Current controller label with a stable saved ID |
 | Transition | Explicit starting/ending RGB and brightness, integer duration 1–60 seconds |
+| Scene | A built-in lamp [scene](#scenes) or raw ID `80`–`93`; default Disco |
 
 **Preset settings:** one selector groups **Built-in presets** and **My presets**. Selecting a preset saves its assignment automatically; its color, brightness and effect appear below. Use **Customize a copy** for a built-in preset, **Edit** for your selected custom preset, or **+ Create preset**. The separate editor shows only the selected effect's parameters. Switching effects preserves the draft's color, brightness, timings and ordered palette. **Library** opens shared presets for editing/deletion; it loads automatically, with more pages available when needed. Static presets retain their existing behavior. Dynamic presets support:
 
@@ -180,6 +182,44 @@ task run
 
 Keep a custom data directory outside the repository or add it to your local Git exclusions.
 
+## Scenes
+
+The lamp has built-in scenes (command `0x06`). Run one from the CLI, HTTP or Stream Deck:
+
+```bash
+./sunset send scene disco
+./sunset dry-run scene 8a      # prints 55 01 FF 06 01 A2, then 55 06 FF 06 8A 14
+```
+
+HTTP: `GET|POST /<token>/scene/<slug|ID>`. The Stream Deck **Scene** action stores one scene per key. A scene sends power-on first and stops a running software effect or transition. `./sunset urls` lists one link per named scene.
+
+Scene IDs come from the [King1704G reference](https://github.com/King1704G/custom_components-sunset_light_cheapass_amazon_light/blob/main/custom_components/sunset_light/control.py). Its names mostly did not match what the LT-06 shows, so each scene is named after the effect the owner observed on 2026-10-25. The reference names are kept for traceability. Details are in the [scene verification record](specs/009-full-command-scene-support/hardware-verification.md).
+
+| Slug | Label | ID | Effect on LT-06 | Reference name |
+|---|---|---|---|---|
+| `red` | Red | `80` | static red | `fantasy` |
+| `green` | Green | `81` | static green | `greenprairie` |
+| `night` | Night | `82` | static dim cool blue | `sunset`, `forest` |
+| `sunrise` | Sunrise | `83` | static warm sunrise color | `sunrise` |
+| `ghost` | Ghost | `84` | static pale color | `ghost` |
+| `pink` | Pink | `85` | static pink-purple | `midsummer` |
+| `warmwhite` | Warm White | `86` | static warm white-orange | `tropicaltwilight` |
+| `disco` | Disco | `87` | fast color change | `disco` |
+| `party` | Party | `88` | faster color change | `alarm` |
+| `rgbfade` | RGB Fade | `89` | green, blue, red with fade | `rubyglow`, `aurora` |
+| `rainbowfade` | Rainbow Fade | `8A` | seven colors with fade | — |
+| `redpulse` | Red Pulse | `8B` | red pulse | `savanah` |
+| `greenpulse` | Green Pulse | `8C` | green pulse | `lakeplacid` |
+| `bluepulse` | Blue Pulse | `8D` | blue pulse | `neon` |
+| `amberpulse` | Amber Pulse | `8E` | yellow-orange pulse | `sundowner` |
+| `icepulse` | Ice Pulse | `8F` | white-blue pulse | `bluestar` |
+| `pinkpulse` | Pink Pulse | `90` | purple-pink pulse | `redrose` |
+| `whitepulse` | White Pulse | `91` | white pulse | `rating` |
+| `greenredpulse` | Green Red Pulse | `92` | alternating green and red pulse | — |
+| `blueredpulse` | Blue Red Pulse | `93` | alternating whitish blue and red pulse | `autumn` |
+
+Raw IDs `80`–`93` are accepted too, case-insensitive, with an optional `0x` prefix. `brightness` does not change a running scene. White is `color FFFFFF`, not a scene. Scenes are not part of presets.
+
 ## HTTP API
 
 The service binds to IPv4 loopback. Command URLs accept **GET or POST**, with no request body or query parameters. GET support is intentional for Stream Deck's background Website action.
@@ -193,8 +233,9 @@ The service binds to IPv4 loopback. Command URLs accept **GET or POST**, with no
 | `/<token>/color/FF5000` | Set six-digit RGB color |
 | `/<token>/brightness/40` | Set integer brightness, 0–100 |
 | `/<token>/preset/sunset` | Apply a named preset |
+| `/<token>/scene/disco` | Run a built-in [scene](#scenes) by slug or ID `80`–`93` |
 
-Use the generated URLs instead of manually copying the token. Color, brightness, and preset commands send power-on first. HEAD requests never execute lamp commands.
+Use the generated URLs instead of manually copying the token. Color, brightness, preset and scene commands send power-on first. HEAD requests never execute lamp commands.
 
 Successful command responses contain `sent: true` and `physical_state_verified: false`. `/health` reports `bluetooth_connected`; it does **not** confirm that the lamp is illuminated or has reached the requested color. Native BLE operations may wait for library timeouts; an HTTP timeout does not guarantee immediate cancellation of an in-progress write.
 
@@ -283,7 +324,9 @@ task speckit:update:check
 task speckit:update:test
 ```
 
-The Taskfile.yml pins Spec Kit 1.1.3, Companion 0.25.0, Brownfield 1.0.0, Bugfix 1.1.0, and the local feature-numbering extension 1.0.0. Installation uses `uv tool install` for the Specify CLI and installs all four project extensions with Codex skills. Existing Spec Kit initialization is preserved; a fresh project is initialized for Codex automatically. Restart Codex after installation to reload the generated skills.
+The Taskfile.yml pins Spec Kit 1.1.3, Companion 0.25.0, Brownfield 1.0.0, Bugfix 1.1.0, and the local feature-numbering extension 1.0.0. Installation uses `uv tool install` for the Specify CLI, installs every agent integration listed in `SPECKIT_INTEGRATIONS` (default `codex claude`: Codex skills in `.agents/skills/`, Claude Code skills in `.claude/skills/`), and registers all four project extensions for each of them. The first integration is the default and sets the command spelling in shared Spec Kit scripts. Choose other agents with, for example, `SPECKIT_INTEGRATIONS="claude gemini" task speckit:install`; `specify integration list` shows the supported keys. Existing Spec Kit initialization is preserved; a fresh project is initialized for the default integration. Restart your agent after installation to reload the generated skills.
+
+Agent instructions live in `AGENTS.md`; `CLAUDE.md` only imports it for Claude Code.
 
 New feature directories use `specs/NNN-feature-name`, starting at `001`. The mandatory `before_specify` hook selects the next number for both stock Specify and Companion; its source lives in `.speckit/feature-numbering/`.
 
@@ -291,7 +334,7 @@ The update check reports installed versions, pin drift, and available upstream r
 
 ## Protocol references
 
-- [King1704G control.py, pinned revision](https://github.com/King1704G/custom_components-sunset_light_cheapass_amazon_light/blob/165539104949e8bc623b46040dee1ad33a3eb30c/custom_components/sunset_light/control.py): packet layout, folded checksum, power, RGB, and brightness. Verified power packets: OFF `55 01 FF 06 00 A3`; ON `55 01 FF 06 01 A2`.
+- [King1704G control.py, pinned revision](https://github.com/King1704G/custom_components-sunset_light_cheapass_amazon_light/blob/165539104949e8bc623b46040dee1ad33a3eb30c/custom_components/sunset_light/control.py): packet layout, folded checksum, power, RGB, brightness, and scene IDs. Verified power packets: OFF `55 01 FF 06 00 A3`; ON `55 01 FF 06 01 A2`.
 - [rexxars config_flow.py, pinned revision](https://github.com/rexxars/ha-mergbw/blob/2771a214601d8c00ed21a4e05ca7616bd30fce0b/custom_components/mergbw/config_flow.py): advertisement discovery reference, not a source of verified control commands for this implementation.
 - [Go Bluetooth v0.16.0](https://github.com/tinygo-org/bluetooth/tree/v0.16.0): platform integration; its [go.mod](https://github.com/tinygo-org/bluetooth/blob/v0.16.0/go.mod) requires Go 1.25.0.
 - [Elgato System Actions](https://help.elgato.com/hc/en-us/articles/360028234471-Elgato-Stream-Deck-System-Actions-Hotkey-Open-Website-Multimedia): Website and background GET requests.
