@@ -406,3 +406,17 @@ test("install verifies the streamed installer before opening it", async () => {
 	assert.equal(blocked.service.snapshot()!.errorCategory, "open_failed");
 	await rm(blocked.root, { recursive: true, force: true });
 });
+
+test("install accepts SHA256SUMS lines with ./ names, as published by v1.0.1", async () => {
+	const h = await harness();
+	h.routes.set(
+		assetUrl("v1.3.0", CHECKSUMS),
+		async () =>
+			new Response(`${"0".repeat(64)}  ./sunset_v1.3.0_darwin_arm64.tar.gz\n${digest(payload)}  ./${INSTALLER}\n`),
+	);
+	await h.service.start();
+	await h.service.install("v1.3.0");
+	assert.equal(h.service.snapshot()!.state, "handed");
+	assert.equal(h.execs.at(-1)?.file, "/usr/bin/open");
+	await rm(h.root, { recursive: true, force: true });
+});

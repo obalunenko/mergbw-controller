@@ -174,7 +174,9 @@ jobs:
           done
           test -s dist/com.obalunenko.mergbw.development.streamDeckPlugin
           cd dist
-          sha256sum ./*.tar.gz ./*.streamDeckPlugin > SHA256SUMS
+          # Bare names: installed plugins match the installer line by exact file name.
+          sha256sum -- *.tar.gz *.streamDeckPlugin > SHA256SUMS
+          grep -qx '[0-9a-f]\{64\}  com.obalunenko.mergbw.development.streamDeckPlugin' SHA256SUMS
           sha256sum --check SHA256SUMS
       - name: Generate release notes including direct commits
         run: python3 scripts/release.py notes --tag "$RELEASE_TAG" --repository "$GH_REPO" --output release-notes.md

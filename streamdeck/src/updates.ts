@@ -307,7 +307,7 @@ export class UpdateService {
 			const sums = await this.get(offer.checksums!.url, LIMITS.checksums, LIMITS.requestMs, "size");
 			let expected: string | undefined;
 			for (const line of new TextDecoder().decode(sums.body).split(/\r?\n/)) {
-				const match = /^([0-9a-f]{64}) [ *](.+)$/.exec(line.trimEnd());
+				const match = /^([0-9a-f]{64}) [ *](?:\.\/)?(.+)$/.exec(line.trimEnd());
 				if (match?.[2] === INSTALLER) expected = match[1];
 			}
 			if (!expected) throw new UpdateError("checksum");
