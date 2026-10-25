@@ -55,12 +55,13 @@ class ReleaseTest(unittest.TestCase):
                          "Application Support", "assignments, custom artwork and language",
                          "profile contains assignments without credentials", "needs local setup",
                          "For standalone CLI use", "./sunset serve", "permission",
-                         "Local installation is sufficient for acceptance",
                          "without Developer ID, notarization or an Apple certificate",
                          "com.obalunenko.mergbw.development.streamDeckPlugin"):
             self.assertIn(expected, notes)
         self.assertNotIn("it requires the running controller", notes)
         self.assertNotIn("Import a private controller URL", notes)
+        self.assertNotIn("downloading the installer is optional", notes)
+        self.assertNotIn("Local installation is sufficient", notes)
         self.assertEqual(notes.count(".tar.gz]"), 4)
 
     def test_incremental_release_excludes_old_and_unrelated_history(self):
@@ -94,6 +95,34 @@ class ReleaseTest(unittest.TestCase):
         self.assertIn("## Other changes", notes)
         self.assertIn("Unclassified direct commit", notes)
         self.assertNotIn("earlier change", notes)
+
+    def test_stable_release_covers_changes_since_previous_stable(self):
+        self.git("tag", "v1.2.0")
+        first = self.commit("feat: release candidate work")
+        self.git("tag", "v1.3.0-rc.1")
+        second = self.commit("fix: final polish")
+        self.git("tag", "v1.3.0")
+        stable = release.notes("v1.3.0", "example/controller")
+        self.assertIn("Changes since [v1.2.0]", stable)
+        self.assertIn("/compare/v1.2.0...v1.3.0", stable)
+        for commit in (first, second):
+            self.assertEqual(stable.count(f"/commit/{commit})"), 1)
+        self.assertNotIn("initial controller", stable)
+        candidate = release.notes("v1.3.0-rc.1", "example/controller")
+        self.assertIn("/compare/v1.2.0...v1.3.0-rc.1", candidate)
+
+    def test_notes_explain_plugin_version_update_and_quarantine(self):
+        self.git("tag", "v1.3.0")
+        notes = release.notes("v1.3.0", "example/controller")
+        for expected in ("Plugin version `1.3.0.0`", "## Updating the Stream Deck plugin",
+                         "settings, presets, key assignments and language are kept",
+                         "0.2.0.0 cannot check for updates", "check for new releases",
+                         "xattr -d com.apple.quarantine", "Privacy & Security",
+                         "xattr -dr com.apple.quarantine"):
+            self.assertIn(expected, notes)
+        self.assertIn("Plugin version `1.3.0.0`", release.notes("v1.3.0", "example/controller"))
+        self.git("tag", "v1.4.0-rc.1")
+        self.assertIn("Plugin version `1.4.0.0`", release.notes("v1.4.0-rc.1", "example/controller"))
 
     def test_two_tags_on_one_commit_have_no_new_commits(self):
         self.git("tag", "v1.0.0")

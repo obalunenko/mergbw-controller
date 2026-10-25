@@ -284,3 +284,25 @@ test("managed diagnostics accept only bounded lifecycle fields before any secret
 	]);
 	assert.ok(!JSON.stringify(events).includes("never-display"));
 });
+
+test("update events keep only versions, result, phase and category", () => {
+	const logs: Record<string, number | string>[] = [];
+	const diagnostics = new Diagnostics((fields) => logs.push(fields));
+	diagnostics.emit("update.checked", { installed: "v1.2.0+7", latest: "v1.2.1", result: "available" });
+	diagnostics.emit("update.failed", {
+		installed: "v1.2.0",
+		phase: "install",
+		errorCategory: "checksum",
+		...({ url: "https://example.invalid/x?token=1", notes: "body", path: "/tmp/x" } as object),
+	});
+	diagnostics.emit("update.checked", {
+		installed: "https://example.invalid",
+		latest: "v1.2.1\nforged",
+		result: "bogus" as never,
+	});
+	assert.deepEqual(logs, [
+		{ event: "update.checked", installed: "v1.2.0+7", latest: "v1.2.1", result: "available" },
+		{ event: "update.failed", errorCategory: "checksum", phase: "install", installed: "v1.2.0" },
+		{ event: "update.checked" },
+	]);
+});

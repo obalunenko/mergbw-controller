@@ -39,6 +39,9 @@ def previous_tag(tag):
     # tags on its commit. Unrelated branches and development tags are excluded.
     tags = git("tag", "--merged", tag, "--sort=-version:refname").splitlines()
     candidates = [candidate for candidate in tags if candidate != tag and TAG.fullmatch(candidate)]
+    # A stable release lists everything since the previous stable release.
+    if "-" not in tag:
+        candidates = [candidate for candidate in candidates if "-" not in candidate]
     if not candidates:
         return None
     return git("describe", "--tags", "--abbrev=0", *[f"--match={candidate}" for candidate in candidates], tag)
@@ -66,7 +69,8 @@ def notes(tag, repository):
             entry += "\n\n" + "\n".join(f"  > {line}" for line in body.splitlines())
         groups[group].append(entry)
 
-    lines = [f"# MeRGBW {tag}", ""]
+    plugin_version = re.match(r"v(\d+\.\d+\.\d+)", tag)[1] + ".0"
+    lines = [f"# MeRGBW {tag}", "", f"Plugin version `{plugin_version}`.", ""]
     if previous:
         lines += [f"Changes since [{previous}]({base}/releases/tag/{quote(previous, safe='')}).", ""]
     else:
@@ -88,10 +92,14 @@ def notes(tag, repository):
               "Standalone controller archives contain `sunset`, both READMEs and the MIT license. For standalone CLI use, extract the archive, then initialize and start the controller:", "",
               "```sh", "./sunset --identity AA:BB:CC:DD:EE:FF init", "./sunset serve", "```", "",
               "Replace the example identity with your lamp's manufacturer-data identity. Existing settings and presets are preserved. On macOS, allow Bluetooth for the terminal launching the controller. Linux requires BlueZ/D-Bus and a Bluetooth adapter.", "",
-              "Open the `.development.streamDeckPlugin` installer with Stream Deck 7.1+ on macOS 13.5+. This personal development build uses local ad-hoc signatures, without Developer ID, notarization or an Apple certificate. It bundles both Apple Silicon and Intel controller components; the plugin setup needs no separate controller, Terminal, developer tools or runtime executable download. Local installation is sufficient for acceptance; downloading the installer is optional.", "",
+              "Open the `.development.streamDeckPlugin` installer with Stream Deck 7.1+ on macOS 13.5+. This personal build uses local ad-hoc signatures, without Developer ID, notarization or an Apple certificate. It bundles both Apple Silicon and Intel controller components; the plugin setup needs no separate controller, Terminal, developer tools or runtime executable download.", "",
+              "A browser-downloaded installer is quarantined by macOS. Before opening it, run `xattr -d com.apple.quarantine ~/Downloads/com.obalunenko.mergbw.development.streamDeckPlugin`, or allow the blocked controller in System Settings → Privacy & Security. If the panel still reports that macOS blocked the controller, run `xattr -dr com.apple.quarantine ~/Library/Application\\ Support/com.elgato.StreamDeck/Plugins/com.obalunenko.mergbw.sdPlugin` and use Restart controller.", "",
               "Before plugin setup, stop any old standalone server using the method that originally launched it; the plugin never terminates foreign processes. In any action panel, enter the known manufacturer-data identity or select a local settings.json and optional presets.json, review the changes, then apply. Source files remain unchanged; legacy private command links alone cannot configure lamp identity.", "",
               "Managed settings, token and presets live in Application Support outside the replaced plugin directory. Updates preserve this local configuration plus Stream Deck assignments, custom artwork and language. A transferred profile contains assignments without credentials and needs local setup before commands are enabled.", "",
               "Record Bluetooth permission, local installation and actual lamp observations on the tested Mac. Architecture support in the payload does not prove execution on another Mac. CI validates software and inspects compiled native binaries without operating a lamp; builds and packet transmission do not prove physical lamp state. See the bundled READMEs for recorded device observations.", ""]
+    lines += ["## Updating the Stream Deck plugin", "",
+              "Installed plugins check for new releases and offer them in the action panel, with one macOS notification per version. Install downloads this installer, verifies it against SHA256SUMS and opens Stream Deck's installation prompt. An update installed from the panel needs no quarantine step. Open the installer to update manually; settings, presets, key assignments and language are kept.", "",
+              "Plugin 0.2.0.0 cannot check for updates; install this release manually once.", ""]
     changelog = f"{base}/compare/{quote(previous, safe='')}...{encoded_tag}" if previous else f"{base}/commits/{encoded_tag}"
     lines += [f"[Full changelog]({changelog})", ""]
     return "\n".join(lines)

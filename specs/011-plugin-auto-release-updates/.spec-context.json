@@ -1,0 +1,811 @@
+{
+  "workflow": "companion",
+  "specName": "Авторелиз плагина и предложение обновления",
+  "branch": "feature/lightning-effect",
+  "currentStep": "implement",
+  "status": "implementing",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T14:36:20.000Z"
+    },
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-25T14:38:58.015Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T14:42:09.018Z"
+    },
+    {
+      "step": "plan",
+      "substep": "research",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T14:44:03.207Z"
+    },
+    {
+      "step": "plan",
+      "substep": "design",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T14:46:33.348Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T14:46:33.603Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T14:52:13.284Z"
+    },
+    {
+      "step": "tasks",
+      "substep": "generate",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T14:53:23.233Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T001",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T14:53:23.589Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T14:53:23.686Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T15:18:32.136Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T002",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:19:41.296Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T003",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:19:41.368Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T004",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:19:41.445Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T005",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:19:41.524Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T006",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:21:50.092Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T007",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:21:50.173Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T016",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:23:04.997Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T017",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:23:11.550Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T026",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:23:50.464Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T027",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:23:50.533Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T028",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:23:50.601Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T008",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:28:45.551Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T009",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:28:45.604Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T010",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:28:45.657Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T011",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:28:45.715Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T012",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:28:45.775Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T013",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:28:45.837Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T014",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:28:45.890Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T015",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:28:45.943Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T018",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:34:31.079Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T019",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:34:31.134Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T020",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:34:31.188Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T021",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:34:31.242Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T022",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:34:31.295Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T023",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:34:31.348Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T024",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:34:31.402Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T025",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:34:31.456Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T029",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T15:36:23.741Z"
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Stamp manifest Version X.Y.Z.0 at assemble and write release.json with the exact tag",
+      "why": "Stream Deck versions are numeric only; prerelease ordering needs the full semver",
+      "rejected": "Bumping the source manifest per release, or encoding rc in the 4th number"
+    },
+    {
+      "decision": "Keep installer asset name com.obalunenko.mergbw.development.streamDeckPlugin",
+      "why": "Already version-free, so stable across releases",
+      "rejected": "Renaming to a versioned or distribution name"
+    },
+    {
+      "decision": "Stable-tag release notes start at the previous stable tag",
+      "why": "Stable users must see everything since their last stable",
+      "rejected": "Nearest tag including prereleases"
+    },
+    {
+      "decision": "GitHub /releases/latest, unauthenticated, every 24 h",
+      "why": "Excludes drafts and prereleases; far below anonymous limits; no dependency",
+      "rejected": "Listing all releases and filtering"
+    },
+    {
+      "decision": "Download via Node, verify SHA256SUMS, hand over with /usr/bin/open",
+      "why": "Stream Deck shows its own install prompt; Node-written files carry no quarantine",
+      "rejected": "openUrl with file URL; unpacking in place"
+    },
+    {
+      "decision": "macOS notification via osascript with argv",
+      "why": "No native code or dependency; failure tolerated",
+      "rejected": "UNUserNotificationCenter in the signed helper app"
+    },
+    {
+      "decision": "Persist updates {autoCheck, notifiedVersion} in schema-2 global settings",
+      "why": "Same store as language; survives plugin updates",
+      "rejected": "Separate Application Support file"
+    },
+    {
+      "decision": "launch_blocked category from a quarantine xattr probe after launch failure",
+      "why": "Deterministic signal for the ad-hoc downloaded-installer case",
+      "rejected": "Plugin removing quarantine itself"
+    },
+    {
+      "decision": "Local builds are X.Y.Z.N: nearest tag plus a per-build counter in dist/plugin-build-number; releases are X.Y.Z.0",
+      "why": "Owner request: a local build sorts above its release and below the next, so the next release is offered",
+      "rejected": "Commit count since tag as N (does not grow on rebuilds)"
+    },
+    {
+      "decision": "Download redirect host is not pinned; only HTTPS plus SHA256SUMS match",
+      "why": "GitHub redirects assets to release-assets.githubusercontent.com; pinning would break real downloads",
+      "rejected": "Allow-listing final redirect hosts"
+    },
+    {
+      "decision": "update.status is requested when the Lamp and connection screen opens; the action panel gets update via the inspector.get snapshot",
+      "why": "Avoids queuing ahead of user actions on every panel open",
+      "rejected": "Separate update.status on every panel open"
+    },
+    {
+      "decision": "Release page shown as plain-text URL",
+      "why": "Panel can only sendToPlugin in the current harness",
+      "rejected": "Clickable openUrl link"
+    },
+    {
+      "decision": "Added scene to staged image KINDS",
+      "why": "Pre-existing gap: scene icons were never staged, so full package checks would reject the payload",
+      "rejected": "Leaving it for a separate fix"
+    }
+  ],
+  "step_summaries": {
+    "plan": {
+      "summary": "Plan, research, data model and update contract written for tag-versioned plugin releases and in-plugin update offer",
+      "key_finding": "Release pipeline already publishes the installer and notes; the real gap is that manifest version is not tied to the tag, so updates cannot be detected"
+    },
+    "tasks": {
+      "summary": "30 tasks: Setup, Foundational (6), US1 versioned installer (8), US2 notes (2), US3 update offer (8), Polish (5)"
+    },
+    "implement": {
+      "summary": "29/30 tasks: tag-stamped plugin versions (release X.Y.Z.0, local X.Y.Z.N), stable-range release notes, in-plugin update check/notification/banner/verified install, launch_blocked quarantine help, READMEs"
+    }
+  },
+  "approach": "Stamp the tag into the staged manifest and a release.json at assembly, and tighten stable release notes. Add one plugin UpdateService that polls GitHub releases/latest, notifies once via osascript, offers the update in the panel and installs it by downloading, verifying SHA256SUMS and opening the installer in Stream Deck.",
+  "verified": [
+    {
+      "what": "plan blocks check out",
+      "command": "python3 .specify/extensions/companion/scripts/check_plan.py --feature-dir specs/011-plugin-auto-release-updates --strict",
+      "source": "derived",
+      "exitCode": 1,
+      "durationSeconds": 0.0,
+      "result": "  ERROR   plan.md:100  a line that is not `kind: text` (malformed) ·   ERROR   plan.md:101  a line that is not `kind: text` (malformed) ·   6 error(s), 0 warning(s)",
+      "warnings": [
+        "exited 1"
+      ]
+    },
+    {
+      "what": "plugin software checks",
+      "command": "task plugin:check:software",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 52.5,
+      "result": "---------------------------------------------------------------------- · Ran 33 tests in 0.531s · OK"
+    },
+    {
+      "what": "release notes tests",
+      "command": "task release:test",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 1.7,
+      "result": "---------------------------------------------------------------------- · Ran 9 tests in 1.639s · OK"
+    },
+    {
+      "what": "plugin native assembly tests",
+      "command": "python3 scripts/test_plugin_native.py",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.6,
+      "result": "---------------------------------------------------------------------- · Ran 33 tests in 0.528s · OK"
+    },
+    {
+      "what": "Go core tests",
+      "command": "task test:core",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.4,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/managed\t(cached) · ok  \tgithub.com/obalunenko/mergbw-controller/cmd/sunset/supervisor\t(cached) · task: [test:core] go test ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble ./internal/managed ./cmd/sunset/supervisor"
+    },
+    {
+      "what": "Go vet",
+      "command": "task vet",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.3,
+      "result": "task: [vet] go vet ./..."
+    },
+    {
+      "what": "Go build",
+      "command": "task build",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.1,
+      "result": "task: [build] go build -trimpath -buildvcs=false -o sunset ./cmd/sunset"
+    }
+  ],
+  "planBlocks": [
+    "screens"
+  ],
+  "workingBranch": "feature/plugin-auto-release-updates",
+  "coverage": {
+    "FR-001": {
+      "title": "Tag publishes release with installer, archives, SHA256SUMS and notes",
+      "tasks": [
+        "T015",
+        "T029"
+      ]
+    },
+    "FR-002": {
+      "title": "Release installer version derived from tag as X.Y.Z.0; mismatch stops release",
+      "tasks": [
+        "T008",
+        "T009",
+        "T011",
+        "T012",
+        "T014",
+        "T015"
+      ]
+    },
+    "FR-002a": {
+      "title": "Local builds are X.Y.Z.N with incrementing N; compared after X.Y.Z",
+      "tasks": [
+        "T008",
+        "T011",
+        "T018",
+        "T021"
+      ]
+    },
+    "FR-003": {
+      "title": "Installer asset name stable across releases",
+      "tasks": [
+        "T012",
+        "T021"
+      ]
+    },
+    "FR-004": {
+      "title": "Downloaded ad-hoc installer works after documented quarantine step; launch_blocked help",
+      "tasks": [
+        "T004",
+        "T010",
+        "T013",
+        "T017",
+        "T020",
+        "T025",
+        "T026",
+        "T027",
+        "T030"
+      ]
+    },
+    "FR-005": {
+      "title": "Notes list all commits since previous release of the channel plus update instructions",
+      "tasks": [
+        "T016",
+        "T017"
+      ]
+    },
+    "FR-006": {
+      "title": "Check latest stable release on start and every 24h; offer only strictly newer with installer",
+      "tasks": [
+        "T018",
+        "T021",
+        "T024"
+      ]
+    },
+    "FR-007": {
+      "title": "Offer shown in any action panel with versions, notes and release link; keys unaffected",
+      "tasks": [
+        "T019",
+        "T020",
+        "T022",
+        "T023",
+        "T025"
+      ]
+    },
+    "FR-007a": {
+      "title": "One macOS notification per new version, not repeated",
+      "tasks": [
+        "T004",
+        "T018",
+        "T021"
+      ]
+    },
+    "FR-008": {
+      "title": "Install downloads, verifies SHA256SUMS and opens Stream Deck prompt only on button press",
+      "tasks": [
+        "T018",
+        "T021",
+        "T022",
+        "T025"
+      ]
+    },
+    "FR-009": {
+      "title": "Check/download failures never affect lamp control",
+      "tasks": [
+        "T003",
+        "T018",
+        "T021"
+      ]
+    },
+    "FR-010": {
+      "title": "Auto-check can be disabled; manual check available",
+      "tasks": [
+        "T002",
+        "T005",
+        "T018",
+        "T019",
+        "T025"
+      ]
+    },
+    "FR-011": {
+      "title": "Only public release data requested; no user data sent",
+      "tasks": [
+        "T003",
+        "T007",
+        "T018",
+        "T021"
+      ]
+    },
+    "FR-012": {
+      "title": "Update preserves configuration, presets, token, keys, language, icons",
+      "tasks": [
+        "T005",
+        "T006",
+        "T030"
+      ]
+    },
+    "FR-013": {
+      "title": "Both READMEs describe release install, updates, disabling and first manual move",
+      "tasks": [
+        "T026",
+        "T027"
+      ]
+    }
+  },
+  "currentTask": "T029",
+  "task_summaries": {
+    "T001": {
+      "status": "DONE",
+      "did": "Branch feature/plugin-auto-release-updates created from master 7e63cd0",
+      "files": [
+        "git"
+      ]
+    },
+    "T002": {
+      "status": "DONE",
+      "did": "globals() accepts optional schema-2 updates {autoCheck, notifiedVersion}",
+      "files": [
+        "streamdeck/src/validation.ts"
+      ]
+    },
+    "T003": {
+      "status": "DONE",
+      "did": "launch_blocked, update error categories, update.checked/failed events with allow-listed fields",
+      "files": [
+        "streamdeck/src/diagnostics.ts"
+      ]
+    },
+    "T004": {
+      "status": "DONE",
+      "did": "EN/RU update, notification and launch_blocked strings plus format() helper",
+      "files": [
+        "streamdeck/src/i18n.ts"
+      ]
+    },
+    "T005": {
+      "status": "DONE",
+      "did": "getUpdates/saveUpdates on serial queue; schema 1 rejects",
+      "files": [
+        "streamdeck/src/settings.ts"
+      ]
+    },
+    "T006": {
+      "status": "DONE",
+      "did": "updates schema, rejection, saveUpdates keeps language, legacy rejects",
+      "files": [
+        "streamdeck/tests/settings.test.ts"
+      ]
+    },
+    "T007": {
+      "status": "DONE",
+      "did": "update events drop non-allow-listed fields",
+      "files": [
+        "streamdeck/tests/diagnostics.test.ts"
+      ]
+    },
+    "T016": {
+      "status": "DONE",
+      "did": "tests: stable notes since previous stable, rc range, plugin version, update and quarantine sections",
+      "files": [
+        "scripts/test_release.py"
+      ]
+    },
+    "T017": {
+      "status": "DONE",
+      "did": "stable tag skips prerelease predecessors; plugin version, quarantine and update sections in notes",
+      "files": [
+        "scripts/release.py"
+      ]
+    },
+    "T026": {
+      "status": "DONE",
+      "did": "README: quarantine step, tag-based versions incl. local X.Y.Z.N, updates section, stable notes range",
+      "files": [
+        "README.md"
+      ]
+    },
+    "T027": {
+      "status": "DONE",
+      "did": "README_RU: same changes in Russian",
+      "files": [
+        "README_RU.md"
+      ]
+    },
+    "T028": {
+      "status": "DONE",
+      "did": "Owner verification record with pending rows",
+      "files": [
+        "specs/011-plugin-auto-release-updates/hardware-verification.md"
+      ]
+    },
+    "T008": {
+      "status": "DONE",
+      "did": "Assemble tests: release tag stamps X.Y.Z.0/build 0, invalid tag fails before staging, git-describe/manifest fallback, atomic counter 1 then 2, source manifest untouched, finish requires stamp",
+      "files": [
+        "scripts/test_plugin_native.py"
+      ]
+    },
+    "T009": {
+      "status": "DONE",
+      "did": "Package-check tests: X.Y.Z.N agreeing with release.json, mismatch/missing/extra-key rejection, MERGBW_EXPECTED_TAG exact tag + build 0",
+      "files": [
+        "streamdeck/tests/package.test.ts"
+      ]
+    },
+    "T010": {
+      "status": "DONE",
+      "did": "Launch-blocked tests: probe success maps spawn_failed/startup_timeout to launch_blocked, failing probe keeps category, probe only runs xattr -p",
+      "files": [
+        "streamdeck/tests/managed-errors.test.ts"
+      ]
+    },
+    "T011": {
+      "status": "DONE",
+      "did": "assemble/spike stamp staged manifest Version and release.json (release build 0; local git describe or manifest fallback + atomic dist/plugin-build-number); finish_payload verifies stamp; KINDS gains scene",
+      "files": [
+        "scripts/plugin-native.py"
+      ]
+    },
+    "T012": {
+      "status": "DONE",
+      "did": "check-package accepts X.Y.Z.W, requires release.json {tag,build} agreeing with manifest in complete payloads, honours MERGBW_EXPECTED_TAG",
+      "files": [
+        "streamdeck/scripts/check-package.mjs"
+      ]
+    },
+    "T013": {
+      "status": "DONE",
+      "did": "Injectable xattr -p quarantine probe on bundled app; spawn_failed/startup_timeout become launch_blocked when present; launch_blocked added to runtimeErrors",
+      "files": [
+        "streamdeck/src/managed-controller.ts"
+      ]
+    },
+    "T014": {
+      "status": "DONE",
+      "did": "plugin:native:assemble forwards optional RELEASE_TAG as --release-tag",
+      "files": [
+        "Taskfile.yml"
+      ]
+    },
+    "T015": {
+      "status": "DONE",
+      "did": "release.yml sets RELEASE_TAG on assemble and MERGBW_EXPECTED_TAG on package and archive-check steps",
+      "files": [
+        ".github/workflows/release.yml"
+      ]
+    },
+    "T018": {
+      "status": "DONE",
+      "did": "Wrote UpdateService tests: semver/(tag,build) order, offer decisions, request, schedule, notification, Later, install",
+      "files": [
+        "streamdeck/tests/updates.test.ts"
+      ]
+    },
+    "T019": {
+      "status": "DONE",
+      "did": "Added update.* message tests: payload validation, offer-tag checks, update snapshot field, publish on change",
+      "files": [
+        "streamdeck/tests/inspector-messages.test.ts"
+      ]
+    },
+    "T020": {
+      "status": "DONE",
+      "did": "Added UI tests: banner states, inert notes, updates row toggle and Check now, launch_blocked help",
+      "files": [
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "T021": {
+      "status": "DONE",
+      "did": "Created UpdateService: semver+build compare, capped/timed GitHub request, decide(), 24 h timer, one-time osascript notification, Later, verified streamed install, temp cleanup, events",
+      "files": [
+        "streamdeck/src/updates.ts"
+      ]
+    },
+    "T022": {
+      "status": "DONE",
+      "did": "Added five update.* message types, payload keys, update snapshot field and handlers delegating to UpdateService",
+      "files": [
+        "streamdeck/src/inspector-messages.ts"
+      ]
+    },
+    "T023": {
+      "status": "DONE",
+      "did": "Added update banner on the action panel, Updates row on Lamp and connection, launch_blocked notice",
+      "files": [
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/ui/index.html"
+      ]
+    },
+    "T024": {
+      "status": "DONE",
+      "did": "Constructed UpdateService with fetch, execFile, Date clock and os.tmpdir(), read release.json from plugin root, started after runtime.open and passed to InspectorController",
+      "files": [
+        "streamdeck/src/plugin.ts"
+      ]
+    },
+    "T025": {
+      "status": "DONE",
+      "did": "Rendered banner and states via textContent, wired Install/Later/Check now/auto-check, update.status on opening Lamp and connection, launch_blocked help",
+      "files": [
+        "streamdeck/src/ui/inspector.ts"
+      ]
+    },
+    "T029": {
+      "status": "DONE",
+      "did": "plugin:check:software (297 pass), test_plugin_native (33), release:test, test:core, vet, build all green; Linux check skipped",
+      "files": [
+        "repo"
+      ]
+    }
+  },
+  "concerns": [
+    {
+      "note": "simplified: one 10-minute ceiling for the whole installer download (updates.ts LIMITS.downloadMs); raise if slow links time out",
+      "step": "implement"
+    },
+    {
+      "note": "Full plugin:package with the native universal payload and a real tagged release were not run locally; T030 owner observation (prerelease tag, browser download, N to N+1 update, notification) is pending",
+      "step": "implement"
+    },
+    {
+      "note": "Linux task check skipped by owner decision",
+      "step": "implement"
+    }
+  ],
+  "last_action": "All software checks green; T030 owner device verification pending"
+}

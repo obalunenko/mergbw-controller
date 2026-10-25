@@ -257,9 +257,9 @@ tasks:
       - '{{.PYTHON}} scripts/plugin-native.py build --output-root {{shellQuote (printf "%s/dist" .ROOT_DIR)}}'
 
   plugin:native:assemble:
-    desc: Assemble matching arm64 and Intel slices into an isolated universal app.
+    desc: Assemble matching arm64 and Intel slices into an isolated universal app (optional RELEASE_TAG=vX.Y.Z stamps X.Y.Z.0; local builds get X.Y.Z.N).
     cmds:
-      - '{{.PYTHON}} scripts/plugin-native.py assemble --arm64-dir {{shellQuote .NATIVE_ARM64_DIR}} --amd64-dir {{shellQuote .NATIVE_AMD64_DIR}}'
+      - '{{.PYTHON}} scripts/plugin-native.py assemble --arm64-dir {{shellQuote .NATIVE_ARM64_DIR}} --amd64-dir {{shellQuote .NATIVE_AMD64_DIR}}{{if .RELEASE_TAG}} --release-tag {{shellQuote .RELEASE_TAG}}{{end}}'
 
   plugin:native:dev:
     desc: Mark and ad-hoc sign an assembled two-architecture development payload.

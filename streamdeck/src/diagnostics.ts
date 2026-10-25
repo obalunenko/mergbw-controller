@@ -6,6 +6,7 @@ export const managedErrorCategories = [
 	"binary_missing",
 	"binary_incompatible",
 	"spawn_failed",
+	"launch_blocked",
 	"protocol_incompatible",
 	"startup_timeout",
 	"host_unavailable",
@@ -19,8 +20,21 @@ export const managedErrorCategories = [
 	"stale_configuration",
 	"internal_error",
 ] as const;
+export const updateErrorCategories = [
+	"network",
+	"rate_limited",
+	"http",
+	"malformed",
+	"no_asset",
+	"size",
+	"checksum",
+	"open_failed",
+] as const;
+export type UpdateErrorCategory = (typeof updateErrorCategories)[number];
+export type UpdateResult = "available" | "dismissed" | "no_asset" | "up_to_date";
 export type ErrorCategory =
 	| (typeof managedErrorCategories)[number]
+	| UpdateErrorCategory
 	| "auth"
 	| "backend"
 	| "parameter"
@@ -40,16 +54,23 @@ export type SafeEvent =
 	| "plugin.ready"
 	| "presets.failed"
 	| "presets.loaded"
-	| "runtime.failed";
+	| "runtime.failed"
+	| "update.checked"
+	| "update.failed";
 export type Diagnostic = {
-	phase?: "cleanup" | "configuration" | "readiness" | "recovery" | "startup";
+	phase?: "check" | "cleanup" | "configuration" | "install" | "readiness" | "recovery" | "startup";
 	actionKind?: ActionKind;
 	outcome?: Outcome;
 	errorCategory?: ErrorCategory;
 	durationMs?: number;
 	requestId?: string;
 	operationId?: string;
+	installed?: string;
+	latest?: string;
+	result?: UpdateResult;
 };
+const RELEASE_TAG =
+	/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[1-9]\d{0,5})?$/;
 export function requestId(value: unknown, secrets: Iterable<string> = []): string | undefined {
 	if (typeof value !== "string" || !/^[0-9]{1,32}$/.test(value)) return undefined;
 	for (const secret of secrets) if (secret && value.includes(secret)) return undefined;
@@ -100,6 +121,8 @@ export class Diagnostics {
 				"presets.failed",
 				"presets.loaded",
 				"runtime.failed",
+				"update.checked",
+				"update.failed",
 			].includes(event)
 		)
 			return;
@@ -111,6 +134,7 @@ export class Diagnostics {
 		if (
 			[
 				...managedErrorCategories,
+				...updateErrorCategories,
 				"validation",
 				"service",
 				"auth",
@@ -129,8 +153,15 @@ export class Diagnostics {
 			input.durationMs <= 86400000
 		)
 			fields.durationMs = input.durationMs;
-		if (["startup", "readiness", "recovery", "cleanup", "configuration"].includes(input.phase ?? ""))
+		if (
+			["startup", "readiness", "recovery", "cleanup", "configuration", "check", "install"].includes(input.phase ?? "")
+		)
 			fields.phase = input.phase!;
+		for (const key of ["installed", "latest"] as const)
+			if (typeof input[key] === "string" && input[key].length <= 64 && RELEASE_TAG.test(input[key]))
+				fields[key] = input[key];
+		if (["available", "dismissed", "no_asset", "up_to_date"].includes(input.result ?? ""))
+			fields.result = input.result!;
 		const id = this.id(input.requestId);
 		if (id) fields.requestId = id;
 		if (typeof input.operationId === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(input.operationId))

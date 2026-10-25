@@ -1,4 +1,7 @@
 import streamDeck from "@elgato/streamdeck";
+import { execFile } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -16,6 +19,7 @@ import { InspectorController } from "./inspector-messages.js";
 import { bundledSupervisorSpawn, ManagedController, runtimeError, shutdownOnSignal } from "./managed-controller.js";
 import { OperationStore } from "./operation-store.js";
 import { Settings } from "./settings.js";
+import { UpdateService } from "./updates.js";
 
 streamDeck.logger.setLevel("info");
 const diagnostics = new Diagnostics((fields) => streamDeck.logger.info(fields));
@@ -34,12 +38,24 @@ const settings = new Settings(
 );
 const operations = new OperationStore();
 const client = new BridgeClient();
-const runtime = new ManagedController(
-	bundledSupervisorSpawn(resolve(dirname(fileURLToPath(import.meta.url)), "..")),
+const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const runtime = new ManagedController(bundledSupervisorSpawn(pluginRoot), settings, client, host);
+const updates = new UpdateService({
+	fetch: (url, init) => fetch(url, init),
+	exec: (file, args) =>
+		new Promise<void>((done, fail) =>
+			execFile(file, args, { timeout: 30000 }, (error) => (error ? fail(error) : done())),
+		),
+	clock: {
+		now: () => Date.now(),
+		setTimeout: (callback, delay) => setTimeout(callback, delay),
+		clearTimeout: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
+	},
+	tmpRoot: tmpdir(),
 	settings,
-	client,
-	host,
-);
+	readStamp: async () => JSON.parse(await readFile(resolve(pluginRoot, "release.json"), "utf8")) as unknown,
+	diagnostics,
+});
 const inspector = new InspectorController(
 	settings,
 	operations,
@@ -49,6 +65,7 @@ const inspector = new InspectorController(
 	},
 	diagnostics,
 	runtime,
+	updates,
 );
 const services = { settings, operations, client, inspector, diagnostics, runtime };
 streamDeck.actions.registerAction(new PowerOn(services));
@@ -70,8 +87,11 @@ async function start(): Promise<void> {
 	await settings.load();
 	await runtime.open();
 	diagnostics.emit("plugin.ready");
+	void updates.start();
 }
 void start().catch((error: unknown) => {
+	// Update checks never depend on the lamp controller, so a blocked launch can still be fixed by an update.
+	if (settings.migrationStatus() !== "invalid") void updates.start();
 	runtime.startupFailed(error);
 	diagnostics.emit("runtime.failed", {
 		errorCategory: runtimeError(error, "storage_unavailable") as ErrorCategory,

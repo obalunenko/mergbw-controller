@@ -1,4 +1,4 @@
-import { translate } from "../i18n.js";
+import { format, translate } from "../i18n.js";
 import {
 	defaultPreset,
 	effectSnapshot,
@@ -61,6 +61,18 @@ let generation: string | null = null;
 let writesAllowed = true;
 let applyTimeout: ReturnType<typeof setTimeout> | undefined;
 let proposal: { transactionId: string; expectedGeneration: string | null; requiresConfirmation: boolean } | undefined;
+let updateTag: string | undefined;
+let laterTag: string | undefined;
+const PLUGIN_DIR = "~/Library/Application Support/com.elgato.StreamDeck/Plugins/com.obalunenko.mergbw.sdPlugin";
+const RELEASE_PAGE = "https://github.com/obalunenko/mergbw-controller/";
+const UPDATE_STATUS: Record<string, string> = {
+	checking: "updateChecking",
+	up_to_date: "updateUpToDate",
+	available: "updateAvailable",
+	dismissed: "updateDismissed",
+	downloading: "updateDownloading",
+	handed: "updateHanded",
+};
 const persisted = new Map<string, string>();
 const requests: { message: Message; drafts: Drafts }[] = [];
 const saveErrors = new Map<string, string>();
@@ -90,6 +102,60 @@ function showView(next: View): void {
 		element(`view-${name}`).hidden = name !== next;
 	element("back").hidden = next === "main";
 	text("back", next === "review" ? "backToParameters" : next === "editor" ? "cancel" : "backToKey");
+}
+// Release data is untrusted: every value is rendered with textContent only.
+function renderUpdate(raw: unknown, completing: boolean): void {
+	const update = isObject(raw) && typeof raw.installed === "string" && typeof raw.state === "string" ? raw : undefined;
+	element("update-settings").hidden = !update;
+	const state = update ? String(update.state) : "";
+	const latest = typeof update?.latest === "string" ? update.latest : undefined;
+	const values = {
+		latest: (latest ?? "").replace(/^v/, ""),
+		installed: String(update?.installed ?? "").replace(/^v/, ""),
+	};
+	const installable = update?.installable === true;
+	const category = typeof update?.errorCategory === "string" ? `update_${update.errorCategory}` : undefined;
+	const url =
+		typeof update?.releaseUrl === "string" && update.releaseUrl.startsWith(RELEASE_PAGE) ? update.releaseUrl : "";
+	const notes = typeof update?.notes === "string" ? update.notes.slice(0, 2000) : "";
+	const banner =
+		!!latest &&
+		(["available", "downloading", "handed"].includes(state) || (state === "failed" && installable && !!category));
+	updateTag = banner && installable && ["available", "handed"].includes(state) ? latest : undefined;
+	laterTag = banner && state !== "downloading" ? latest : undefined;
+	element("update-banner").hidden = !banner;
+	const bannerKey = state === "failed" ? "updateAvailable" : (UPDATE_STATUS[state] ?? "updateAvailable");
+	element("update-banner-text").textContent = banner ? format(language, bannerKey, values) : "";
+	element("update-banner-error").textContent =
+		banner && state === "failed" && category ? translate(language, category) : "";
+	element("update-notes").textContent = banner ? notes : "";
+	element("update-notes-details").hidden = !banner || !notes;
+	element("update-release-url").textContent =
+		banner && url ? `${translate(language, "updateReleasePage")}: ${url}` : "";
+	element("update-install").hidden = !updateTag;
+	element("update-later").hidden = !laterTag;
+	const installing = requests.some(
+		(request, index) => !(completing && index === 0) && request.message.type === "update.install",
+	);
+	element("update-install").toggleAttribute("disabled", installing);
+	if (!update) return;
+	input("update-auto-check").checked = update.autoCheck !== false;
+	const key = state === "failed" ? (category ?? "updateIdle") : (UPDATE_STATUS[state] ?? "updateIdle");
+	element("update-status").textContent = [
+		format(language, key, values),
+		...(category && state !== "failed" ? [translate(language, category)] : []),
+	].join(" ");
+	const checked = typeof update.lastCheckedAt === "string" ? new Date(update.lastCheckedAt) : undefined;
+	element("update-last-check").textContent =
+		checked && !Number.isNaN(checked.getTime())
+			? format(language, "updateLastCheck", { time: checked.toLocaleString(language) })
+			: "";
+	element("update-setup-release").textContent =
+		url && !banner ? `${translate(language, "updateReleasePage")}: ${url}` : "";
+	const checking = requests.some(
+		(request, index) => !(completing && index === 0) && request.message.type === "update.check",
+	);
+	element("update-check").toggleAttribute("disabled", checking || state === "checking" || state === "downloading");
 }
 function editorLabels(): void {
 	text("editor-title", editorOperation === "create" ? "createPreset" : "editorEdit");
@@ -620,13 +686,18 @@ client.sendToPropertyInspector.subscribe((event) => {
 		element("configuration-check").hidden = snapshot.saveOutcome.activeStateKnown === true;
 	}
 	if (isObject(snapshot.controller)) {
-		text(
-			"controller-state",
+		element("controller-state").textContent = format(
+			language,
 			typeof snapshot.controller.errorCategory === "string"
 				? snapshot.controller.errorCategory
 				: String(snapshot.controller.state),
+			{ plugin: PLUGIN_DIR },
 		);
 	}
+	const blocked = isObject(snapshot.controller) && snapshot.controller.errorCategory === "launch_blocked";
+	element("launch-blocked").hidden = !blocked;
+	element("launch-blocked").textContent = blocked ? format(language, "launch_blocked", { plugin: PLUGIN_DIR }) : "";
+	renderUpdate(snapshot.update, completing);
 	const canEdit = writesAllowed && snapshot.activeStateKnown !== false && !!generation;
 	element("preset-copy").toggleAttribute(
 		"disabled",
@@ -1201,7 +1272,26 @@ element("editor-brightness").addEventListener("input", () => {
 	if (input("editor-brightness").validity.valid && input("editor-brightness").value !== "")
 		input("editor-brightness-slider").value = input("editor-brightness").value;
 });
-element("setup-open").addEventListener("click", () => showView("setup"));
+element("setup-open").addEventListener("click", () => {
+	showView("setup");
+	void send("update.status");
+});
+element("update-install").addEventListener("click", () => {
+	if (!updateTag || requests.some((request) => request.message.type === "update.install")) return;
+	element("update-install").toggleAttribute("disabled", true);
+	void send("update.install", { tag: updateTag });
+});
+element("update-later").addEventListener("click", () => {
+	if (laterTag) void send("update.dismiss", { tag: laterTag });
+});
+element("update-check").addEventListener("click", () => {
+	if (requests.some((request) => request.message.type === "update.check")) return;
+	element("update-check").toggleAttribute("disabled", true);
+	void send("update.check");
+});
+element("update-auto-check").addEventListener("change", () => {
+	void send("update.autoCheck", { autoCheck: input("update-auto-check").checked });
+});
 element("diagnostics-open").addEventListener("click", () => showView("diagnostics"));
 element("library-open").addEventListener("click", () => {
 	showView("library");

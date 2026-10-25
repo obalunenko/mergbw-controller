@@ -52,11 +52,16 @@ class Runner:
         self.minimum = "13.5"
         self.dependencies = "runtime\nfixture/internal/managed"
         self.goroot = None
+        self.describe = None
 
     def __call__(self, command, *, cwd, env=None):
         self.calls.append((command, env))
         if command[:3] == ["git", "rev-parse", "HEAD"]:
             return "a" * 40
+        if command[:2] == ["git", "describe"]:
+            if self.describe is None:
+                raise native.BuildError("native build/inspection failed: git")
+            return self.describe
         if command[:2] == ["git", "ls-files"]:
             return "internal/bridge/http.go\ngo.mod"
         if command[:2] == ["go", "build"]:
@@ -158,6 +163,8 @@ class SpikeTests(unittest.TestCase):
             path = self.source / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("built fixture")
+        self.manifest = self.source / "manifest.json"
+        self.manifest.write_text(json.dumps({"UUID": "com.obalunenko.mergbw", "Version": "0.2.0.0", "Name": "MeRGBW"}, indent=4) + "\n")
         shutil.copytree(native.ROOT / "streamdeck/native", self.root / "streamdeck/native")
         bridge = self.root / "internal/bridge/http.go"
         bridge.parent.mkdir(parents=True)
@@ -183,7 +190,7 @@ class SpikeTests(unittest.TestCase):
         self.assertEqual(metadata["managedProtocolVersion"], 1)
         self.assertEqual(metadata["bridgeVersion"], "2.0.0-go")
         self.assertRegex(metadata["sourceTreeSHA256"], r"^[0-9a-f]{64}$")
-        expected = set(native.RUNTIME_FILES) | {f"{native.APP}/{name}" for name in native.NATIVE_FILES} | {"controller/payload-manifest.json", "licenses/go-native-notices.txt"}
+        expected = set(native.RUNTIME_FILES) | {f"{native.APP}/{name}" for name in native.NATIVE_FILES} | {"controller/payload-manifest.json", "licenses/go-native-notices.txt", "release.json"}
         self.assertEqual({path.relative_to(target).as_posix() for path in target.rglob("*") if path.is_file()}, expected)
         notice = target / "licenses/go-native-notices.txt"
         self.assertIn("Copyright fixture license", notice.read_text())
@@ -201,6 +208,8 @@ class SpikeTests(unittest.TestCase):
         self.assertIn("-ldflags=-macos=13.5.0", builds[0][0])
         self.assertEqual(builds[1][1]["CGO_ENABLED"], "1")
         self.assertEqual(builds[1][1]["MACOSX_DEPLOYMENT_TARGET"], "13.5")
+        self.assertEqual(json.loads((target / "release.json").read_text()), {"tag": "v0.2.0", "build": 1})
+        self.assertEqual(json.loads((target / "manifest.json").read_text())["Version"], "0.2.0.1")
         self.assertTrue(all(command[0] in ("go", "git", "lipo", "otool", "codesign") for command, _ in self.runner.calls))
         self.assertTrue(all(command[0] not in ("sunset", "mergbw-supervisor", "open", "streamdeck") for command, _ in self.runner.calls))
 
@@ -262,8 +271,69 @@ class CompleteTests(SpikeTests):
                                               system="Darwin", machine=machine))
         return outputs
 
-    def assemble(self, slices):
-        return native.assemble(self.output, *slices, root=self.root, runner=self.runner, system="Darwin")
+    def assemble(self, slices, **kwargs):
+        return native.assemble(self.output, *slices, root=self.root, runner=self.runner, system="Darwin", **kwargs)
+
+    def stamp(self, target):
+        return json.loads((target / "manifest.json").read_text())["Version"], json.loads((target / "release.json").read_text())
+
+    def test_release_tag_stamps_staged_manifest_and_release_json_without_counter(self):
+        source = self.manifest.read_bytes()
+        slices = self.slices()
+        for tag in ("v1.3.0", "v1.3.0-rc.1"):
+            with self.subTest(tag=tag):
+                target = self.assemble(slices, release_tag=tag)
+                self.assertEqual(self.stamp(target), ("1.3.0.0", {"tag": tag, "build": 0}))
+                self.assertEqual(stat.S_IMODE((target / "release.json").stat().st_mode), 0o644)
+                self.assertEqual(json.loads((target / "manifest.json").read_text())["Name"], "MeRGBW")
+                shutil.rmtree(target)
+        self.assertFalse((self.root / "dist/plugin-build-number").exists())
+        self.assertFalse(any(command[:2] == ["git", "describe"] for command, _ in self.runner.calls))
+        self.assertEqual(self.manifest.read_bytes(), source)
+
+    def test_invalid_release_tag_fails_before_staging(self):
+        slices = self.slices()
+        for tag in ("1.3.0", "v1.3", "v01.3.0", "v1.3.0-", "v1.3.0+build", "v1.3.0\n", ""):
+            with self.subTest(tag=tag), self.assertRaisesRegex(native.BuildError, "release tag"):
+                self.assemble(slices, release_tag=tag)
+        self.assertEqual(self.runner.calls, [])
+        self.assertFalse((self.output / native.PLUGIN).exists())
+
+    def test_local_build_uses_nearest_tag_and_atomic_counter(self):
+        source = self.manifest.read_bytes()
+        slices = self.slices()
+        self.runner.describe = "v1.2.0"
+        for build in (1, 2):
+            target = self.assemble(slices)
+            self.assertEqual(self.stamp(target), (f"1.2.0.{build}", {"tag": "v1.2.0", "build": build}))
+            self.assertEqual((self.root / "dist/plugin-build-number").read_text().strip(), str(build))
+            shutil.rmtree(target)
+        describe = [command for command, _ in self.runner.calls if command[:2] == ["git", "describe"]]
+        self.assertEqual(describe[0], ["git", "describe", "--tags", "--abbrev=0", "--match", "v*"])
+        self.assertEqual(sorted(path.name for path in (self.root / "dist").iterdir()), ["plugin-build-number"])
+        self.assertEqual(self.manifest.read_bytes(), source)
+
+    def test_local_build_without_valid_tag_falls_back_to_source_manifest(self):
+        slices = self.slices()
+        for describe in (None, "vnext", "v1.2"):
+            with self.subTest(describe=describe):
+                shutil.rmtree(self.root / "dist", ignore_errors=True)
+                self.runner.describe = describe
+                target = self.assemble(slices)
+                self.assertEqual(self.stamp(target), ("0.2.0.1", {"tag": "v0.2.0", "build": 1}))
+                shutil.rmtree(target)
+
+    def test_invalid_counter_or_source_version_fails_without_output(self):
+        slices = self.slices()
+        (self.root / "dist").mkdir()
+        (self.root / "dist/plugin-build-number").write_text("seven")
+        with self.assertRaisesRegex(native.BuildError, "counter"):
+            self.assemble(slices)
+        (self.root / "dist/plugin-build-number").unlink()
+        self.manifest.write_text(json.dumps({"Version": "0.2.0"}))
+        with self.assertRaisesRegex(native.BuildError, "manifest version"):
+            self.assemble(slices)
+        self.assertFalse((self.output / native.PLUGIN).exists())
 
     def test_native_slices_are_inspected_not_invoked_and_do_not_replace_cli_archives(self):
         self.output.mkdir()
@@ -336,6 +406,23 @@ class CompleteTests(SpikeTests):
             self.assertEqual(entry["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
             self.assertEqual(entry["mode"], f"{stat.S_IMODE(path.stat().st_mode):04o}")
         self.assertFalse(any(command[0] in ("sunset", "mergbw-supervisor", "open") for command, _ in self.runner.calls))
+        self.assertEqual(self.stamp(target), ("0.2.0.1", {"tag": "v0.2.0", "build": 1}))
+
+    def test_finish_rejects_missing_or_disagreeing_release_stamp(self):
+        for fault in ("missing", "keys", "version"):
+            with self.subTest(fault=fault):
+                shutil.rmtree(self.output, ignore_errors=True)
+                target = self.assemble(self.slices(), release_tag="v1.3.0")
+                stamp = target / "release.json"
+                if fault == "missing":
+                    stamp.unlink()
+                if fault == "keys":
+                    stamp.write_text(json.dumps({"tag": "v1.3.0", "build": 0, "extra": 1}))
+                if fault == "version":
+                    stamp.write_text(json.dumps({"tag": "v1.4.0", "build": 0}))
+                with self.assertRaisesRegex(native.BuildError, "release stamp"):
+                    native.finish_payload(target, "development", root=self.root, runner=self.runner, system="Darwin")
+                self.assertFalse((target / "controller/payload-manifest.json").exists())
 
     def test_distribution_missing_credentials_fails_before_signing_without_downgrade(self):
         target = self.assemble(self.slices())

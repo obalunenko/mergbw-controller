@@ -103,3 +103,49 @@ test("initial loading serializes later import and saves without restoring a stal
 		assert.equal(settings.connectionRevision, 2);
 	}
 });
+
+test("update settings are optional, allow-listed and kept by language saves", async () => {
+	assert.deepEqual(globals({ schemaVersion: 2, language: "en", updates: { autoCheck: false } }), {
+		schemaVersion: 2,
+		language: "en",
+		updates: { autoCheck: false },
+	});
+	assert.deepEqual(
+		globals({ schemaVersion: 2, language: "ru", updates: { autoCheck: true, notifiedVersion: "v1.3.0" } }).updates,
+		{ autoCheck: true, notifiedVersion: "v1.3.0" },
+	);
+	for (const updates of [
+		{},
+		{ autoCheck: "yes" },
+		{ autoCheck: true, extra: 1 },
+		{ autoCheck: true, notifiedVersion: "1.3.0" },
+		{ autoCheck: true, notifiedVersion: "v1.3.0-rc.1" },
+		null,
+	])
+		assert.throws(() => globals({ schemaVersion: 2, language: "en", updates }));
+	assert.equal(
+		globals({ schemaVersion: 1, connection: null, language: "en", updates: { autoCheck: false } }).updates,
+		undefined,
+	);
+
+	const storage = new MemoryStorage();
+	const settings = new Settings(storage);
+	await settings.load();
+	assert.deepEqual(settings.getUpdates(), { autoCheck: true });
+	await settings.saveUpdates({ autoCheck: false, notifiedVersion: "v1.3.0" });
+	await settings.saveLanguage("ru");
+	await assert.rejects(settings.saveUpdates({ autoCheck: true, token: syntheticToken }));
+	const restored = new Settings(storage);
+	await restored.load();
+	assert.deepEqual(restored.get(), {
+		schemaVersion: 2,
+		language: "ru",
+		updates: { autoCheck: false, notifiedVersion: "v1.3.0" },
+	});
+
+	const legacy = new MemoryStorage();
+	legacy.global = { schemaVersion: 1, connection: null, language: "en" };
+	const old = new Settings(legacy);
+	await old.load();
+	await assert.rejects(old.saveUpdates({ autoCheck: false }), /migration_required/);
+});

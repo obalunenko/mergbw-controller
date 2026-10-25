@@ -155,6 +155,7 @@ const provenance = { sourceRevision: "a".repeat(40), sourceTreeSHA256: "b".repea
 const inspectionCalls: string[][] = [];
 const completeOptions = {
 	...provenance,
+	expectedTag: undefined as string | undefined,
 	packageMode: "distribution",
 	platform: "darwin",
 	runner: (command: string, args: string[]) => {
@@ -226,8 +227,89 @@ function payload(directory: string, mode = "distribution") {
 	const save = () =>
 		writeFileSync(join(directory, "controller/payload-manifest.json"), JSON.stringify(manifest), { mode: 0o644 });
 	save();
+	stamp(directory, "0.2.0.0", { tag: "v0.2.0", build: 0 });
 	return { manifest, save };
 }
+function stamp(directory: string, version: string, release?: unknown) {
+	const path = join(directory, "manifest.json");
+	writeFileSync(path, JSON.stringify({ ...JSON.parse(readFileSync(path, "utf8")), Version: version }, null, 4));
+	if (release === undefined) rmSync(join(directory, "release.json"), { force: true });
+	else writeFileSync(join(directory, "release.json"), JSON.stringify(release), { mode: 0o644 });
+}
+
+test("complete package requires release.json agreeing with the X.Y.Z.N manifest version", () => {
+	const { directory, clean } = runtime();
+	try {
+		payload(directory);
+		for (const [version, release] of [
+			["1.2.0.7", { tag: "v1.2.0", build: 7 }],
+			["1.3.0.0", { tag: "v1.3.0-rc.1", build: 0 }],
+			["10.20.30.0", { tag: "v10.20.30", build: 0 }],
+		] as const) {
+			stamp(directory, version, release);
+			assert.ok(checkRuntime(directory, completeOptions).includes("release.json"));
+		}
+		for (const [version, release, error] of [
+			["1.2.0.8", { tag: "v1.2.0", build: 7 }, /release stamp/],
+			["1.2.1.7", { tag: "v1.2.0", build: 7 }, /release stamp/],
+			["1.2.0.7", { tag: "v1.2.0", build: 7, notes: "x" }, /release stamp/],
+			["1.2.0.7", { tag: "v1.2.0" }, /release stamp/],
+			["1.2.0.7", { tag: "v1.2.0", build: "7" }, /release stamp/],
+			["1.2.0.0", { tag: "v1.2.0", build: -0.5 }, /release stamp/],
+			["1.2.0.0", { tag: "1.2.0", build: 0 }, /release stamp/],
+			["1.2.0.0", { tag: "v01.2.0", build: 0 }, /release stamp/],
+			["1.2.0.0", ["v1.2.0", 0], /release stamp/],
+			["1.2.0.0", undefined, /missing distribution file: release.json/],
+			["1.2.0", { tag: "v1.2.0", build: 0 }, /manifest identity/],
+			["1.2.0.0-rc", { tag: "v1.2.0", build: 0 }, /manifest identity/],
+		] as const) {
+			stamp(directory, version, release);
+			assert.throws(() => checkRuntime(directory, completeOptions), error, `${version} ${JSON.stringify(release)}`);
+		}
+		stamp(directory, "1.2.0.0", { tag: "v1.2.0", build: 0 });
+		writeFileSync(join(directory, "release.json"), "{not json");
+		assert.throws(() => checkRuntime(directory, completeOptions), /release stamp/);
+	} finally {
+		clean();
+	}
+});
+
+test("software check accepts any X.Y.Z.W manifest version without a release stamp", () => {
+	const { directory, clean } = runtime();
+	try {
+		stamp(directory, "1.4.2.3");
+		assert.ok(!checkRuntime(directory, { softwareOnly: true }).includes("release.json"));
+		stamp(directory, "1.4.2");
+		assert.throws(() => checkRuntime(directory, { softwareOnly: true }), /manifest identity/);
+	} finally {
+		clean();
+	}
+});
+
+test("MERGBW_EXPECTED_TAG requires that exact tag with build 0", () => {
+	const { directory, clean } = runtime();
+	const previous = process.env.MERGBW_EXPECTED_TAG;
+	try {
+		payload(directory);
+		stamp(directory, "1.3.0.0", { tag: "v1.3.0-rc.1", build: 0 });
+		assert.ok(checkRuntime(directory, { ...completeOptions, expectedTag: "v1.3.0-rc.1" }).length > 28);
+		for (const expectedTag of ["v1.3.0", "v1.3.0-rc.2"])
+			assert.throws(() => checkRuntime(directory, { ...completeOptions, expectedTag }), /expected release tag/);
+		stamp(directory, "1.3.0.4", { tag: "v1.3.0", build: 4 });
+		assert.ok(checkRuntime(directory, completeOptions).length > 28);
+		assert.throws(() => checkRuntime(directory, { ...completeOptions, expectedTag: "v1.3.0" }), /expected release tag/);
+		const fromEnvironment: Partial<typeof completeOptions> = { ...completeOptions };
+		delete fromEnvironment.expectedTag;
+		process.env.MERGBW_EXPECTED_TAG = "v1.3.0";
+		assert.throws(() => checkRuntime(directory, fromEnvironment), /expected release tag/);
+		stamp(directory, "1.3.0.0", { tag: "v1.3.0", build: 0 });
+		assert.ok(checkRuntime(directory, fromEnvironment).length > 28);
+	} finally {
+		if (previous === undefined) delete process.env.MERGBW_EXPECTED_TAG;
+		else process.env.MERGBW_EXPECTED_TAG = previous;
+		clean();
+	}
+});
 
 test("complete package requires exact source/schema/protocol/build metadata and finite native bytes", () => {
 	const { directory, clean } = runtime();
@@ -511,6 +593,8 @@ test("full source gate rejects a stale staged JavaScript/UI/manifest after softw
 		const sourceDirectory = join(directory, "..", "current-built-source");
 		cpSync(directory, sourceDirectory, { recursive: true });
 		const options = { ...completeOptions, sourceDirectory };
+		assert.ok(checkRuntime(directory, options).length > 28);
+		stamp(directory, "1.2.0.7", { tag: "v1.2.0", build: 7 });
 		assert.ok(checkRuntime(directory, options).length > 28);
 		for (const file of ["bin/plugin.js", "ui/inspector.js", "ui/inspector.css", "manifest.json"]) {
 			const path = join(sourceDirectory, file),

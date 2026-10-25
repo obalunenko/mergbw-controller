@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn, type SpawnOptions } from "node:child_process";
+import { type ChildProcess, execFile, spawn, type SpawnOptions } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, rmSync } from "node:fs";
 import { createServer, type Socket } from "node:net";
@@ -55,6 +55,7 @@ export const runtimeErrors = [
 	"spawn_failed",
 	"protocol_incompatible",
 	"startup_timeout",
+	"launch_blocked",
 	"host_unavailable",
 	"permission_denied",
 	"bluetooth_unavailable",
@@ -85,7 +86,25 @@ export function runtimeError(error: unknown, fallback = "internal_error"): strin
 		: fallback;
 }
 export type ManagedTransport = { send: (frame: unknown) => void; close: () => void; exited: Promise<void> };
-export type ManagedSpawn = (receive: (line: string) => void, lost: (reason?: string) => void) => ManagedTransport;
+export type ManagedSpawn = ((receive: (line: string) => void, lost: (reason?: string) => void) => ManagedTransport) & {
+	launchBlocked?: () => Promise<boolean>;
+};
+// Resolves when the command exits 0. Only reads; the owner decides whether to remove quarantine.
+export type ProbeExec = (file: string, args: string[]) => Promise<unknown>;
+const execProbe: ProbeExec = (file, args) =>
+	new Promise((resolve, reject) => {
+		execFile(file, args, { shell: false, timeout: 5000, maxBuffer: 4096 }, (error) =>
+			error ? reject(error) : resolve(undefined),
+		);
+	});
+export function quarantineProbe(pluginRoot: string, exec: ProbeExec = execProbe): () => Promise<boolean> {
+	const app = join(pluginRoot, "controller/MeRGBW Controller.app");
+	return () =>
+		exec("/usr/bin/xattr", ["-p", "com.apple.quarantine", app]).then(
+			() => true,
+			() => false,
+		);
+}
 // Frame bytes first, then decode one complete UTF-8 object. Retained memory is
 // bounded independently of how many complete lines arrived in the same chunk.
 export class ManagedLines {
@@ -132,8 +151,12 @@ export class ManagedLines {
 }
 // The injected launcher is a process-boundary seam for non-BLE fixtures.
 export type AppLauncher = (executable: string, args: string[], options: SpawnOptions) => ChildProcess;
-export function bundledSupervisorSpawn(pluginRoot: string, launch: AppLauncher = spawn): ManagedSpawn {
-	return (receive, lost) => {
+export function bundledSupervisorSpawn(
+	pluginRoot: string,
+	launch: AppLauncher = spawn,
+	exec: ProbeExec = execProbe,
+): ManagedSpawn {
+	const spawnSupervisor: ManagedSpawn = (receive, lost) => {
 		const { supervisor: executable } = validateNativePayload(pluginRoot);
 		let directory: string | undefined;
 		try {
@@ -273,6 +296,8 @@ export function bundledSupervisorSpawn(pluginRoot: string, launch: AppLauncher =
 			exited,
 		};
 	};
+	spawnSupervisor.launchBlocked = quarantineProbe(pluginRoot, exec);
+	return spawnSupervisor;
 }
 export class ManagedController {
 	public state = "unconfigured";
@@ -309,6 +334,7 @@ export class ManagedController {
 	private opening?: Promise<void>;
 	private uncertainty?: { candidate: string; expected: string | null };
 	private attempt?: { candidate: string; expected: string | null; unchanged: boolean };
+	private blockedProbe?: string;
 	constructor(
 		private readonly spawnHelper: ManagedSpawn,
 		private readonly settings: Settings,
@@ -337,7 +363,26 @@ export class ManagedController {
 		this.listeners.add(listener);
 		return () => this.listeners.delete(listener);
 	}
+	// A failed launch of a quarantined bundled app is reported as launch_blocked.
+	private probeLaunchBlocked(): void {
+		const category =
+			this.state === "failed" && (this.error === "spawn_failed" || this.error === "startup_timeout")
+				? this.error
+				: undefined;
+		if (category === this.blockedProbe) return;
+		this.blockedProbe = category;
+		if (!category || !this.spawnHelper.launchBlocked) return;
+		void this.spawnHelper
+			.launchBlocked()
+			.catch(() => false)
+			.then((blocked) => {
+				if (!blocked || this.blockedProbe !== category || this.state !== "failed" || this.error !== category) return;
+				this.error = "launch_blocked";
+				this.changed();
+			});
+	}
 	private changed(): void {
+		this.probeLaunchBlocked();
 		const provisional = this.provisional();
 		const key = JSON.stringify([
 			this.session,

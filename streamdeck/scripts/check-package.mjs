@@ -64,7 +64,9 @@ const excluded = (path) =>
 				/\.(log|map|streamDeckProfile)$/.test(part),
 		);
 
+const releaseTag = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/;
 const nativeRequired = [
+	"release.json",
 	"controller/payload-manifest.json",
 	"licenses/go-native-notices.txt",
 	...nativeFiles.map((path) => `controller/${path}`),
@@ -114,6 +116,7 @@ export function checkRuntime(directory, options = {}) {
 			if (path === "manifest.json") {
 				const normalize = (bytes) => {
 					const value = JSON.parse(bytes.toString("utf8"));
+					delete value.Version; // Stamped from release.json at assembly.
 					if (value.Nodejs) delete value.Nodejs.Debug;
 					return JSON.stringify(value);
 				};
@@ -125,7 +128,8 @@ export function checkRuntime(directory, options = {}) {
 	const manifest = JSON.parse(text("manifest.json"));
 	if (
 		manifest.UUID !== "com.obalunenko.mergbw" ||
-		manifest.Version !== "0.2.0.0" ||
+		typeof manifest.Version !== "string" ||
+		!/^\d+\.\d+\.\d+\.\d+$/.test(manifest.Version) ||
 		manifest.SDKVersion !== 3 ||
 		manifest.Nodejs?.Version !== "24" ||
 		manifest.Software?.MinimumVersion !== "7.1" ||
@@ -191,6 +195,7 @@ export function checkRuntime(directory, options = {}) {
 		files.map((path) => `${runtimeName}/${path}`),
 		options,
 	);
+	if (!options.softwareOnly) checkStamp(directory, manifest.Version, options);
 	const checksum = createHash("sha256")
 		.update(readFileSync(join(directory, "ui/vendor/sdpi-components.js")))
 		.digest("hex");
@@ -227,6 +232,31 @@ export function checkRuntime(directory, options = {}) {
 	return files.sort();
 }
 
+// release.json is the installed version: exactly {tag, build}, agreeing with manifest X.Y.Z.build.
+export function checkStamp(directory, version, options = {}) {
+	const path = join(directory, "release.json");
+	const expectedTag = Object.hasOwn(options, "expectedTag") ? options.expectedTag : process.env.MERGBW_EXPECTED_TAG;
+	let stamp;
+	try {
+		const stat = lstatSync(path);
+		if (!stat.isFile() || stat.size > 4096) throw new Error();
+		stamp = JSON.parse(readFileSync(path, "utf8"));
+	} catch {
+		fail("release stamp unreadable");
+	}
+	const match = typeof stamp?.tag === "string" ? releaseTag.exec(stamp.tag) : null;
+	if (
+		!match ||
+		Array.isArray(stamp) ||
+		Object.keys(stamp).sort().join() !== "build,tag" ||
+		!Number.isSafeInteger(stamp.build) ||
+		stamp.build < 0 ||
+		version !== `${match[1]}.${match[2]}.${match[3]}.${stamp.build}`
+	)
+		fail("release stamp does not match manifest version");
+	if (expectedTag && (stamp.tag !== expectedTag || stamp.build !== 0)) fail("expected release tag or build mismatch");
+	return stamp;
+}
 export function inspectionTool(command, args) {
 	const result = spawnSync(command, args, { encoding: "utf8", timeout: 120000 });
 	if (result.error || result.status !== 0) fail(`native inspection failed: ${command}`);

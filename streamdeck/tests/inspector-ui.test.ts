@@ -1302,3 +1302,131 @@ for (const outcome of ["failed-refresh", "new-generation", "new-assignment", "ex
 		assert.equal(ui.sent.filter((message) => message.type === "configuration.apply").length, 1);
 	});
 }
+
+const offer = {
+	state: "available",
+	installed: "v1.2.0",
+	latest: "v1.3.0",
+	autoCheck: true,
+	installable: true,
+	notes: '<img src=x onerror="alert(1)"> <a href="javascript:alert(2)">link</a>',
+	releaseUrl: "https://github.com/obalunenko/mergbw-controller/releases/tag/v1.3.0",
+	lastCheckedAt: "2026-10-25T10:00:00.000Z",
+};
+test("update banner shows available, downloading, handed and install failures with inert notes", () => {
+	const ui = inspector();
+	ui.reply({ ...snapshot("off", {}) });
+	assert.equal(ui.get("update-banner").hidden, true);
+	assert.equal(ui.get("update-settings").hidden, true);
+	ui.reply({ ...snapshot("off", {}), update: offer });
+	assert.equal(ui.get("update-banner").hidden, false);
+	assert.equal(
+		ui.get("update-banner-text").textContent,
+		i18n.format("en", "updateAvailable", { latest: "1.3.0", installed: "1.2.0" }),
+	);
+	assert.equal(ui.get("update-notes").textContent, offer.notes);
+	assert.deepEqual(ui.get("update-notes").children, []);
+	assert.equal(ui.get("update-notes-details").hidden, false);
+	assert.ok(ui.get("update-release-url").textContent.endsWith(offer.releaseUrl));
+	assert.equal(ui.get("update-install").hidden, false);
+	assert.equal(ui.get("update-later").hidden, false);
+	ui.get("update-install").fire("click");
+	ui.get("update-install").fire("click");
+	assert.deepEqual(ui.sent.at(-1), { ...ui.sent.at(-1)!, type: "update.install", payload: { tag: "v1.3.0" } });
+	assert.equal(ui.sent.filter((message) => message.type === "update.install").length, 1);
+	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "downloading" } });
+	assert.equal(ui.get("update-banner").hidden, false);
+	assert.equal(ui.get("update-banner-text").textContent, i18n.en.updateDownloading);
+	assert.equal(ui.get("update-install").hidden, true);
+	assert.equal(ui.get("update-later").hidden, true);
+	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "handed" } });
+	assert.equal(ui.get("update-banner-text").textContent, i18n.en.updateHanded);
+	assert.equal(ui.get("update-install").hidden, false);
+	ui.reply({ ...snapshot("off", {}), update: { ...offer, state: "failed", errorCategory: "checksum" } });
+	assert.equal(ui.get("update-banner").hidden, false);
+	assert.equal(ui.get("update-banner-error").textContent, i18n.en.update_checksum);
+	assert.equal(ui.get("update-install").hidden, true);
+	assert.ok(ui.get("update-release-url").textContent.includes(offer.releaseUrl));
+	ui.get("update-later").fire("click");
+	assert.equal(ui.sent.at(-1)?.type, "update.dismiss");
+	assert.deepEqual(ui.sent.at(-1)?.payload, { tag: "v1.3.0" });
+	for (const update of [
+		{ ...offer, state: "dismissed" },
+		{ ...offer, state: "up_to_date", installable: false, errorCategory: "no_asset" },
+		{ state: "failed", installed: "v1.2.0", autoCheck: true, errorCategory: "network" },
+		{ ...offer, releaseUrl: "https://evil.example/", state: "checking" },
+	]) {
+		ui.reply({ ...snapshot("off", {}), update });
+		assert.equal(ui.get("update-banner").hidden, true, update.state);
+		assert.equal(ui.get("update-notes").textContent, "");
+	}
+	const hostile = inspector();
+	hostile.reply({ ...snapshot("off", {}), update: { ...offer, releaseUrl: "https://evil.example/x" } });
+	assert.equal(hostile.get("update-release-url").textContent, "");
+});
+
+test("the updates row toggles automatic checks, runs Check now and shows the last check", () => {
+	for (const language of ["en", "ru"] as const) {
+		const ui = inspector();
+		const base = { ...snapshot("off", {}), language };
+		const current = { state: "up_to_date", installed: "v1.3.0", latest: "v1.3.0", autoCheck: true };
+		ui.reply({ ...base, update: current });
+		ui.get("setup-open").fire("click");
+		assert.equal(ui.sent.at(-1)?.type, "update.status");
+		ui.reply({ ...base, update: { ...current, lastCheckedAt: "2026-10-25T10:00:00.000Z" } });
+		assert.equal(ui.get("update-settings").hidden, false);
+		assert.equal(ui.get("update-status").textContent, i18n.format(language, "updateUpToDate", { installed: "1.3.0" }));
+		assert.ok(
+			ui.get("update-last-check").textContent.startsWith(i18n.format(language, "updateLastCheck", { time: "" })),
+		);
+		assert.equal(ui.get("update-auto-check").checked, true);
+		ui.get("update-auto-check").checked = false;
+		ui.get("update-auto-check").fire("change");
+		assert.equal(ui.sent.at(-1)?.type, "update.autoCheck");
+		assert.deepEqual(ui.sent.at(-1)?.payload, { autoCheck: false });
+		ui.reply({ ...base, update: { ...current, autoCheck: false } });
+		assert.equal(ui.get("update-auto-check").checked, false);
+		ui.get("update-check").fire("click");
+		ui.get("update-check").fire("click");
+		assert.equal(ui.sent.filter((message) => message.type === "update.check").length, 1);
+		assert.equal(ui.get("update-check").disabled, true);
+		ui.reply({ ...base, update: { ...current, autoCheck: false, state: "checking" } }, { complete: false });
+		assert.equal(ui.get("update-status").textContent, i18n.translate(language, "updateChecking"));
+		assert.equal(ui.get("update-check").disabled, true);
+		ui.reply({
+			...base,
+			update: { state: "failed", installed: "v1.3.0", autoCheck: false, errorCategory: "rate_limited" },
+		});
+		assert.equal(ui.get("update-status").textContent, i18n.translate(language, "update_rate_limited"));
+		assert.equal(ui.get("update-check").disabled, false);
+		assert.equal(ui.get("update-banner").hidden, true);
+		ui.reply({
+			...base,
+			update: {
+				...current,
+				latest: "v1.4.0",
+				installable: false,
+				errorCategory: "no_asset",
+				releaseUrl: "https://github.com/obalunenko/mergbw-controller/releases/tag/v1.4.0",
+			},
+		});
+		assert.ok(ui.get("update-status").textContent.endsWith(i18n.translate(language, "update_no_asset")));
+		assert.ok(ui.get("update-setup-release").textContent.endsWith("/releases/tag/v1.4.0"));
+		assert.equal(ui.get("update-banner").hidden, true);
+	}
+});
+
+test("a quarantined controller launch shows the exact xattr help", () => {
+	const plugin = "~/Library/Application Support/com.elgato.StreamDeck/Plugins/com.obalunenko.mergbw.sdPlugin";
+	for (const language of ["en", "ru"] as const) {
+		const ui = inspector();
+		ui.reply({ ...snapshot("off", {}), language, controller: { state: "failed", errorCategory: "launch_blocked" } });
+		const help = i18n.format(language, "launch_blocked", { plugin });
+		assert.equal(ui.get("launch-blocked").hidden, false);
+		assert.equal(ui.get("launch-blocked").textContent, help);
+		assert.ok(help.includes(`xattr -dr com.apple.quarantine "${plugin}"`));
+		assert.equal(ui.get("controller-state").textContent, help);
+		ui.reply({ ...snapshot("off", {}), language });
+		assert.equal(ui.get("launch-blocked").hidden, true);
+	}
+});
