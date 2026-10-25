@@ -98,7 +98,7 @@ counts as a failed check, and the plugin keeps running.
   (FR-006).
 - `update.check` from the panel runs a check immediately, even when automatic
   checking is off (FR-010).
-- When `autoCheck` is `false`, no timer-driven requests and no notifications
+- When `autoCheck` is `false`, no timer-driven requests and no install prompts
   happen (US3-6, FR-007a).
 - If a check is already running, a new one joins it.
 
@@ -142,20 +142,16 @@ type GlobalSettings = {
   token, presets, assignments, language and custom icons are kept under 007
   rules (FR-012).
 
-## 4. macOS notification
+## 4. Install prompt (replaces the macOS notification, 2026-10-26)
 
-```
-/usr/bin/osascript -e "on run argv" -e "display notification (item 1 of argv) with title (item 2 of argv)" -e "end run" <text> <title>
-```
-
-- It runs through `execFile`, with the text and title passed as argv and never
-  interpolated into the script. Errors are ignored.
-- EN title text: "MeRGBW X.Y.Z is available". RU: «Доступна MeRGBW X.Y.Z».
-  No secrets.
-- It is sent once per tag: only when `tag_name !== updates.notifiedVersion`.
-  After the attempt, `notifiedVersion = tag_name` is saved, whether or not
-  delivery succeeded. It is not repeated after a restart or after "Later"
-  (FR-007a).
+- When a check finds an `available` offer and `autoCheck` is `true`, the
+  plugin runs §5 for that tag on its own. Stream Deck shows its install
+  confirmation; nothing installs without it (FR-007a, FR-008).
+- At most once per tag per plugin start (kept in memory). After Cancel the
+  next check returns to `available` and keeps the banner without reopening
+  the prompt; a newer tag or a plugin restart prompts again.
+- `updates.notifiedVersion` is still accepted in global settings for
+  compatibility, but is no longer written.
 
 ## 5. Install hand-off
 
@@ -252,7 +248,7 @@ strings or notes text.
 ## Verification hooks
 
 `UpdateService` takes injected `fetch`, `exec` (`execFile`), a clock and a
-temporary root. Tests cover every decision, schedule, notification and
+temporary root. Tests cover every decision, schedule, install prompt and
 download row above with synthetic responses, without network, Stream Deck or
 Bluetooth. The owner checks the installed behaviour by hand and records it in
 `hardware-verification.md`. A successful install does not prove the lamp's

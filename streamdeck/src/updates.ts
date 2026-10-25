@@ -3,7 +3,6 @@ import { mkdir, open, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { Diagnostics, UpdateErrorCategory, UpdateResult } from "./diagnostics.js";
-import { format, translate } from "./i18n.js";
 import type { Clock } from "./operation-store.js";
 import type { Settings } from "./settings.js";
 import { object, STABLE_TAG } from "./validation.js";
@@ -49,9 +48,11 @@ export type UpdateOptions = {
 	exec: UpdateExec;
 	clock: Clock;
 	tmpRoot: string;
-	settings: Pick<Settings, "getLanguage" | "getUpdates" | "saveUpdates">;
+	settings: Pick<Settings, "getUpdates" | "saveUpdates">;
 	readStamp: () => unknown;
 	diagnostics?: Diagnostics;
+	// Open Stream Deck's install prompt when a check finds an update (default true).
+	prompt?: boolean;
 };
 class UpdateError extends Error {
 	constructor(public readonly category: UpdateErrorCategory) {
@@ -152,6 +153,7 @@ export class UpdateService {
 	private release?: Release;
 	private offer?: Release;
 	private dismissedTag?: string;
+	private promptedTag?: string;
 	private lastCheckedAt?: number;
 	private error?: UpdateErrorCategory;
 	private inFlight?: Promise<void>;
@@ -185,8 +187,7 @@ export class UpdateService {
 		return value;
 	}
 	public check(): Promise<void> {
-		if (!this.stamp || this.state === "downloading" || this.state === "handed")
-			return this.inFlight ?? Promise.resolve();
+		if (!this.stamp || this.state === "downloading") return this.inFlight ?? Promise.resolve();
 		return (this.inFlight ??= this.runCheck().finally(() => {
 			this.inFlight = undefined;
 		}));
@@ -272,31 +273,13 @@ export class UpdateService {
 		this.state = result === "no_asset" ? "up_to_date" : result;
 		this.options.diagnostics?.emit("update.checked", { installed: this.installed(), latest: release.tag, result });
 		this.notify();
-		if (result === "available") await this.announce(release.tag);
+		if (result === "available") this.prompt(release.tag);
 	}
-	private async announce(tag: string): Promise<void> {
-		const updates = this.options.settings.getUpdates();
-		if (!updates.autoCheck || updates.notifiedVersion === tag) return;
-		const language = this.options.settings.getLanguage();
-		try {
-			await this.options.exec("/usr/bin/osascript", [
-				"-e",
-				"on run argv",
-				"-e",
-				"display notification (item 1 of argv) with title (item 2 of argv)",
-				"-e",
-				"end run",
-				format(language, "updateNotificationText", { latest: tag.slice(1) }),
-				translate(language, "updateNotificationTitle"),
-			]);
-		} catch {
-			/* Delivery cannot be observed; the panel offer remains. */
-		}
-		try {
-			await this.options.settings.saveUpdates({ ...this.options.settings.getUpdates(), notifiedVersion: tag });
-		} catch {
-			/* A failed save may repeat the notification after restart. */
-		}
+	// Stream Deck shows its own install confirmation; Cancel keeps the banner until the next plugin start.
+	private prompt(tag: string): void {
+		if (this.options.prompt === false || !this.autoCheck() || this.promptedTag === tag) return;
+		this.promptedTag = tag;
+		void this.install(tag).catch(() => {});
 	}
 	private async runInstall(offer: Release): Promise<void> {
 		const dir = join(this.options.tmpRoot, "mergbw-update", offer.tag);

@@ -42,7 +42,14 @@ function json(value: unknown, status = 200): Route {
 	return async () => new Response(JSON.stringify(value), { status });
 }
 async function harness(
-	options: { stamp?: unknown; global?: unknown; storage?: MemoryStorage; root?: string; latest?: unknown } = {},
+	options: {
+		stamp?: unknown;
+		global?: unknown;
+		storage?: MemoryStorage;
+		root?: string;
+		latest?: unknown;
+		prompt?: boolean;
+	} = {},
 ) {
 	const root = options.root ?? (await mkdtemp(join(tmpdir(), "mergbw-us3-")));
 	const storage = options.storage ?? new MemoryStorage();
@@ -76,6 +83,7 @@ async function harness(
 		settings,
 		readStamp: () => ("stamp" in options ? options.stamp : { tag: "v1.2.0", build: 0 }),
 		diagnostics: new Diagnostics((fields) => events.push(fields)),
+		prompt: options.prompt ?? false,
 	});
 	return { service, settings, storage, clock, requests, execs, failing, routes, events, root };
 }
@@ -281,44 +289,49 @@ test("start check, 24 h timer, joined checks and disabled automatic checks", asy
 	await off.service.check();
 	assert.equal(off.requests.length, 1);
 	assert.equal(off.service.snapshot()!.state, "available");
-	assert.equal(off.execs.length, 0, "no notification while automatic checks are off");
+	assert.equal(off.execs.length, 0, "no install prompt while automatic checks are off");
 	await assert.rejects(off.service.setAutoCheck("yes"), /validation/);
 });
 
-test("notification is sent once per tag with argv text, across Later and restart, and exec failure is ignored", async () => {
-	const h = await harness();
+test("a found update opens Stream Deck's install prompt once per tag per plugin start", async () => {
+	const settled = async (h: Awaited<ReturnType<typeof harness>>) => {
+		while (h.service.snapshot()!.state === "downloading") await new Promise((resolve) => setImmediate(resolve));
+	};
+	const opened = (h: Awaited<ReturnType<typeof harness>>) =>
+		h.execs.filter((exec) => exec.file === "/usr/bin/open").length;
+	const h = await harness({ prompt: true });
 	await h.service.start();
-	assert.deepEqual(h.execs, [
-		{
-			file: "/usr/bin/osascript",
-			args: [
-				"-e",
-				"on run argv",
-				"-e",
-				"display notification (item 1 of argv) with title (item 2 of argv)",
-				"-e",
-				"end run",
-				"MeRGBW 1.3.0 is available",
-				"MeRGBW",
-			],
-		},
-	]);
-	assert.deepEqual((h.storage.global as { updates: unknown }).updates, { autoCheck: true, notifiedVersion: "v1.3.0" });
+	await settled(h);
+	assert.equal(h.service.snapshot()!.state, "handed");
+	assert.equal(opened(h), 1);
+	assert.ok(!h.execs.some((exec) => exec.file === "/usr/bin/osascript"), "no macOS notification");
+	// Cancel in Stream Deck: the next check keeps the banner but does not reopen the prompt.
 	await h.service.check();
-	h.service.dismiss("v1.3.0");
+	await settled(h);
+	assert.equal(h.service.snapshot()!.state, "available");
+	assert.equal(opened(h), 1);
+	h.routes.set(RELEASES_URL, json(release("v1.4.0")));
 	await h.service.check();
-	assert.equal(h.execs.length, 1);
-	const restarted = await harness({ storage: h.storage });
+	await settled(h);
+	assert.equal(h.service.snapshot()!.latest, "v1.4.0");
+	assert.equal(
+		h.events.at(-1)?.event,
+		"update.failed",
+		"a newer tag is prompted again (its synthetic assets are absent)",
+	);
+	const restarted = await harness({ prompt: true, storage: h.storage, root: h.root });
 	await restarted.service.start();
-	assert.equal(restarted.service.snapshot()!.state, "available");
-	assert.equal(restarted.execs.length, 0);
-
-	const ru = await harness({ global: { schemaVersion: 2, language: "ru" } });
-	ru.failing.add("/usr/bin/osascript");
-	await ru.service.start();
-	assert.equal(ru.execs[0]!.args[6], "Доступна MeRGBW 1.3.0");
-	assert.equal(ru.service.snapshot()!.state, "available");
-	assert.equal((ru.storage.global as { updates: { notifiedVersion: string } }).updates.notifiedVersion, "v1.3.0");
+	await settled(restarted);
+	assert.equal(opened(restarted), 1, "a plugin restart prompts again");
+	const off = await harness({
+		prompt: true,
+		global: { schemaVersion: 2, language: "en", updates: { autoCheck: false } },
+	});
+	await off.service.start();
+	await off.service.check();
+	assert.equal(off.service.snapshot()!.state, "available");
+	assert.equal(opened(off), 0, "automatic checks off means no prompt");
+	await rm(h.root, { recursive: true, force: true });
 });
 
 test("Later hides the offer until restart and a newer tag shows it again", async () => {
@@ -356,7 +369,8 @@ test("install verifies the streamed installer before opening it", async () => {
 	assert.equal(h.service.snapshot()!.state, "handed");
 	assert.ok(h.requests.slice(1).every((request) => request.init.headers === undefined));
 	await h.service.check();
-	assert.equal(h.requests.length, 3, "checks are skipped after hand-off");
+	assert.equal(h.requests.length, 4, "checks continue after hand-off");
+	assert.equal(h.service.snapshot()!.state, "available");
 	await h.service.install("v1.3.0");
 	assert.equal(h.service.snapshot()!.state, "handed", "a cancelled prompt can be reopened");
 	assert.equal(h.execs.filter((exec) => exec.file === "/usr/bin/open").length, 2);
