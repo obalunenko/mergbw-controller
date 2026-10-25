@@ -143,6 +143,17 @@ func run(args []string) error {
 			fmt.Println("Проверка параметров завершена; переход и подключение не запускались.")
 			return nil
 		}
+		if action.Effect != nil {
+			effect := action.Effect
+			fmt.Printf("Эффект %s: RGB %v, яркость %d%%.\n", effect.Preset.Effect.Kind, effect.Preset.RGB, effect.Preset.Brightness)
+			if duration := effect.DurationMS(); duration != nil {
+				fmt.Printf("Целевая длительность: %d мс; фактические интервалы зависят от Bluetooth.\n", *duration)
+			} else {
+				fmt.Println("Повтор до остановки; фактические интервалы зависят от Bluetooth.")
+			}
+			fmt.Println("Проверка параметров завершена; эффект и подключение не запускались.")
+			return nil
+		}
 		for _, frame := range action.Packets {
 			fmt.Printf("% X\n", frame)
 		}
@@ -248,7 +259,7 @@ func send(settings config.Settings, action protocol.Action) (result error) {
 	if err != nil {
 		return err
 	}
-	if response.StatusCode != http.StatusOK && !(action.Transition != nil && response.StatusCode == http.StatusAccepted) {
+	if response.StatusCode != http.StatusOK && !((action.Transition != nil || action.Effect != nil) && response.StatusCode == http.StatusAccepted) {
 		return fmt.Errorf("HTTP %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
 	}
 	fmt.Print(string(body))

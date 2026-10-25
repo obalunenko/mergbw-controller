@@ -9,7 +9,6 @@ import (
 	"maps"
 	"reflect"
 	"regexp"
-	"slices"
 	"time"
 
 	"github.com/obalunenko/mergbw-controller/internal/protocol"
@@ -79,8 +78,7 @@ func PrepareProposal(owner, expected string, active *Snapshot, settings Settings
 	}
 	copied := maps.Clone(presets)
 	for key, value := range copied {
-		value.RGB = slices.Clone(value.RGB)
-		copied[key] = value
+		copied[key] = protocol.ClonePreset(value)
 	}
 	diff := map[string]bool{"identity": active == nil, "port": active == nil, "secret": active == nil, "presets": active == nil}
 	if active != nil {

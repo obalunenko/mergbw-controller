@@ -151,6 +151,7 @@ tasks:
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/controller/controller.go -destination=internal/controller/mock_link_test.go -package=controller'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/bridge/http.go -destination=internal/bridge/mock_controller_test.go -package=bridge_test'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -destination=internal/bridge/mock_transition_controller_test.go -package=bridge_test github.com/obalunenko/mergbw-controller/internal/bridge TransitionController'
+      - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -destination=internal/bridge/mock_effect_controller_test.go -package=bridge_test github.com/obalunenko/mergbw-controller/internal/bridge EffectController'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/controller/controller.go -destination=internal/bridge/mock_link_test.go -package=bridge_test'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -destination=internal/bridge/mock_response_writer_test.go -package=bridge_test net/http ResponseWriter'
       - '{{.GO}} tool -modfile=tools/mockgen/go.mod mockgen -source=internal/ble/transport.go -destination=internal/ble/mock_transport_test.go -package=ble'

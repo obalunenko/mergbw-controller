@@ -2,6 +2,7 @@ import { request } from "node:http";
 
 import { type ErrorCategory, requestId } from "./diagnostics.js";
 import { type Clock, type OperationRecord, type OperationResult, systemClock } from "./operation-store.js";
+import { type EffectEnvelope, effectSnapshot } from "./preset-effects.js";
 import { type Connection, object, connection as validateConnection } from "./validation.js";
 
 export type TransitionSnapshot = {
@@ -35,7 +36,7 @@ export function transitionSnapshot(value: unknown, secret = ""): value is Transi
 const transitionRoute =
 	/^transition\/[A-F0-9]{6}\/(?:100|[1-9]?[0-9])\/[A-F0-9]{6}\/(?:100|[1-9]?[0-9])\/(?:[1-9]|[1-5][0-9]|60)$/;
 export type Health = { ok: true; version: string; bluetooth_connected: boolean; physical_state_verified: false };
-export type PresetEntry = { id: string; label: string };
+export type PresetEntry = { id: string; label: string; builtIn?: boolean };
 export type Catalog = { presets: PresetEntry[]; physical_state_verified: false };
 export type ReadResult<T> = { statusCode?: number; value?: T; errorCategory?: ErrorCategory; requestId?: string };
 type WireResult = ReadResult<unknown> & { dispatched?: boolean };
@@ -96,6 +97,7 @@ export class BridgeClient {
 					entry.id.includes(connection.accessToken) ||
 					entry.id <= previous ||
 					typeof entry.label !== "string" ||
+					(entry.builtIn !== undefined && typeof entry.builtIn !== "boolean") ||
 					!entry.label.trim() ||
 					[...entry.label].some(
 						(char) =>
@@ -113,7 +115,11 @@ export class BridgeClient {
 				return {
 					...result,
 					value: {
-						presets: value.presets.map((entry: PresetEntry) => ({ id: entry.id, label: entry.label })),
+						presets: value.presets.map((entry: PresetEntry) => ({
+							id: entry.id,
+							label: entry.label,
+							...(entry.builtIn === undefined ? {} : { builtIn: entry.builtIn }),
+						})),
 						physical_state_verified: false,
 					},
 				};
@@ -139,6 +145,20 @@ export class BridgeClient {
 			record.snapshot.capability?.signal,
 		);
 		const common = { requestId: result.requestId };
+		if (route.startsWith("preset/") && result.statusCode === 202) {
+			const value = result.value;
+			if (
+				object(value) &&
+				Object.keys(value).sort().join(",") === "accepted,action,effect,physical_state_verified" &&
+				value.accepted === true &&
+				value.action === route &&
+				value.physical_state_verified === false &&
+				effectSnapshot(value.effect, record.snapshot.connection.accessToken) &&
+				value.effect.presetId === route.slice("preset/".length)
+			)
+				return { ...common, status: "accepted", effect: value.effect };
+			return { ...common, status: "unknown", errorCategory: "protocol" };
+		}
 		if (transitionRoute.test(route)) {
 			if (
 				result.statusCode === 202 &&
@@ -224,6 +244,56 @@ export class BridgeClient {
 				(object(value.transition) && value.transition.id === route.slice("transition/cancel/".length)))
 		)
 			return { ...result, value: value as TransitionEnvelope };
+		return {
+			...result,
+			value: undefined,
+			errorCategory:
+				result.errorCategory ??
+				(result.statusCode === 403 ? "auth" : result.statusCode === 504 ? "timeout" : "protocol"),
+		};
+	}
+	public async effect(
+		connection: Connection,
+		signal?: AbortSignal,
+		capability?: import("./managed-controller.js").Capability,
+	): Promise<ReadResult<EffectEnvelope>> {
+		if (this.managedGuard && (!capability || !this.managedGuard(capability))) return { errorCategory: "service" };
+		return this.effectRequest(connection, "effect", "GET", signal);
+	}
+	public async cancelEffect(
+		connection: Connection,
+		id: string,
+		signal?: AbortSignal,
+		capability?: import("./managed-controller.js").Capability,
+	): Promise<ReadResult<EffectEnvelope>> {
+		if (this.managedGuard && (!capability || !this.managedGuard(capability))) return { errorCategory: "service" };
+		if (!/^[0-9a-f]{32}$/.test(id) || id.includes(connection.accessToken)) return { errorCategory: "validation" };
+		return this.effectRequest(connection, `effect/cancel/${id}`, "POST", signal);
+	}
+	private async effectRequest(
+		connection: Connection,
+		route: string,
+		method: "GET" | "POST",
+		signal?: AbortSignal,
+	): Promise<ReadResult<EffectEnvelope>> {
+		const result = await this.read(
+			connection,
+			`/${connection.accessToken}/${route}`,
+			method,
+			65536,
+			this.clock.now() + (method === "POST" ? 45000 : 5000),
+			signal,
+		);
+		const value = result.value;
+		if (
+			result.statusCode === 200 &&
+			object(value) &&
+			Object.keys(value).sort().join(",") === "effect,physical_state_verified" &&
+			value.physical_state_verified === false &&
+			(value.effect === null || effectSnapshot(value.effect, connection.accessToken)) &&
+			(method === "GET" || (object(value.effect) && value.effect.id === route.slice("effect/cancel/".length)))
+		)
+			return { ...result, value: value as EffectEnvelope };
 		return {
 			...result,
 			value: undefined,

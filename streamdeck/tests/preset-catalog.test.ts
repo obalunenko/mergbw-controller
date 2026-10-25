@@ -7,6 +7,7 @@ import { BridgeClient, type Catalog, type ReadResult } from "../src/bridge-clien
 import { Diagnostics } from "../src/diagnostics.js";
 import { InspectorController, type InspectorReply, presetOptions } from "../src/inspector-messages.js";
 import { OperationStore } from "../src/operation-store.js";
+import type { EffectSnapshot } from "../src/preset-effects.js";
 import { Settings } from "../src/settings.js";
 import type { Assignment } from "../src/validation.js";
 import { deferred, fixture, KeyFacade, MemoryStorage, syntheticToken } from "./helpers.js";
@@ -36,6 +37,51 @@ async function harness() {
 const catalog = (presets: Catalog["presets"]): ReadResult<Catalog> => ({
 	statusCode: 200,
 	value: { presets, physical_state_verified: false },
+});
+
+test("renaming a dynamic preset label retains the assigned ID and exact run ownership", async () => {
+	const h = await harness();
+	const job: EffectSnapshot = {
+		id: "a".repeat(32),
+		presetId: "sunset",
+		kind: "breathing",
+		state: "running",
+		elapsedMs: 0,
+		durationMs: null,
+		physical_state_verified: false,
+	};
+	let starts = 0;
+	const stopped: string[] = [];
+	h.client.catalog = async () => catalog([{ id: "sunset", label: "Before rename" }]);
+	h.client.command = async () => {
+		starts++;
+		return { status: "accepted", effect: job };
+	};
+	h.client.effect = async () => ({ value: { effect: job, physical_state_verified: false } });
+	h.client.cancelEffect = async (_connection, id) => {
+		stopped.push(id);
+		return { value: { effect: { ...job, state: "cancelled" }, physical_state_verified: false } };
+	};
+	const action = new Preset({ ...h, diagnostics: new Diagnostics(() => {}) });
+	const key = new KeyFacade();
+	const ev = {
+		action: { id: "a", isKey: () => true, ...key },
+		payload: { settings: { schemaVersion: 1, presetId: "sunset" } },
+	};
+	try {
+		await action.onWillAppear(ev as unknown as WillAppearEvent<Assignment>);
+		await h.inspector.receive("a", message("presets.refresh"));
+		await action.onKeyDown(ev as unknown as KeyDownEvent<Assignment>);
+		h.client.catalog = async () => catalog([{ id: "sunset", label: "After rename" }]);
+		await h.inspector.receive("a", message("presets.refresh"));
+		await action.onKeyDown(ev as unknown as KeyDownEvent<Assignment>);
+		assert.equal(h.settings.getAction("a").presetId, "sunset");
+		assert.equal(starts, 1);
+		assert.deepEqual(stopped, [job.id]);
+		assert.equal(h.inspector.snapshot("a").effect?.state, "cancelled");
+	} finally {
+		h.inspector.dispose();
+	}
 });
 
 test("opening preset selection loads current catalog; refresh retains stable id across rename/delete/empty", async () => {

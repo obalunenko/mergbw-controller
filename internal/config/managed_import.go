@@ -7,7 +7,6 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"slices"
 	"syscall"
 	"unicode/utf8"
 
@@ -93,10 +92,9 @@ func CaptureImport(settingsPath, presetsPath string, active *Snapshot) (*ImportC
 			return nil, ErrInvalidConfiguration
 		}
 	}
-	// Clone RGB slices too: neither source nor caller mutation can alter review.
+	// Clone all nested values: source and caller mutation cannot alter review.
 	for key, preset := range presets {
-		preset.RGB = slices.Clone(preset.RGB)
-		presets[key] = preset
+		presets[key] = protocol.ClonePreset(preset)
 	}
 	return &ImportCandidate{Settings: settings, Presets: presets}, nil
 }

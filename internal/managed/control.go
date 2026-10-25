@@ -75,6 +75,7 @@ func NewID() (string, error) {
 var frameTypes = map[string]bool{
 	"session.open": true, "host.alive": true,
 	"configuration.prepareManual": true, "configuration.prepareImport": true,
+	"configuration.presetList": true, "configuration.presetRead": true, "configuration.preparePreset": true,
 	"configuration.apply": true, "configuration.cancel": true, "configuration.read": true, "configuration.check": true,
 	"controller.start": true, "controller.restart": true, "controller.stop": true,
 	"controller.state": true, "controller.bootstrap": true,

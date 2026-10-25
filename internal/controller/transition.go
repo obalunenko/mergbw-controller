@@ -16,9 +16,10 @@ type transitionJob struct {
 	cancel   context.CancelFunc
 	done     chan struct{}
 	started  time.Time
+	effect   *protocol.EffectAction
 }
 
-// admit atomically cancels a previous transition and claims its execution gate.
+// admit atomically cancels the active job and claims its execution gate.
 func (c *Controller) admit(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -61,7 +62,7 @@ func (c *Controller) acquireForCommand(ctx context.Context) error {
 func (c *Controller) cancelActive() {
 	c.transitionMu.Lock()
 	defer c.transitionMu.Unlock()
-	if job := c.transition; job != nil && (job.snapshot.State == "running" || job.snapshot.State == "cancelling") {
+	if job := c.active; job != nil && (job.snapshot.State == "running" || job.snapshot.State == "cancelling") {
 		job.snapshot.State = "cancelling"
 		job.cancel()
 	}
@@ -71,6 +72,12 @@ func (c *Controller) StartTransition(ctx context.Context, spec protocol.Transiti
 	if err := spec.Validate(); err != nil {
 		return protocol.TransitionSnapshot{}, err
 	}
+	return c.startJob(ctx, spec.Duration().Milliseconds(), nil, func(jobCtx context.Context, job *transitionJob) {
+		c.runTransition(jobCtx, job, spec)
+	})
+}
+
+func (c *Controller) startJob(ctx context.Context, durationMS int64, effect *protocol.EffectAction, run func(context.Context, *transitionJob)) (protocol.TransitionSnapshot, error) {
 	// Retain admission until publication so another command cannot miss this job.
 	select {
 	case <-ctx.Done():
@@ -98,20 +105,32 @@ func (c *Controller) StartTransition(ctx context.Context, spec protocol.Transiti
 		return protocol.TransitionSnapshot{}, err
 	}
 	jobCtx, cancel := context.WithCancel(c.root)
-	job := &transitionJob{snapshot: protocol.TransitionSnapshot{ID: hex.EncodeToString(id[:]), State: "running", DurationMS: spec.Duration().Milliseconds()}, cancel: cancel, done: make(chan struct{})}
+	job := &transitionJob{snapshot: protocol.TransitionSnapshot{ID: hex.EncodeToString(id[:]), State: "running", DurationMS: durationMS}, cancel: cancel, done: make(chan struct{}), effect: effect}
 	snapshot := job.snapshot
 	c.transitionMu.Lock()
-	c.transition = job
+	c.active = job
+	if effect == nil {
+		c.transition = job
+	} else {
+		c.effect = job
+	}
 	c.transitionMu.Unlock()
-	logging.FromContext(c.root).Info("transition.accepted", "component", "controller", "transition_id", snapshot.ID, "duration_ms", snapshot.DurationMS, "physical_state_verified", false)
-	go c.runTransition(jobCtx, job, spec)
+	if effect == nil {
+		logging.FromContext(c.root).Info("transition.accepted", "component", "controller", "transition_id", snapshot.ID, "duration_ms", snapshot.DurationMS, "physical_state_verified", false)
+	} else {
+		logging.FromContext(c.root).Info("effect.accepted", "component", "controller", "effect_id", snapshot.ID, "kind", effect.Preset.Effect.Kind, "duration_ms", effect.DurationMS(), "physical_state_verified", false)
+	}
+	go run(jobCtx, job)
 	return snapshot, nil
 }
 
 func (c *Controller) snapshotLocked(job *transitionJob) protocol.TransitionSnapshot {
 	snapshot := job.snapshot
 	if !job.started.IsZero() && (snapshot.State == "running" || snapshot.State == "cancelling") {
-		snapshot.ElapsedMS = min(snapshot.DurationMS, max(int64(0), c.now().Sub(job.started).Milliseconds()))
+		snapshot.ElapsedMS = max(int64(0), c.now().Sub(job.started).Milliseconds())
+		if job.effect == nil {
+			snapshot.ElapsedMS = min(snapshot.DurationMS, snapshot.ElapsedMS)
+		}
 	}
 	return snapshot
 }
@@ -157,17 +176,7 @@ func (c *Controller) runTransition(ctx context.Context, job *transitionJob, spec
 	defer c.release()
 	defer job.cancel()
 	state := "cancelled"
-	defer func() {
-		c.transitionMu.Lock()
-		job.snapshot = c.snapshotLocked(job)
-		job.snapshot.State = state
-		if state == "completed" {
-			job.snapshot.ElapsedMS = job.snapshot.DurationMS
-		}
-		snapshot := job.snapshot
-		c.transitionMu.Unlock()
-		logging.FromContext(c.root).Info("transition.finished", "component", "controller", "transition_id", snapshot.ID, "state", state, "duration_ms", snapshot.DurationMS, "elapsed_ms", snapshot.ElapsedMS, "physical_state_verified", false)
-	}()
+	defer func() { c.finishJob(job, state) }()
 	if err := ctx.Err(); err != nil {
 		return
 	}
@@ -177,21 +186,7 @@ func (c *Controller) runTransition(ctx context.Context, job *transitionJob, spec
 		}
 		return
 	}
-	write := func(frame []byte) bool {
-		if err := c.pause(ctx, time.Until(c.lastWrite.Add(c.gap))); err != nil {
-			return false
-		}
-		if err := ctx.Err(); err != nil {
-			return false
-		}
-		err := c.link.Write(ctx, frame)
-		c.lastWrite = time.Now()
-		if err != nil || ctx.Err() != nil {
-			state = "unknown"
-			return false
-		}
-		return true
-	}
+	write := func(frame []byte) bool { return c.writeJobFrame(ctx, frame, &state) }
 	for _, frame := range spec.InitialPackets() {
 		if !write(frame) {
 			return
@@ -228,5 +223,37 @@ func (c *Controller) runTransition(ctx context.Context, job *transitionJob, spec
 		}
 		// Schedule from now after slow writes, not a burst of overdue samples.
 		next = max(next+250*time.Millisecond, c.now().Sub(started)+250*time.Millisecond)
+	}
+}
+
+func (c *Controller) writeJobFrame(ctx context.Context, frame []byte, state *string) bool {
+	if err := c.pause(ctx, time.Until(c.lastWrite.Add(c.gap))); err != nil {
+		return false
+	}
+	if err := ctx.Err(); err != nil {
+		return false
+	}
+	err := c.link.Write(ctx, frame)
+	c.lastWrite = time.Now()
+	if err != nil || ctx.Err() != nil {
+		*state = "unknown"
+		return false
+	}
+	return true
+}
+
+func (c *Controller) finishJob(job *transitionJob, state string) {
+	c.transitionMu.Lock()
+	job.snapshot = c.snapshotLocked(job)
+	job.snapshot.State = state
+	if state == "completed" && job.effect == nil {
+		job.snapshot.ElapsedMS = job.snapshot.DurationMS
+	}
+	snapshot := job.snapshot
+	c.transitionMu.Unlock()
+	if job.effect == nil {
+		logging.FromContext(c.root).Info("transition.finished", "component", "controller", "transition_id", snapshot.ID, "state", state, "duration_ms", snapshot.DurationMS, "elapsed_ms", snapshot.ElapsedMS, "physical_state_verified", false)
+	} else {
+		logging.FromContext(c.root).Info("effect.finished", "component", "controller", "effect_id", snapshot.ID, "state", state, "elapsed_ms", snapshot.ElapsedMS, "physical_state_verified", false)
 	}
 }

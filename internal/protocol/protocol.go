@@ -12,15 +12,17 @@ import (
 )
 
 type Preset struct {
-	Label      string `json:"label"`
-	RGB        []int  `json:"rgb"`
-	Brightness int    `json:"brightness"`
+	Label      string  `json:"label"`
+	RGB        []int   `json:"rgb"`
+	Brightness int     `json:"brightness"`
+	Effect     *Effect `json:"effect,omitzero"`
 }
 
 type Action struct {
 	Route      string
 	Packets    [][]byte
 	Transition *Transition
+	Effect     *EffectAction
 }
 
 var slugPattern = regexp.MustCompile(`^[a-z0-9_-]{1,40}$`)
@@ -69,6 +71,11 @@ func ValidatePresets(presets map[string]Preset) error {
 		}
 		if preset.Brightness < 0 || preset.Brightness > 100 {
 			return fmt.Errorf("пресет %s: brightness должен быть от 0 до 100", slug)
+		}
+		if preset.Effect != nil {
+			if err := preset.Effect.Validate(preset.Brightness); err != nil {
+				return fmt.Errorf("пресет %s: %w", slug, err)
+			}
 		}
 	}
 	return nil
@@ -129,6 +136,13 @@ func Resolve(args []string, presets map[string]Preset) (Action, error) {
 		rgb, err := rgbBytes(preset.RGB)
 		if err != nil || preset.Brightness < 0 || preset.Brightness > 100 {
 			return Action{}, fmt.Errorf("некорректные RGB/brightness у пресета %s", value)
+		}
+		if preset.Effect != nil {
+			spec := EffectAction{PresetID: value, Preset: ClonePreset(preset)}
+			if err := spec.Validate(); err != nil {
+				return Action{}, err
+			}
+			return Action{Route: "preset/" + value, Effect: &spec}, nil
 		}
 		return Action{Route: "preset/" + value, Packets: [][]byte{on, packet(0x03, rgb...), packet(0x05, byte(preset.Brightness))}}, nil
 	default:

@@ -1,5 +1,13 @@
 import { translate } from "../i18n.js";
 import {
+	defaultPreset,
+	effectSnapshot,
+	presetDefinition,
+	type PresetDefinition,
+	type PresetKind,
+	presetKinds,
+} from "../preset-effects.js";
+import {
 	type ActionKind,
 	colorInput,
 	identity,
@@ -25,7 +33,29 @@ let latestRequestType: string | undefined;
 let language: Language = "en";
 let actionKind: ActionKind | undefined;
 let catalogAvailable = false;
+let presetEntries: Record<string, unknown>[] = [];
+let presetCatalogStatus = "idle";
+let copyDefinition = false;
+let readingSummary = false;
+let summaryKey = "";
+let summary: PresetDefinition | undefined;
+let assignAfterCreate: { id: string; generation: string | null; previousId: string } | undefined;
+let reviewedPreset: { id: string; operation: "create" | "delete" | "update"; preset?: PresetDefinition } | undefined;
+type View = "diagnostics" | "editor" | "library" | "main" | "review" | "setup";
+let view: View | undefined;
+let configured = false;
+let assignmentStatusKey = "autoSave";
 let transitionId: string | undefined;
+let effectId: string | undefined;
+let editorGeneration: string | null = null;
+let editorOperation: "create" | "update" = "create";
+let editorOpen = false;
+let awaitingDefinition: string | undefined;
+let editorNext: string | null = null;
+let editorPageKey = "";
+let editorCatalogGeneration: string | null = null;
+let editorReview: string | undefined;
+let paletteColors: string[] = [];
 let generation: string | null = null;
 let writesAllowed = true;
 let applyTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -53,11 +83,231 @@ function reconcile(id: string, value: string): string {
 function text(id: string, key: string): void {
 	element(id).textContent = translate(language, key);
 }
+function showView(next: View): void {
+	view = next;
+	for (const name of ["main", "library", "editor", "setup", "review", "diagnostics"])
+		element(`view-${name}`).hidden = name !== next;
+	element("back").hidden = next === "main";
+	text("back", next === "review" ? "backToParameters" : next === "editor" ? "cancel" : "backToKey");
+}
+function editorLabels(): void {
+	text("editor-title", editorOperation === "create" ? "createPreset" : "editorEdit");
+	text("editor-scope", editorOperation === "create" ? "newPresetScope" : "sharedPresetScope");
+	text("editor-review", editorOperation === "create" ? "createAndAssign" : "applyPresetChanges");
+	text("editor-brightness-label", select("editor-kind").value === "breathing" ? "peakBrightness" : "brightness");
+}
 function localize(): void {
 	document.documentElement.lang = language;
 	for (const node of Array.from(document.querySelectorAll<HTMLElement>("[data-i18n]")))
 		node.textContent = translate(language, node.dataset.i18n!);
 	input("language").value = language;
+	const kind = select("editor-kind").value || "static";
+	select("editor-kind").replaceChildren(
+		...presetKinds.map((kind) => option(kind, translate(language, `kind.${kind}`))),
+	);
+	select("editor-kind").value = kind;
+	editorLabels();
+	text("assignment-status", assignmentStatusKey);
+	if (view) showView(view);
+}
+function option(value: string, label: string): HTMLOptionElement {
+	const result = document.createElement("option");
+	result.value = value;
+	result.textContent = label;
+	return result;
+}
+function renderPresetChoices(selected: string): void {
+	const counts = new Map<string, number>();
+	for (const entry of presetEntries) counts.set(String(entry.label), (counts.get(String(entry.label)) ?? 0) + 1);
+	const groups = [true, false]
+		.map((builtIn) => {
+			const group = document.createElement("optgroup");
+			group.label = translate(language, builtIn ? "preloadedPresets" : "customPresets");
+			group.replaceChildren(
+				...presetEntries
+					.filter((entry) => (entry.builtIn === true) === builtIn)
+					.map((entry) =>
+						option(
+							String(entry.id),
+							counts.get(String(entry.label))! > 1
+								? `${String(entry.label)} (${String(entry.id)})`
+								: String(entry.label),
+						),
+					),
+			);
+			return group;
+		})
+		.filter((group) => group.children.length > 0);
+	const missing = !presetEntries.some((entry) => entry.id === selected);
+	const placeholder = option(
+		selected,
+		selected
+			? `${translate(language, catalogAvailable ? "presetMissing" : "catalogUnchecked")} (${selected})`
+			: translate(language, "preset"),
+	);
+	placeholder.disabled = true;
+	select("preset-select").replaceChildren(...(missing ? [placeholder] : []), ...groups);
+	select("preset-select").value = selected;
+	select("preset-select").disabled = !catalogAvailable || presetEntries.length === 0;
+	const entry = presetEntries.find((entry) => entry.id === selected);
+	element("preset-copy").hidden = !entry || entry.builtIn !== true;
+	element("preset-edit").hidden = !entry || entry.builtIn === true;
+	for (const id of ["preset-copy", "preset-edit"])
+		element(id).toggleAttribute("disabled", !catalogAvailable || !entry || !generation || !writesAllowed);
+	text(
+		"catalog-status",
+		presetCatalogStatus === "loading"
+			? "pending"
+			: !catalogAvailable
+				? "catalogUnchecked"
+				: missing && selected
+					? "presetMissing"
+					: presetEntries.length === 0
+						? "noPresets"
+						: "",
+	);
+	if (catalogAvailable && entry) element("catalog-status").textContent = "";
+	element("preset-summary").hidden = !entry || !catalogAvailable;
+	element("preset-label").textContent = entry ? String(entry.label) : "";
+	text("preset-origin", entry?.builtIn === true ? "preloadedPresets" : "customPresets");
+	const key = `${generation}:${selected}`;
+	if (summaryKey !== key) {
+		summary = undefined;
+		element("preset-swatch").hidden = true;
+		element("preset-description").textContent = "";
+	}
+	if (
+		view === "main" &&
+		entry &&
+		catalogAvailable &&
+		generation &&
+		summaryKey !== key &&
+		!editorOpen &&
+		!awaitingDefinition
+	) {
+		summaryKey = key;
+		readingSummary = true;
+		awaitingDefinition = selected;
+		void send("configuration.presetRead", { expectedGeneration: generation, id: selected });
+	}
+	if (summary && summaryKey === key) renderSummary(summary);
+}
+function renderSummary(preset: PresetDefinition): void {
+	element("preset-swatch").hidden = false;
+	element("preset-swatch").style.backgroundColor = `#${rgbHex(preset.rgb)}`;
+	element("preset-description").textContent =
+		`${translate(language, `kind.${preset.effect?.kind ?? "static"}`)} · ${preset.brightness}%`;
+}
+function rgbHex(rgb: number[]): string {
+	return rgb
+		.map((value) => value.toString(16).padStart(2, "0"))
+		.join("")
+		.toUpperCase();
+}
+function rgbValue(value: string): number[] {
+	return colorInput(value)
+		.match(/../g)!
+		.map((channel) => parseInt(channel, 16));
+}
+function renderPalette(position = Number(select("palette-select").value) || 0): void {
+	position = Math.max(0, Math.min(position, paletteColors.length - 1));
+	select("palette-select").replaceChildren(
+		...paletteColors.map((color, index) => option(String(index), `${index + 1}. #${color}`)),
+	);
+	select("palette-select").value = String(position);
+	input("palette-color").value = `#${paletteColors[position] ?? "FF5000"}`;
+	element("palette-add").toggleAttribute("disabled", paletteColors.length >= 16);
+	element("palette-remove").toggleAttribute("disabled", paletteColors.length <= 2);
+	element("palette-up").toggleAttribute("disabled", position === 0);
+	element("palette-down").toggleAttribute("disabled", position >= paletteColors.length - 1);
+}
+function editorFields(): void {
+	const kind = select("editor-kind").value;
+	for (const type of ["palette", "strobe", "breathing", "candle"])
+		element(`editor-${type}-controls`).hidden = kind !== type;
+	element("editor-rgb-controls").hidden = kind === "palette";
+	element("editor-loop-controls").hidden = kind === "static";
+	element("editor-duration-controls").hidden = kind !== "candle" || input("editor-loop").checked;
+	element("editor-once-help").hidden = input("editor-loop").checked;
+	editorLabels();
+}
+function loadDraft(preset: PresetDefinition, id: string, operation: "create" | "update"): void {
+	editorOpen = true;
+	editorOperation = operation;
+	editorGeneration = generation;
+	input("editor-id").value = id;
+	input("editor-name").value = preset.label;
+	input("editor-rgb").value = rgbHex(preset.rgb);
+	input("editor-color").value = `#${rgbHex(preset.rgb)}`;
+	input("editor-brightness").value = String(preset.brightness);
+	input("editor-brightness-slider").value = String(preset.brightness);
+	select("editor-kind").value = preset.effect?.kind ?? "static";
+	input("editor-loop").checked = preset.effect?.loop ?? true;
+	const e = preset.effect;
+	paletteColors = [preset.rgb, ...(e?.kind === "palette" ? e.colors : [[0, 80, 255]])].map(rgbHex);
+	input("editor-transition").value = String(e?.kind === "palette" ? e.transitionMs / 1000 : 2);
+	input("editor-on").value = String(e?.kind === "strobe" ? e.onMs / 1000 : 0.5);
+	input("editor-off").value = String(e?.kind === "strobe" ? e.offMs / 1000 : 0.5);
+	input("editor-min").value = String(e?.kind === "breathing" ? e.minBrightness : 5);
+	input("editor-cycle").value = String(e?.kind === "breathing" ? e.cycleMs / 1000 : 4);
+	input("editor-depth").value = String(e?.kind === "candle" ? e.depth : 35);
+	input("editor-flicker").value = String(e?.kind === "candle" ? e.flickerMs / 1000 : 0.5);
+	input("editor-duration").value = String(e?.kind === "candle" ? (e.durationMs ?? 30000) / 1000 : 30);
+	element("preset-editor").hidden = false;
+	element("editor-review").toggleAttribute(
+		"disabled",
+		!writesAllowed || !generation || generation !== editorGeneration,
+	);
+	element("editor-error").textContent = "";
+	renderPalette(0);
+	editorFields();
+	showView("editor");
+}
+function milliseconds(id: string): number {
+	const value = input(id).valueAsNumber * 1000;
+	const rounded = Math.round(value);
+	if (!Number.isSafeInteger(rounded) || Math.abs(value - rounded) > 0.0000001) throw new Error("invalidPresetTiming");
+	return rounded;
+}
+function readDraft(): PresetDefinition {
+	const kind = select("editor-kind").value as PresetKind;
+	const preset: PresetDefinition = {
+		label: input("editor-name").value,
+		rgb: kind === "palette" ? rgbValue(paletteColors[0] ?? "") : rgbValue(input("editor-rgb").value),
+		brightness: input("editor-brightness").valueAsNumber,
+	};
+	const loop = input("editor-loop").checked;
+	switch (kind) {
+		case "palette":
+			preset.effect = {
+				kind,
+				loop,
+				colors: paletteColors.slice(1).map(rgbValue),
+				transitionMs: milliseconds("editor-transition"),
+			};
+			break;
+		case "strobe":
+			preset.effect = { kind, loop, onMs: milliseconds("editor-on"), offMs: milliseconds("editor-off") };
+			break;
+		case "breathing":
+			preset.effect = {
+				kind,
+				loop,
+				minBrightness: input("editor-min").valueAsNumber,
+				cycleMs: milliseconds("editor-cycle"),
+			};
+			break;
+		case "candle":
+			preset.effect = {
+				kind,
+				loop,
+				depth: input("editor-depth").valueAsNumber,
+				flickerMs: milliseconds("editor-flicker"),
+				...(loop ? {} : { durationMs: milliseconds("editor-duration") }),
+			};
+			break;
+	}
+	return presetDefinition(preset);
 }
 function lostApply(requestId: string): void {
 	if (requests[0]?.message.requestId !== requestId) return;
@@ -68,16 +318,27 @@ function lostApply(requestId: string): void {
 	// dispatch an already queued replacement while authoritative state is unknown.
 	for (let index = requests.length - 1; index >= 0; index--)
 		if (
-			["configuration.apply", "configuration.prepareManual", "configuration.prepareImport"].includes(
-				requests[index]!.message.type,
-			)
+			[
+				"configuration.apply",
+				"configuration.prepareManual",
+				"configuration.prepareImport",
+				"configuration.preparePreset",
+			].includes(requests[index]!.message.type)
 		)
 			requests.splice(index, 1);
 	writesAllowed = false;
+	assignAfterCreate = undefined;
+	reviewedPreset = undefined;
 	proposal = undefined;
 	element("proposal").hidden = true;
 	for (const id of ["prepare", "apply", "confirm"]) element(id).toggleAttribute("disabled", true);
+	for (const id of ["editor-new", "editor-edit", "editor-delete", "editor-review"])
+		element(id).toggleAttribute("disabled", true);
 	text("save-outcome", "commit_unknown");
+	element("configuration-check").hidden = false;
+	element("back").removeAttribute("disabled");
+	element("cancel").removeAttribute("disabled");
+	showView(editorOpen ? "editor" : "setup");
 	void dispatch();
 }
 async function dispatch(): Promise<void> {
@@ -96,6 +357,17 @@ async function dispatch(): Promise<void> {
 }
 async function send(type: string, payload: Record<string, unknown> = {}, drafts: Drafts = {}): Promise<void> {
 	if (type === "controller.restart" && requests.some((request) => request.message.type === type)) return;
+	if (type.startsWith("configuration.prepare") || type === "configuration.apply") {
+		if (
+			requests.some(
+				(request) =>
+					request.message.type.startsWith("configuration.prepare") || request.message.type === "configuration.apply",
+			)
+		)
+			return;
+		for (const id of ["back", "editor-discard", "editor-review", "prepare"])
+			element(id).toggleAttribute("disabled", true);
+	}
 	const requestId = crypto.randomUUID();
 	requests.push({ message: { v: 2, sessionId, requestId, type, payload }, drafts });
 	if (requests.length === 1) await dispatch();
@@ -122,6 +394,11 @@ client.sendToPropertyInspector.subscribe((event) => {
 	}
 	const snapshot = reply.snapshot;
 	if (!isObject(snapshot)) return;
+	if (isObject(snapshot.configuration)) {
+		generation = typeof snapshot.configuration.generation === "string" ? snapshot.configuration.generation : null;
+		configured = snapshot.configuration.configured === true;
+	}
+	if (!view) showView(configured ? "main" : "setup");
 	if (snapshot.language === "en" || snapshot.language === "ru") language = snapshot.language;
 	localize();
 	if (["on", "off", "color", "brightness", "preset", "transition"].includes(String(snapshot.actionKind)))
@@ -129,6 +406,8 @@ client.sendToPropertyInspector.subscribe((event) => {
 	const configurable =
 		actionKind === "color" || actionKind === "brightness" || actionKind === "preset" || actionKind === "transition";
 	element("assignment-controls").hidden = !configurable;
+	element("power-action").hidden = configurable;
+	if (actionKind) text("power-action", actionKind);
 	for (const kind of ["color", "brightness", "preset", "transition"])
 		element(`${kind}-controls`).hidden = actionKind !== kind;
 	if (actionKind) text("action-name", actionKind);
@@ -156,49 +435,17 @@ client.sendToPropertyInspector.subscribe((event) => {
 			input("percent-slider").value = input("percent").value;
 	}
 	if (actionKind === "preset") {
-		const presetId = reconcile("preset-select", typeof assignment.presetId === "string" ? assignment.presetId : "");
+		const assigned = typeof assignment.presetId === "string" ? assignment.presetId : "";
+		const selected = reconcile("preset-select", assigned);
 		const catalog = isObject(snapshot.catalog) ? snapshot.catalog : {};
 		catalogAvailable = catalog.status === "available";
-		const entries = Array.isArray(catalog.entries) ? catalog.entries.filter(isObject) : [];
-		const labels = new Map<string, number>();
-		for (const entry of entries)
-			if (typeof entry.label === "string") labels.set(entry.label, (labels.get(entry.label) ?? 0) + 1);
-		const options: HTMLOptionElement[] = [];
-		for (const entry of entries) {
-			if (typeof entry.id !== "string" || typeof entry.label !== "string") continue;
-			const option = document.createElement("option");
-			option.value = entry.id;
-			option.textContent = labels.get(entry.label)! > 1 ? `${entry.label} (${entry.id})` : entry.label;
-			options.push(option);
-		}
-		const missing = !options.some((option) => option.value === presetId);
-		if (missing) {
-			const retained = document.createElement("option");
-			retained.value = presetId;
-			retained.textContent = presetId
-				? `${translate(language, catalogAvailable ? "presetMissing" : "catalogUnchecked")} (${presetId})`
-				: translate(language, "presetMissing");
-			retained.disabled = true;
-			options.unshift(retained);
-		}
-		select("preset-select").replaceChildren(...options);
-		select("preset-select").value = presetId;
-		select("preset-select").disabled = !catalogAvailable;
-		text(
-			"catalog-status",
-			catalog.status === "loading"
-				? "pending"
-				: !catalogAvailable
-					? "catalogUnchecked"
-					: missing || options.length === 0
-						? "presetMissing"
-						: "available",
-		);
-		element("assignment-save").toggleAttribute(
-			"disabled",
-			!catalogAvailable || !options.some((option) => option.value === presetId && !option.disabled),
-		);
-	} else element("assignment-save").removeAttribute("disabled");
+		presetCatalogStatus = String(catalog.status ?? "idle");
+		const entries = Array.isArray(catalog.entries) ? catalog.entries : [];
+		presetEntries = entries
+			.filter(isObject)
+			.filter((entry) => typeof entry.id === "string" && typeof entry.label === "string");
+		renderPresetChoices(selected);
+	}
 	text(
 		"migration-guidance",
 		snapshot.migration === "legacy"
@@ -209,9 +456,60 @@ client.sendToPropertyInspector.subscribe((event) => {
 	);
 	if (isObject(snapshot.configuration)) {
 		const configuration = snapshot.configuration;
-		generation = typeof configuration.generation === "string" ? configuration.generation : null;
 		text("connection-summary", configuration.configured === true ? "configured" : "unconfigured");
 	}
+	if (isObject(snapshot.presetPage) && snapshot.presetPage.generation === generation) {
+		editorCatalogGeneration = generation;
+		const page = snapshot.presetPage;
+		const key = JSON.stringify(page);
+		if (key !== editorPageKey) {
+			editorPageKey = key;
+			const selected = select("editor-select").value;
+			const entries = Array.isArray(page.entries)
+				? page.entries.filter(isObject).filter((entry) => entry.builtIn !== true)
+				: [];
+			select("editor-select").replaceChildren(
+				...entries
+					.filter((entry) => typeof entry.id === "string" && typeof entry.label === "string")
+					.map((entry) =>
+						option(String(entry.id), `${String(entry.label)} (${String(entry.id)})${entry.labelTruncated ? "…" : ""}`),
+					),
+			);
+			if (entries.some((entry) => entry.id === selected)) select("editor-select").value = selected;
+			editorNext = typeof page.nextCursor === "string" ? page.nextCursor : null;
+			text("library-status", entries.length === 0 ? "customPresetsEmpty" : "");
+		}
+	}
+	if (
+		completing &&
+		latestRequestType === "configuration.presetRead" &&
+		typeof awaitingDefinition === "string" &&
+		isObject(snapshot.presetDefinition) &&
+		snapshot.presetDefinition.id === awaitingDefinition &&
+		snapshot.presetDefinition.generation === generation
+	) {
+		try {
+			const preset = presetDefinition(snapshot.presetDefinition.preset, false);
+			if (readingSummary) {
+				summary = preset;
+			} else if (copyDefinition) {
+				preset.label += translate(language, "presetCopySuffix");
+				loadDraft(preset, `p_${crypto.randomUUID().replaceAll("-", "")}`, "create");
+			} else loadDraft(preset, awaitingDefinition, "update");
+			copyDefinition = false;
+			awaitingDefinition = undefined;
+		} catch {
+			if (!readingSummary) text("editor-error", "invalid_configuration");
+		}
+		readingSummary = false;
+		awaitingDefinition = undefined;
+		if (actionKind === "preset") renderPresetChoices(select("preset-select").value);
+	} else if (completing && latestRequestType === "configuration.presetRead") {
+		readingSummary = false;
+		awaitingDefinition = undefined;
+	}
+	if (typeof snapshot.presetEditorError === "string") text("editor-error", snapshot.presetEditorError);
+	if (editorOpen && editorGeneration !== generation) text("editor-error", "editorDraftStale");
 	proposal = undefined;
 	if (
 		isObject(snapshot.proposal) &&
@@ -240,18 +538,30 @@ client.sendToPropertyInspector.subscribe((event) => {
 			previous?.presetCount !== undefined && previous.presetCount !== preview.presetCount
 				? `${String(previous.presetCount)} → ${String(preview.presetCount)}`
 				: String(preview.presetCount);
-		element("proposal-summary").textContent =
-			`${lamp} · ${translate(language, "port")}: ${port} · ${translate(language, "presetCount")}: ${count} · ${translate(language, preview.hasToken === true ? "hasToken" : "noToken")}`;
+		element("proposal-summary").textContent = editorReview
+			? editorReview
+			: `${lamp} · ${translate(language, "port")}: ${port} · ${translate(language, "presetCount")}: ${count} · ${translate(language, preview.hasToken === true ? "hasToken" : "noToken")}`;
+		if (proposal && completing && latestRequestType?.startsWith("configuration.prepare")) showView("review");
 	}
 	const diff = isObject(snapshot.proposal) && isObject(snapshot.proposal.diff) ? snapshot.proposal.diff : {};
-	element("proposal-diff").textContent = Object.entries(diff)
-		.filter(([, changed]) => changed === true)
-		.map(([key]) => translate(language, `diff_${key}`))
-		.join(" · ");
+	if (editorReview) {
+		const scopes = { create: "newPresetScope", delete: "presetDeleteWarning", update: "sharedPresetScope" };
+		text("proposal-diff", scopes[reviewedPreset?.operation ?? "update"]);
+	} else {
+		element("proposal-diff").textContent = Object.entries(diff)
+			.filter(([, changed]) => changed === true)
+			.map(([key]) => translate(language, "diff_" + key))
+			.join(" · ");
+	}
 	element("proposal").hidden = !proposal;
 	element("apply").hidden = !proposal || proposal.requiresConfirmation;
 	element("confirm").hidden = !proposal?.requiresConfirmation;
 	element("interruption-warning").hidden = !proposal?.requiresConfirmation;
+	if (reviewedPreset && reviewedPreset.operation !== "delete") {
+		const key = reviewedPreset.operation === "create" ? "createAndAssignConfirm" : "applyPresetConfirm";
+		text("apply", key);
+		text("confirm", key);
+	}
 	if (
 		completing &&
 		latestRequestType === "configuration.check" &&
@@ -266,6 +576,7 @@ client.sendToPropertyInspector.subscribe((event) => {
 		writesAllowed = snapshot.saveOutcome.activeStateKnown === true;
 		element("prepare").toggleAttribute("disabled", !writesAllowed);
 		for (const id of ["apply", "confirm"]) element(id).toggleAttribute("disabled", !writesAllowed);
+		element("configuration-check").hidden = snapshot.saveOutcome.activeStateKnown === true;
 	}
 	if (isObject(snapshot.controller)) {
 		text(
@@ -274,6 +585,108 @@ client.sendToPropertyInspector.subscribe((event) => {
 				? snapshot.controller.errorCategory
 				: String(snapshot.controller.state),
 		);
+	}
+	const canEdit = writesAllowed && snapshot.activeStateKnown !== false && !!generation;
+	element("preset-copy").toggleAttribute(
+		"disabled",
+		!canEdit ||
+			!catalogAvailable ||
+			readingSummary ||
+			!presetEntries.some((entry) => entry.id === select("preset-select").value && entry.builtIn === true),
+	);
+	for (const id of ["editor-new", "editor-load", "preset-new", "library-open"])
+		element(id).toggleAttribute("disabled", !canEdit);
+	element("preset-edit").toggleAttribute(
+		"disabled",
+		!canEdit ||
+			readingSummary ||
+			!catalogAvailable ||
+			!presetEntries.some((entry) => entry.id === select("preset-select").value && entry.builtIn !== true),
+	);
+	for (const id of ["editor-edit", "editor-delete"])
+		element(id).toggleAttribute(
+			"disabled",
+			!canEdit || readingSummary || editorCatalogGeneration !== generation || !select("editor-select").value,
+		);
+	element("editor-next").toggleAttribute("disabled", !canEdit || editorCatalogGeneration !== generation || !editorNext);
+	const configurationPending = requests.some(
+		(request, index) =>
+			!(completing && index === 0) &&
+			(request.message.type.startsWith("configuration.prepare") || request.message.type === "configuration.apply"),
+	);
+	element("editor-review").toggleAttribute(
+		"disabled",
+		!canEdit || editorGeneration !== generation || configurationPending,
+	);
+	for (const id of ["back", "editor-discard", "cancel"]) element(id).toggleAttribute("disabled", configurationPending);
+	element("prepare").toggleAttribute("disabled", !writesAllowed || configurationPending);
+	effectId = undefined;
+	if (effectSnapshot(snapshot.effect)) {
+		const effect = snapshot.effect;
+		element("effect-status").textContent =
+			`${translate(language, `kind.${effect.kind}`)} · ${translate(language, `transition.${effect.state}`)} · ${effect.elapsedMs}${effect.durationMs === null ? "" : ` / ${effect.durationMs}`} ms · ${translate(language, "transitionUnverified")}`;
+		if (effect.state === "running" || effect.state === "cancelling") effectId = effect.id;
+	} else
+		text(
+			"effect-status",
+			typeof snapshot.effectError === "string"
+				? snapshot.effectError
+				: snapshot.effect === null
+					? "effectNone"
+					: "effectUnchecked",
+		);
+	element("effect-refresh").toggleAttribute("disabled", snapshot.effectPending === true);
+	element("effect-cancel").toggleAttribute("disabled", snapshot.effectPending === true || !effectId);
+	element("active-effect").hidden = !effectId;
+	element("active-effect-status").textContent = element("effect-status").textContent;
+	element("active-effect-cancel").toggleAttribute("disabled", snapshot.effectPending === true || !effectId);
+	if (
+		completing &&
+		latestRequestType === "configuration.apply" &&
+		reply.ok &&
+		isObject(snapshot.saveOutcome) &&
+		(snapshot.saveOutcome.status === "applied" || snapshot.saveOutcome.status === "unchanged") &&
+		editorReview
+	) {
+		if (reviewedPreset?.operation === "create")
+			assignAfterCreate = { id: reviewedPreset.id, generation, previousId: persisted.get("preset-select") ?? "" };
+		const deleted = reviewedPreset?.operation === "delete";
+		editorOpen = false;
+		element("preset-editor").hidden = true;
+		editorReview = undefined;
+		awaitingDefinition = undefined;
+		reviewedPreset = undefined;
+		showView(deleted ? "library" : "main");
+		if (deleted) void send("configuration.presetList", { expectedGeneration: generation });
+		else if (assignAfterCreate) text("save-outcome", "presetCreated");
+		void send("presets.refresh");
+	} else if (completing && latestRequestType === "configuration.apply") {
+		if (
+			reply.ok &&
+			isObject(snapshot.saveOutcome) &&
+			["applied", "unchanged"].includes(String(snapshot.saveOutcome.status))
+		)
+			showView("main");
+		else if (editorOpen) showView("editor");
+		else showView("setup");
+	}
+	if (completing && latestRequestType === "configuration.apply") {
+		element("back").removeAttribute("disabled");
+		element("cancel").removeAttribute("disabled");
+	}
+	if (completing && latestRequestType === "presets.refresh" && assignAfterCreate) {
+		const target = assignAfterCreate;
+		assignAfterCreate = undefined;
+		if (
+			reply.ok &&
+			catalogAvailable &&
+			target.generation === generation &&
+			target.previousId === (persisted.get("preset-select") ?? "") &&
+			presetEntries.some((entry) => entry.id === target.id)
+		) {
+			renderPresetChoices(target.id);
+			saveAssignment();
+		} else text("save-outcome", "presetCreated");
 	}
 	transitionId = undefined;
 	if (
@@ -314,6 +727,7 @@ client.sendToPropertyInspector.subscribe((event) => {
 	else if (reply.ok === false) text("message", typeof reply.messageKey === "string" ? reply.messageKey : "validation");
 	else if (typeof check.messageKey === "string") text("message", check.messageKey);
 	else element("message").textContent = "";
+	if (saveErrors.has("assignment.save")) text("assignment-error", saveErrors.get("assignment.save")!);
 	if (isObject(snapshot.operation)) {
 		const status = snapshot.operation.status;
 		const category = snapshot.operation.errorCategory;
@@ -347,11 +761,21 @@ client.sendToPropertyInspector.subscribe((event) => {
 		if (applyTimeout !== undefined) clearTimeout(applyTimeout);
 		applyTimeout = undefined;
 		requests.shift();
+		if (latestRequestType === "assignment.save") {
+			assignmentStatusKey = reply.ok ? "assigned" : "autoSave";
+			text("assignment-status", assignmentStatusKey);
+			if (reply.ok) element("save-outcome").textContent = "";
+		}
+		if (requests.some((request) => request.message.type === "assignment.save")) {
+			assignmentStatusKey = "savingAssignment";
+			text("assignment-status", assignmentStatusKey);
+		}
 		void dispatch();
 	}
 });
 element("prepare").addEventListener("click", () => {
 	if (!writesAllowed) return;
+	editorReview = undefined;
 	try {
 		if (input("setup-method").value === "import") {
 			const settingsPath = selectedPath(input("settings-file").value);
@@ -385,6 +809,8 @@ for (const button of ["apply", "confirm"])
 		});
 		proposal = undefined;
 		element("proposal").hidden = true;
+		element("back").toggleAttribute("disabled", true);
+		element("cancel").toggleAttribute("disabled", true);
 	});
 element("cancel").addEventListener("click", () => {
 	if (proposal) void send("configuration.cancel", { transactionId: proposal.transactionId });
@@ -393,6 +819,9 @@ element("cancel").addEventListener("click", () => {
 	input("settings-file").value = "";
 	input("presets-file").value = "";
 	element("proposal").hidden = true;
+	showView(editorReview ? (editorOpen ? "editor" : "library") : "setup");
+	editorReview = undefined;
+	reviewedPreset = undefined;
 });
 element("setup-method").addEventListener("change", () => {
 	const importing = input("setup-method").value === "import";
@@ -418,8 +847,9 @@ element("rgb").addEventListener("change", () => {
 		const rgb = colorInput(input("rgb").value);
 		input("rgb").value = rgb;
 		input("color-picker").value = `#${rgb}`;
+		saveAssignment();
 	} catch {
-		text("message", "validation");
+		text("assignment-error", "validation");
 	}
 });
 element("percent-slider").addEventListener("input", () => {
@@ -430,10 +860,11 @@ element("percent").addEventListener("input", () => {
 		input("percent-slider").value = input("percent").value;
 });
 element("preset-select").addEventListener("change", () => {
-	element("assignment-save").toggleAttribute(
-		"disabled",
-		!catalogAvailable || select("preset-select").selectedOptions[0]?.disabled !== false,
-	);
+	// A newer explicit choice wins over the pending create-and-assign follow-up.
+	assignAfterCreate = undefined;
+	const selected = select("preset-select").value;
+	renderPresetChoices(selected);
+	saveAssignment();
 });
 element("transition-refresh").addEventListener("click", () => {
 	void send("transition.status");
@@ -446,9 +877,163 @@ element("restart").addEventListener("click", () => {
 	void send("controller.restart", { expectedGeneration: generation });
 });
 element("refresh").addEventListener("click", () => {
+	summaryKey = "";
 	void send("presets.refresh");
 });
-element("assignment-save").addEventListener("click", () => {
+element("preset-copy").addEventListener("click", () => {
+	const id = select("preset-select").value;
+	if (
+		!writesAllowed ||
+		!generation ||
+		!catalogAvailable ||
+		readingSummary ||
+		!presetEntries.some((entry) => entry.id === id && entry.builtIn === true)
+	)
+		return;
+	awaitingDefinition = id;
+	copyDefinition = true;
+	showView("editor");
+	void send("configuration.presetRead", { expectedGeneration: generation, id });
+});
+element("editor-load").addEventListener("click", () => {
+	if (generation) void send("configuration.presetList", { expectedGeneration: generation });
+});
+element("editor-next").addEventListener("click", () => {
+	if (generation && editorNext)
+		void send("configuration.presetList", { expectedGeneration: generation, cursor: editorNext });
+});
+element("editor-select").addEventListener("change", () => {
+	for (const id of ["editor-edit", "editor-delete"])
+		element(id).toggleAttribute(
+			"disabled",
+			!writesAllowed || readingSummary || editorCatalogGeneration !== generation || !select("editor-select").value,
+		);
+});
+function newPreset(): void {
+	if (!writesAllowed || !generation) return;
+	loadDraft(defaultPreset(), `p_${crypto.randomUUID().replaceAll("-", "")}`, "create");
+}
+element("editor-new").addEventListener("click", newPreset);
+element("preset-new").addEventListener("click", newPreset);
+element("preset-edit").addEventListener("click", () => {
+	const id = select("preset-select").value;
+	if (
+		!writesAllowed ||
+		!generation ||
+		readingSummary ||
+		!catalogAvailable ||
+		!presetEntries.some((entry) => entry.id === id && entry.builtIn !== true)
+	)
+		return;
+	copyDefinition = false;
+	awaitingDefinition = id;
+	showView("editor");
+	void send("configuration.presetRead", { expectedGeneration: generation, id });
+});
+element("editor-edit").addEventListener("click", () => {
+	if (
+		writesAllowed &&
+		generation &&
+		!readingSummary &&
+		editorCatalogGeneration === generation &&
+		select("editor-select").value
+	) {
+		awaitingDefinition = select("editor-select").value;
+		copyDefinition = false;
+		showView("editor");
+		void send("configuration.presetRead", { expectedGeneration: generation, id: awaitingDefinition });
+	}
+});
+element("editor-kind").addEventListener("change", () => {
+	// Keep every field and the palette draft when switching effect types.
+	// Hidden fields are only read when their effect is selected.
+	editorFields();
+});
+element("editor-loop").addEventListener("change", editorFields);
+element("palette-select").addEventListener("change", () => renderPalette());
+element("palette-color").addEventListener("input", () => {
+	paletteColors[Number(select("palette-select").value)] = colorInput(input("palette-color").value);
+	renderPalette();
+});
+element("palette-add").addEventListener("click", () => {
+	if (paletteColors.length < 16) {
+		paletteColors.push("FF5000");
+		renderPalette(paletteColors.length - 1);
+	}
+});
+element("palette-remove").addEventListener("click", () => {
+	if (paletteColors.length > 2) {
+		const index = Number(select("palette-select").value);
+		paletteColors.splice(index, 1);
+		renderPalette(index);
+	}
+});
+for (const [id, direction] of [
+	["palette-up", -1],
+	["palette-down", 1],
+] as const)
+	element(id).addEventListener("click", () => {
+		const index = Number(select("palette-select").value),
+			next = index + direction;
+		if (next >= 0 && next < paletteColors.length) {
+			[paletteColors[index], paletteColors[next]] = [paletteColors[next]!, paletteColors[index]!];
+			renderPalette(next);
+		}
+	});
+element("editor-review").addEventListener("click", () => {
+	if (!writesAllowed || !generation || generation !== editorGeneration) return;
+	try {
+		if (!input("editor-name").value.trim() || [...input("editor-name").value].length > 128)
+			throw new Error("invalidPresetName");
+		if (
+			select("editor-kind").value === "breathing" &&
+			input("editor-min").valueAsNumber >= input("editor-brightness").valueAsNumber
+		)
+			throw new Error("minimumBelowPeak");
+		const preset = readDraft(),
+			id = input("editor-id").value;
+		reviewedPreset = { id, operation: editorOperation, preset };
+		editorReview = `${preset.label} · ${translate(language, `kind.${preset.effect?.kind ?? "static"}`)} · ${preset.brightness}%`;
+		element("editor-error").textContent = "";
+		void send("configuration.preparePreset", {
+			expectedGeneration: editorGeneration,
+			operation: editorOperation,
+			id,
+			preset,
+		});
+	} catch (error) {
+		text(
+			"editor-error",
+			error instanceof Error && ["invalidPresetName", "minimumBelowPeak", "invalidPresetTiming"].includes(error.message)
+				? error.message
+				: "validation",
+		);
+	}
+});
+element("editor-delete").addEventListener("click", () => {
+	const id = select("editor-select").value;
+	if (!writesAllowed || !generation || editorCatalogGeneration !== generation || !id) return;
+	reviewedPreset = { id, operation: "delete" };
+	editorReview = `${translate(language, "editorDelete")}: ${select("editor-select").selectedOptions[0]?.textContent ?? id}`;
+	void send("configuration.preparePreset", { expectedGeneration: generation, operation: "delete", id });
+});
+element("editor-discard").addEventListener("click", () => {
+	editorOpen = false;
+	awaitingDefinition = undefined;
+	element("preset-editor").hidden = true;
+	element("editor-error").textContent = "";
+	if (proposal && editorReview) void send("configuration.cancel", { transactionId: proposal.transactionId });
+	editorReview = undefined;
+	reviewedPreset = undefined;
+	showView("main");
+});
+element("effect-refresh").addEventListener("click", () => {
+	void send("effect.status");
+});
+element("effect-cancel").addEventListener("click", () => {
+	if (effectId) void send("effect.cancel", { id: effectId });
+});
+function saveAssignment(): void {
 	try {
 		let settings: Record<string, unknown>;
 		if (actionKind === "color") settings = { schemaVersion: 1, rgb: colorInput(input("rgb").value) };
@@ -480,20 +1065,99 @@ element("assignment-save").addEventListener("click", () => {
 			const drafts = Object.fromEntries(
 				Object.entries(fields).map(([id, value]) => [id, { value: String(value), draft: input(id).value }]),
 			);
-			void send("assignment.save", { settings }, drafts);
+			queueAssignment(settings, drafts);
 			return;
 		} else return;
 		const field = actionKind === "color" ? "rgb" : actionKind === "brightness" ? "percent" : "preset-select";
-		void send(
-			"assignment.save",
-			{ settings },
-			{
-				[field]: { value: String(settings.rgb ?? settings.percent ?? settings.presetId), draft: input(field).value },
-			},
-		);
+		queueAssignment(settings, {
+			[field]: { value: String(settings.rgb ?? settings.percent ?? settings.presetId), draft: input(field).value },
+		});
 	} catch {
-		text("message", "validation");
+		text("assignment-error", "validation");
 	}
+}
+function queueAssignment(settings: Record<string, unknown>, drafts: Drafts): void {
+	element("assignment-error").textContent = "";
+	const pending = requests.filter((request) => request.message.type === "assignment.save");
+	const same = (request: (typeof requests)[number]): boolean =>
+		JSON.stringify(request.message.payload.settings) === JSON.stringify(settings);
+	if (pending.length > 0 && same(pending[pending.length - 1]!)) return;
+	if (
+		pending.length === 0 &&
+		!saveErrors.has("assignment.save") &&
+		Object.entries(drafts).every(([id, draft]) => persisted.get(id) === draft.value)
+	)
+		return;
+	assignmentStatusKey = "savingAssignment";
+	text("assignment-status", assignmentStatusKey);
+	void send("assignment.save", { settings }, drafts);
+}
+element("color-picker").addEventListener("change", () => {
+	input("rgb").value = input("color-picker").value.slice(1).toUpperCase();
+	saveAssignment();
+});
+for (const id of [
+	"percent-slider",
+	"percent",
+	"transition-from-percent",
+	"transition-to-percent",
+	"transition-seconds",
+])
+	element(id).addEventListener("change", saveAssignment);
+for (const end of ["from", "to"]) {
+	element(`transition-${end}-color`).addEventListener("input", () => {
+		input(`transition-${end}-rgb`).value = input(`transition-${end}-color`).value.slice(1).toUpperCase();
+	});
+	element(`transition-${end}-color`).addEventListener("change", () => {
+		input(`transition-${end}-rgb`).value = input(`transition-${end}-color`).value.slice(1).toUpperCase();
+		saveAssignment();
+	});
+	element(`transition-${end}-rgb`).addEventListener("change", () => {
+		try {
+			input(`transition-${end}-color`).value = `#${colorInput(input(`transition-${end}-rgb`).value)}`;
+			saveAssignment();
+		} catch {
+			text("assignment-error", "validation");
+		}
+	});
+}
+element("editor-color").addEventListener("input", () => {
+	input("editor-rgb").value = input("editor-color").value.slice(1).toUpperCase();
+});
+element("editor-rgb").addEventListener("change", () => {
+	try {
+		input("editor-color").value = `#${colorInput(input("editor-rgb").value)}`;
+		element("editor-error").textContent = "";
+	} catch {
+		text("editor-error", "validation");
+	}
+});
+element("editor-brightness-slider").addEventListener("input", () => {
+	input("editor-brightness").value = input("editor-brightness-slider").value;
+});
+element("editor-brightness").addEventListener("input", () => {
+	if (input("editor-brightness").validity.valid && input("editor-brightness").value !== "")
+		input("editor-brightness-slider").value = input("editor-brightness").value;
+});
+element("setup-open").addEventListener("click", () => showView("setup"));
+element("diagnostics-open").addEventListener("click", () => showView("diagnostics"));
+element("library-open").addEventListener("click", () => {
+	showView("library");
+	if (generation) void send("configuration.presetList", { expectedGeneration: generation });
+});
+element("active-effect-cancel").addEventListener("click", () => {
+	if (effectId) void send("effect.cancel", { id: effectId });
+});
+element("back").addEventListener("click", () => {
+	if (view === "review") {
+		element("cancel").click();
+		return;
+	}
+	if (view === "editor") {
+		element("editor-discard").click();
+		return;
+	}
+	showView("main");
 });
 window.addEventListener("pagehide", () => {
 	requests.length = 0;

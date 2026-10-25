@@ -9,6 +9,14 @@ import { validateNativePayload } from "../native/payload-validator.mjs";
 import { BridgeClient } from "./bridge-client.js";
 import { HostLiveness, type HostProbeBroker } from "./host-liveness.js";
 import { type Clock, systemClock } from "./operation-store.js";
+import {
+	generationId,
+	presetDefinition,
+	type PresetDefinition,
+	presetId,
+	type PresetPage,
+	type PresetRead,
+} from "./preset-effects.js";
 import type { Settings } from "./settings.js";
 import { connection, type Connection, object, port } from "./validation.js";
 
@@ -66,6 +74,9 @@ export const runtimeErrors = [
 	"import_unreadable",
 	"import_size",
 	"import_file",
+	"preset_exists",
+	"preset_not_found",
+	"preset_too_large",
 	"internal_error",
 ] as const;
 export function runtimeError(error: unknown, fallback = "internal_error"): string {
@@ -747,6 +758,108 @@ export class ManagedController {
 			settingsPath,
 			...(presetsPath ? { presetsPath } : {}),
 			expectedGeneration,
+		});
+		return this.review(raw, ownerSession, expectedGeneration);
+	}
+	public async presetList(expectedGeneration: string, ownerSession: string, cursor?: string): Promise<PresetPage> {
+		if (!this.activeStateKnown) throw new Error("storage_unavailable");
+		if (!generationId(expectedGeneration) || (cursor !== undefined && !presetId(cursor))) throw new Error("validation");
+		const raw = await this.request("configuration.presetList", {
+			ownerSession,
+			expectedGeneration,
+			...(cursor === undefined ? {} : { cursor }),
+		});
+		const secret = this.credentials?.accessToken ?? "";
+		if (
+			!object(raw) ||
+			Object.keys(raw).sort().join(",") !== "entries,generation,nextCursor" ||
+			raw.generation !== expectedGeneration ||
+			!Array.isArray(raw.entries) ||
+			raw.entries.length > 50 ||
+			(raw.nextCursor !== null && !presetId(raw.nextCursor)) ||
+			Buffer.byteLength(JSON.stringify(raw)) > 32768
+		)
+			throw new Error("protocol_incompatible");
+		let previous = cursor ?? "";
+		const entries = raw.entries.map((entry: unknown) => {
+			if (
+				!object(entry) ||
+				Object.keys(entry).sort().join(",") !==
+					(entry.builtIn === undefined ? "id,label,labelTruncated" : "builtIn,id,label,labelTruncated") ||
+				!presetId(entry.id) ||
+				entry.id <= previous ||
+				typeof entry.label !== "string" ||
+				[...entry.label].length > 128 ||
+				[...entry.label].some(
+					(c) =>
+						c.charCodeAt(0) < 32 ||
+						(c.charCodeAt(0) >= 127 && c.charCodeAt(0) <= 159) ||
+						c === "\u2028" ||
+						c === "\u2029",
+				) ||
+				typeof entry.labelTruncated !== "boolean" ||
+				(entry.builtIn !== undefined && typeof entry.builtIn !== "boolean") ||
+				(secret && (entry.id.includes(secret) || entry.label.includes(secret)))
+			)
+				throw new Error("protocol_incompatible");
+			previous = entry.id;
+			return {
+				id: entry.id,
+				label: entry.label,
+				labelTruncated: entry.labelTruncated,
+				...(entry.builtIn === undefined ? {} : { builtIn: entry.builtIn }),
+			};
+		});
+		if (raw.nextCursor !== null && (raw.nextCursor !== previous || entries.length === 0))
+			throw new Error("protocol_incompatible");
+		return { generation: expectedGeneration, entries, nextCursor: raw.nextCursor as string | null };
+	}
+	public async presetRead(expectedGeneration: string, ownerSession: string, id: string): Promise<PresetRead> {
+		if (!this.activeStateKnown) throw new Error("storage_unavailable");
+		if (!generationId(expectedGeneration) || !presetId(id)) throw new Error("validation");
+		const raw = await this.request("configuration.presetRead", { ownerSession, expectedGeneration, id });
+		if (
+			!object(raw) ||
+			Object.keys(raw).sort().join(",") !== "generation,id,preset" ||
+			raw.generation !== expectedGeneration ||
+			raw.id !== id ||
+			Buffer.byteLength(JSON.stringify(raw)) > 32768
+		)
+			throw new Error("protocol_incompatible");
+		try {
+			return {
+				generation: expectedGeneration,
+				id,
+				preset: presetDefinition(raw.preset, false, this.credentials?.accessToken),
+			};
+		} catch {
+			throw new Error("protocol_incompatible");
+		}
+	}
+	public async preparePreset(
+		operation: "create" | "delete" | "update",
+		id: string,
+		preset: PresetDefinition | undefined,
+		expectedGeneration: string,
+		ownerSession: string,
+	): Promise<Proposal> {
+		if (!this.activeStateKnown) throw new Error("storage_unavailable");
+		if (
+			!generationId(expectedGeneration) ||
+			!presetId(id) ||
+			!["create", "update", "delete"].includes(operation) ||
+			(operation === "delete" && preset !== undefined)
+		)
+			throw new Error("validation");
+		const definition =
+			operation === "delete" ? undefined : presetDefinition(preset, true, this.credentials?.accessToken);
+		if (Buffer.byteLength(JSON.stringify(definition) ?? "") > 32768) throw new Error("preset_too_large");
+		const raw = await this.request("configuration.preparePreset", {
+			ownerSession,
+			expectedGeneration,
+			operation,
+			id,
+			...(definition ? { preset: definition } : {}),
 		});
 		return this.review(raw, ownerSession, expectedGeneration);
 	}
