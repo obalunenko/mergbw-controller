@@ -20,6 +20,19 @@
 			</header>
 			<button id="back" class="link" type="button" data-i18n="backToKey" hidden>Back to key</button>
 			<section id="view-main" hidden>
+				<section id="update-banner" class="notice" hidden aria-live="polite">
+					<p id="update-banner-text"></p>
+					<p id="update-banner-error" class="error"></p>
+					<details id="update-notes-details" hidden>
+						<summary data-i18n="updateReleaseNotes">Release notes</summary>
+						<p id="update-notes"></p>
+					</details>
+					<p id="update-release-url" class="help"></p>
+					<div class="buttons">
+						<button id="update-install" class="primary" type="button" data-i18n="updateInstall" hidden>Install</button
+						><button id="update-later" type="button" data-i18n="updateLater" hidden>Later</button>
+					</div>
+				</section>
 				<h2 data-i18n="keyBehavior">What this key does</h2>
 				<p id="power-action" hidden></p>
 				<div id="assignment-controls" hidden>
@@ -273,6 +286,18 @@
 					<option value="en">English</option>
 					<option value="ru">Русский</option>
 				</select>
+				<div id="update-settings" hidden>
+					<h3 data-i18n="updates">Updates</h3>
+					<label class="checkbox"
+						><input id="update-auto-check" type="checkbox" checked /><span data-i18n="updateAutoCheck"
+							>Check for updates automatically</span
+						></label
+					>
+					<p id="update-status" role="status" aria-live="polite"></p>
+					<p id="update-last-check" class="help"></p>
+					<p id="update-setup-release" class="help"></p>
+					<button id="update-check" type="button" data-i18n="updateCheckNow">Check now</button>
+				</div>
 				<label for="setup-method" data-i18n="setupMethod">Setup method</label
 				><select id="setup-method">
 					<option value="manual" data-i18n="manualSetup">Enter lamp code</option>
@@ -358,6 +383,7 @@
 					Check saved configuration
 				</button>
 			</div>
+			<p id="launch-blocked" class="notice" role="alert" hidden></p>
 			<p id="message" class="error" role="status" aria-live="polite"></p>
 			<p id="operation" class="help" aria-live="polite"></p>
 		</main>

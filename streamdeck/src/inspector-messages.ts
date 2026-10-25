@@ -13,7 +13,16 @@ import {
 	type PresetRead,
 } from "./preset-effects.js";
 import type { Settings } from "./settings.js";
-import { assignment, type Assignment, identity, type Language, object, selectedPath } from "./validation.js";
+import type { UpdateService, UpdateSnapshot } from "./updates.js";
+import {
+	assignment,
+	type Assignment,
+	identity,
+	type Language,
+	object,
+	selectedPath,
+	STABLE_TAG,
+} from "./validation.js";
 
 export const messageTypes = [
 	"inspector.get",
@@ -35,6 +44,11 @@ export const messageTypes = [
 	"assignment.save",
 	"language.save",
 	"inspector.close",
+	"update.status",
+	"update.check",
+	"update.install",
+	"update.dismiss",
+	"update.autoCheck",
 ] as const;
 export type MessageType = (typeof messageTypes)[number];
 export type InspectorMessage = {
@@ -64,6 +78,11 @@ const keys: Record<MessageType, string[]> = {
 	"assignment.save": ["settings"],
 	"language.save": ["language"],
 	"inspector.close": [],
+	"update.status": [],
+	"update.check": [],
+	"update.install": ["tag"],
+	"update.dismiss": ["tag"],
+	"update.autoCheck": ["autoCheck"],
 };
 export function parseMessage(context: string, raw: unknown): InspectorMessage {
 	if (
@@ -126,6 +145,12 @@ export function parseMessage(context: string, raw: unknown): InspectorMessage {
 		}
 	}
 	if (type === "effect.cancel" && !generationId(raw.payload.id)) throw new Error("validation");
+	if (
+		(type === "update.install" || type === "update.dismiss") &&
+		(typeof raw.payload.tag !== "string" || !STABLE_TAG.test(raw.payload.tag))
+	)
+		throw new Error("validation");
+	if (type === "update.autoCheck" && typeof raw.payload.autoCheck !== "boolean") throw new Error("validation");
 	return { v: 2, sessionId: raw.sessionId, requestId: raw.requestId, type, payload: raw.payload };
 }
 export type ConnectionSummary = { configured: boolean; port: number; hasToken: boolean };
@@ -164,6 +189,7 @@ export type InspectorSnapshot = {
 	explanation?: ErrorCategory;
 	actionKind?: import("./validation.js").ActionKind;
 	operation?: OperationSummary;
+	update?: UpdateSnapshot;
 };
 export function safeSnapshot(context: string, settings: Settings, operations: OperationStore): InspectorSnapshot {
 	let connection: ConnectionSummary = { configured: false, port: 18765, hasToken: false };
@@ -282,6 +308,7 @@ export class InspectorController {
 		private readonly send: (reply: InspectorReply, context: string) => Promise<void> | void,
 		private readonly diagnostics?: Diagnostics,
 		private readonly runtime?: ManagedController,
+		private readonly updates?: UpdateService,
 	) {
 		this.revision = settings.connectionRevision;
 		this.catalog = { connectionRevision: this.revision, status: "idle", entries: [], requestGeneration: 0 };
@@ -301,6 +328,7 @@ export class InspectorController {
 		});
 		this.unsubscribers = [
 			...(runtimeUnsubscribe ? [runtimeUnsubscribe] : []),
+			...(updates ? [updates.subscribe(() => this.publish())] : []),
 			settings.subscribe(() => {
 				for (const [context, explanation] of this.explanations) {
 					if (
@@ -532,6 +560,8 @@ export class InspectorController {
 		}
 		if (snapshot.catalog?.entries.some((entry) => !this.isSafePresetId(entry.id)))
 			snapshot.catalog = { ...snapshot.catalog, status: "unavailable", entries: [] };
+		const update = this.updates?.snapshot();
+		if (update) snapshot.update = update;
 		if (snapshot.catalog)
 			snapshot.catalog.entries = snapshot.catalog.entries.map((entry) => ({
 				...entry,
@@ -764,6 +794,24 @@ export class InspectorController {
 				case "presets.refresh":
 					await this.refresh(false, context, message);
 					break;
+				case "update.status":
+					break;
+				case "update.check":
+					if (!this.updates) throw new Error("validation");
+					await this.updates.check();
+					break;
+				case "update.install":
+					if (!this.updates) throw new Error("validation");
+					void this.updates.install(message.payload.tag).catch(() => {});
+					break;
+				case "update.dismiss":
+					if (!this.updates) throw new Error("validation");
+					this.updates.dismiss(message.payload.tag);
+					break;
+				case "update.autoCheck":
+					if (!this.updates) throw new Error("validation");
+					await this.updates.setAutoCheck(message.payload.autoCheck);
+					break;
 			}
 			if (this.sessionTokens.get(context) === sessionToken) await this.reply(context, message, true);
 		} catch (error) {
@@ -794,6 +842,7 @@ export class InspectorController {
 						[
 							"storage",
 							"storage_unavailable",
+							"migration_required",
 							"instance_busy",
 							"binary_missing",
 							"binary_incompatible",

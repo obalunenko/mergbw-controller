@@ -2,6 +2,7 @@
 """Build and inspect native payloads without ever executing either candidate."""
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -16,7 +17,7 @@ import tarfile
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = "com.obalunenko.mergbw.sdPlugin"
 APP = "controller/MeRGBW Controller.app/Contents"
-KINDS = ("plugin", "on", "off", "color", "brightness", "preset", "transition")
+KINDS = ("plugin", "on", "off", "color", "brightness", "preset", "scene", "transition")
 LICENSES = ("elgato-streamdeck", "elgato-schemas", "elgato-utils", "ws", "zod", "tslib")
 RUNTIME_FILES = (
     "LICENSE", ".sdignore", "manifest.json", "bin/plugin.js", "bin/package.json",
@@ -31,8 +32,82 @@ NATIVE_FILES = (
     "_CodeSignature/CodeResources",
 )
 
+_RELEASE = importlib.util.spec_from_file_location("mergbw_release", Path(__file__).with_name("release.py"))
+_release = importlib.util.module_from_spec(_RELEASE)
+_RELEASE.loader.exec_module(_release)
+TAG = _release.TAG
+
+
 class BuildError(Exception):
     """An allowlisted developer-facing builder failure."""
+
+
+def release_stamp(root, runner, release_tag=None):
+    """Return (tag, build); a release is build 0, a local build is the next counter value."""
+    if release_tag is not None:
+        if not TAG.fullmatch(release_tag):
+            raise BuildError("release tag must be vX.Y.Z or vX.Y.Z-prerelease")
+        return release_tag, 0
+    try:
+        tag = runner(["git", "describe", "--tags", "--abbrev=0", "--match", "v*"], cwd=root)
+    except BuildError:
+        tag = ""
+    if not TAG.fullmatch(tag):
+        source = root / "streamdeck" / PLUGIN / "manifest.json"
+        no_symlinks(source)
+        version = json.loads(source.read_text()).get("Version")
+        match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)\.\d+", version if isinstance(version, str) else "")
+        if not match:
+            raise BuildError("source manifest version must be X.Y.Z.W")
+        tag = "v" + ".".join(str(int(part)) for part in match.groups())
+    counter = root / "dist/plugin-build-number"
+    no_symlinks(counter)
+    previous = counter.read_text().strip() if counter.exists() else "0"
+    if not re.fullmatch(r"\d{1,9}", previous):
+        raise BuildError("local build counter is invalid")
+    return tag, int(previous) + 1
+
+
+def write_stamp(staged, tag, build):
+    """Stamp only the staged copy; the source manifest is never edited."""
+    manifest = staged / "manifest.json"
+    value = json.loads(manifest.read_text())
+    value["Version"] = ".".join((*TAG.fullmatch(tag).groups(), str(build)))
+    manifest.write_text(json.dumps(value, indent=4) + "\n")
+    manifest.chmod(0o644)
+    stamp = staged / "release.json"
+    stamp.write_text(json.dumps({"tag": tag, "build": build}) + "\n")
+    stamp.chmod(0o644)
+
+
+def read_stamp(target):
+    stamp, manifest = target / "release.json", target / "manifest.json"
+    no_symlinks(stamp)
+    if not stamp.is_file() or stamp.stat().st_size > 4096:
+        raise BuildError("release stamp is missing")
+    value = json.loads(stamp.read_text())
+    match = TAG.fullmatch(value.get("tag", "")) if isinstance(value, dict) and isinstance(value.get("tag"), str) else None
+    build = value.get("build") if isinstance(value, dict) else None
+    if (not match or set(value) != {"tag", "build"} or type(build) is not int or build < 0
+            or json.loads(manifest.read_text()).get("Version") != ".".join((*match.groups(), str(build)))):
+        raise BuildError("release stamp does not match the staged manifest")
+    return value
+
+
+def commit_build(root, build):
+    """Atomically record a local build number after its plugin was staged."""
+    if not build:
+        return
+    counter = root / "dist/plugin-build-number"
+    counter.parent.mkdir(parents=True, exist_ok=True)
+    no_symlinks(counter)
+    with tempfile.NamedTemporaryFile("w", dir=counter.parent, prefix=".plugin-build-number-", delete=False) as handle:
+        handle.write(f"{build}\n")
+    try:
+        os.replace(handle.name, counter)
+    except OSError:
+        os.unlink(handle.name)
+        raise
 
 
 def run(command, *, cwd, env=None):
@@ -117,6 +192,7 @@ def spike(output_root, *, root=ROOT, runner=run, system=None, machine=None):
         no_symlinks(source / name)
         if not (source / name).is_file():
             raise BuildError("run the existing plugin JS build before spike")
+    tag, build = release_stamp(root, runner)
     revision = runner(["git", "rev-parse", "HEAD"], cwd=root)
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise BuildError("source revision is unavailable")
@@ -141,6 +217,7 @@ def spike(output_root, *, root=ROOT, runner=run, system=None, machine=None):
         staged.mkdir(mode=0o700)
         for name in RUNTIME_FILES:
             copy_regular(source / name, staged / name)
+        write_stamp(staged, tag, build)
         contents = staged / APP
         copy_regular(template, contents / "Info.plist")
         for language in ("en", "ru"):
@@ -197,6 +274,7 @@ def spike(output_root, *, root=ROOT, runner=run, system=None, machine=None):
                 shutil.move(str(path), target / path.name)
         except OSError as exc:
             raise BuildError("could not finalize isolated spike") from exc
+    commit_build(root, build)
     return target
 
 
@@ -340,7 +418,9 @@ def inspect_slice(directory, architecture, expected, root, runner):
     return directory
 
 
-def assemble(output_root, arm64_dir, amd64_dir, *, root=ROOT, runner=run, system=None):
+def assemble(output_root, arm64_dir, amd64_dir, *, root=ROOT, runner=run, system=None, release_tag=None):
+    if release_tag is not None and not TAG.fullmatch(release_tag):
+        raise BuildError("release tag must be vX.Y.Z or vX.Y.Z-prerelease")
     native_host(system, "arm64")
     output_root = Path(output_root)
     no_symlinks(output_root)
@@ -352,11 +432,13 @@ def assemble(output_root, arm64_dir, amd64_dir, *, root=ROOT, runner=run, system
     target = output_root / PLUGIN
     if target.exists():
         raise BuildError("assembled output exists; refusing overwrite")
+    tag, build = release_stamp(root, runner, release_tag)
     output_root.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".assembly-", dir=output_root) as temporary:
         staged = Path(temporary) / PLUGIN
         for name in RUNTIME_FILES:
             copy_regular(root / "streamdeck" / PLUGIN / name, staged / name)
+        write_stamp(staged, tag, build)
         contents = staged / APP
         template = root / "streamdeck/native/Info.plist"
         info = plistlib.loads(template.read_bytes())
@@ -380,6 +462,7 @@ def assemble(output_root, arm64_dir, amd64_dir, *, root=ROOT, runner=run, system
                     for name in sorted(set(NATIVE_FILES) - {"_CodeSignature/CodeResources"})}}
         assembly["noticesSHA256"] = hashlib.sha256((target / "licenses/go-native-notices.txt").read_bytes()).hexdigest()
         (output_root / "assembly-manifest.json").write_text(json.dumps(assembly, indent=2) + "\n")
+    commit_build(root, build)
     return target
 
 
@@ -393,6 +476,7 @@ def finish_payload(target, mode, *, root=ROOT, runner=run, system=None, credenti
     native_host(system, "arm64")
     target = Path(target)
     no_symlinks(target)
+    read_stamp(target)
     metadata = provenance(root, runner)
     if mode == "distribution" and runner(["git", "status", "--porcelain", "--untracked-files=normal"], cwd=root):
         raise BuildError("distribution requires clean tagged source")
@@ -499,6 +583,7 @@ def main():
     command.add_argument("--output-root", type=Path, default=ROOT / "dist/plugin-stage")
     command.add_argument("--arm64-dir", type=Path, default=ROOT / "dist/plugin-native/darwin_arm64")
     command.add_argument("--amd64-dir", type=Path, default=ROOT / "dist/plugin-native/darwin_amd64")
+    command.add_argument("--release-tag", help="release vX.Y.Z[-pre]; omitted for a local X.Y.Z.N build")
     command = commands.add_parser("extract-slice", help="validate and extract a mode-preserving CI slice envelope")
     command.add_argument("--archive", required=True, type=Path)
     command.add_argument("--output-root", type=Path, default=ROOT / "dist/plugin-native")
@@ -514,7 +599,7 @@ def main():
         elif args.command == "extract-slice":
             target = extract_slice(args.archive, args.output_root)
         elif args.command == "assemble":
-            target = assemble(args.output_root, args.arm64_dir, args.amd64_dir)
+            target = assemble(args.output_root, args.arm64_dir, args.amd64_dir, release_tag=args.release_tag)
         else:
             target = finish_payload(args.plugin_root, "development" if args.command == "dev" else "distribution")
     except (BuildError, OSError, ValueError, KeyError, TypeError) as exc:

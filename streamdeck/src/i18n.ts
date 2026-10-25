@@ -247,6 +247,33 @@ export const en = {
 	configured: "Connection saved",
 	noToken: "No saved connection",
 	hasToken: "Token saved",
+	updates: "Updates",
+	updateAutoCheck: "Check for updates automatically",
+	updateCheckNow: "Check now",
+	updateInstall: "Install",
+	updateLater: "Later",
+	updateReleaseNotes: "Release notes",
+	updateReleasePage: "Release page",
+	updateAvailable: "MeRGBW {latest} is available (installed {installed}).",
+	updateNotificationTitle: "MeRGBW",
+	updateNotificationText: "MeRGBW {latest} is available",
+	updateIdle: "Not checked yet.",
+	updateChecking: "Checking for updates…",
+	updateUpToDate: "Up to date ({installed}).",
+	updateDismissed: "MeRGBW {latest} is available. Hidden until restart.",
+	updateDownloading: "Downloading and verifying the installer…",
+	updateHanded: "Opened in Stream Deck. Confirm the installation there; settings are kept.",
+	updateLastCheck: "Last check: {time}",
+	update_network: "Update check failed: no connection to GitHub. It retries later.",
+	update_rate_limited: "GitHub limited requests. The check retries later.",
+	update_http: "GitHub returned an error. The check retries later.",
+	update_malformed: "The release data was not understood. The check retries later.",
+	update_no_asset: "This release has no verified plugin installer. Use the release page.",
+	update_size: "The download size was wrong. Nothing was installed.",
+	update_checksum: "The installer failed its checksum. Nothing was installed.",
+	update_open_failed: "Stream Deck could not open the installer. Use the release page.",
+	launch_blocked:
+		'macOS blocked the downloaded controller. In Terminal run: xattr -dr com.apple.quarantine "{plugin}" or allow it in System Settings → Privacy & Security, then use Restart controller.',
 };
 export type MessageKey = keyof typeof en;
 export const ru: Record<MessageKey, string> = {
@@ -501,8 +528,38 @@ export const ru: Record<MessageKey, string> = {
 	configured: "Подключение сохранено",
 	noToken: "Нет подключения",
 	hasToken: "Токен сохранён",
+	updates: "Обновления",
+	updateAutoCheck: "Проверять обновления автоматически",
+	updateCheckNow: "Проверить сейчас",
+	updateInstall: "Установить",
+	updateLater: "Позже",
+	updateReleaseNotes: "Что нового",
+	updateReleasePage: "Страница релиза",
+	updateAvailable: "Доступна MeRGBW {latest} (установлена {installed}).",
+	updateNotificationTitle: "MeRGBW",
+	updateNotificationText: "Доступна MeRGBW {latest}",
+	updateIdle: "Проверки ещё не было.",
+	updateChecking: "Проверка обновлений…",
+	updateUpToDate: "Установлена последняя версия ({installed}).",
+	updateDismissed: "Доступна MeRGBW {latest}. Скрыто до перезапуска.",
+	updateDownloading: "Скачивание и проверка установщика…",
+	updateHanded: "Открыто в Stream Deck. Подтвердите установку там; настройки сохранятся.",
+	updateLastCheck: "Последняя проверка: {time}",
+	update_network: "Проверка не удалась: нет связи с GitHub. Повтор позже.",
+	update_rate_limited: "GitHub ограничил запросы. Повтор позже.",
+	update_http: "GitHub вернул ошибку. Повтор позже.",
+	update_malformed: "Не удалось разобрать данные релиза. Повтор позже.",
+	update_no_asset: "В релизе нет проверяемого установщика плагина. Откройте страницу релиза.",
+	update_size: "Неверный размер загрузки. Ничего не установлено.",
+	update_checksum: "Контрольная сумма установщика не совпала. Ничего не установлено.",
+	update_open_failed: "Stream Deck не смог открыть установщик. Откройте страницу релиза.",
+	launch_blocked:
+		'macOS заблокировала скачанный контроллер. Выполните в Терминале: xattr -dr com.apple.quarantine "{plugin}" или разрешите запуск в Системные настройки → Конфиденциальность и безопасность, затем нажмите «Перезапустить контроллер».',
 };
 export function translate(language: Language, key: string): string {
 	const dict = language === "ru" ? ru : en;
 	return dict[key as MessageKey] ?? en[key as MessageKey] ?? en.validation;
+}
+export function format(language: Language, key: string, values: Record<string, string>): string {
+	return translate(language, key).replace(/\{(\w+)\}/g, (match, name: string) => values[name] ?? match);
 }

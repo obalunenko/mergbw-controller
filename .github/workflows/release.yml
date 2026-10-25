@@ -122,12 +122,18 @@ jobs:
           python3 scripts/plugin-native.py extract-slice --archive dist/native-transfer/mergbw-native_darwin_arm64.tar.gz
           python3 scripts/plugin-native.py extract-slice --archive dist/native-transfer/mergbw-native_darwin_amd64.tar.gz
       - name: Inspect source-matched inputs and assemble both universal roles
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
         run: task plugin:native:assemble
       - name: Finalize local development payload without Apple credentials
         run: task plugin:native:dev
       - name: Check and author complete development installer without launching native code
+        env:
+          MERGBW_EXPECTED_TAG: ${{ github.ref_name }}
         run: task plugin:package
       - name: Verify extracted installer bytes, modes and local signatures
+        env:
+          MERGBW_EXPECTED_TAG: ${{ github.ref_name }}
         run: node streamdeck/scripts/check-package.mjs --archive dist/com.obalunenko.mergbw.development.streamDeckPlugin
       - name: Upload plugin installer
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0

@@ -47,7 +47,7 @@ test("native byte framing handles split UTF-8, oversized residual, invalid UTF-8
 	assert.equal(failures, 3);
 });
 
-async function fixture(openError?: string, workerError?: string) {
+async function fixture(openError?: string, workerError?: string, launchBlocked?: () => Promise<boolean>) {
 	const settings = new Settings(new MemoryStorage());
 	await settings.load();
 	let callback!: (line: string) => void;
@@ -107,6 +107,7 @@ async function fixture(openError?: string, workerError?: string) {
 			},
 		};
 	};
+	if (launchBlocked) spawn.launchBlocked = launchBlocked;
 	const runtime = new ManagedController(spawn, settings, new BridgeClient(), new HostProbeBroker(async () => ({})));
 	return {
 		runtime,
@@ -311,4 +312,71 @@ test("worker failure event before start result retains missing/incompatible/spaw
 		assert.equal(f.calls.includes("runtime.authorized"), false);
 		await f.runtime.shutdown();
 	}
+});
+
+test("quarantined bundled app turns spawn_failed or startup_timeout into launch_blocked", async () => {
+	for (const category of ["spawn_failed", "startup_timeout"]) {
+		let probes = 0;
+		const f = await fixture(undefined, category, async () => {
+			probes++;
+			return true;
+		});
+		await f.runtime.open();
+		await tick();
+		await tick();
+		assert.equal(f.runtime.state, "failed");
+		assert.equal(f.runtime.error, "launch_blocked");
+		assert.equal(probes, 1);
+		assert.equal(f.runtime.capability(), null);
+		await f.runtime.shutdown();
+	}
+});
+
+test("failing quarantine probe keeps the original launch category", async () => {
+	for (const probe of [async () => false, () => Promise.reject(new Error("probe exploded"))]) {
+		for (const category of ["spawn_failed", "startup_timeout"]) {
+			const f = await fixture(undefined, category, probe);
+			await f.runtime.open();
+			await tick();
+			await tick();
+			assert.equal(f.runtime.error, category);
+			await f.runtime.shutdown();
+		}
+	}
+	let probes = 0;
+	const f = await fixture(undefined, "binary_missing", async () => {
+		probes++;
+		return true;
+	});
+	await f.runtime.open();
+	await tick();
+	assert.equal(f.runtime.error, "binary_missing");
+	assert.equal(probes, 0);
+	await f.runtime.shutdown();
+});
+
+test("bundled quarantine probe only reads the attribute on the bundled app and never removes it", async () => {
+	const { bundledSupervisorSpawn, quarantineProbe } = await import("../src/managed-controller.js");
+	const calls: string[][] = [];
+	const present = quarantineProbe("/synthetic/plugin", async (file, args) => {
+		calls.push([file, ...args]);
+		return "0083;synthetic;Safari;";
+	});
+	assert.equal(await present(), true);
+	const absent = quarantineProbe("/synthetic/plugin", async (file, args) => {
+		calls.push([file, ...args]);
+		throw new Error("xattr: No such xattr: com.apple.quarantine");
+	});
+	assert.equal(await absent(), false);
+	assert.deepEqual(calls, [
+		["/usr/bin/xattr", "-p", "com.apple.quarantine", "/synthetic/plugin/controller/MeRGBW Controller.app"],
+		["/usr/bin/xattr", "-p", "com.apple.quarantine", "/synthetic/plugin/controller/MeRGBW Controller.app"],
+	]);
+	assert.ok(!calls.some((call) => call.includes("-d") || call.includes("-dr") || call.includes("-c")));
+	const spawn = bundledSupervisorSpawn("/synthetic/plugin", undefined, async (file, args) => {
+		calls.push([file, ...args]);
+		return "";
+	});
+	assert.equal(await spawn.launchBlocked?.(), true);
+	assert.equal(calls.length, 3);
 });

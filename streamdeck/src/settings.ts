@@ -11,6 +11,8 @@ import {
 	type GlobalSettings,
 	language,
 	type Language,
+	updateSettings,
+	type UpdateSettings,
 } from "./validation.js";
 
 export type Persistence = {
@@ -146,6 +148,16 @@ export class Settings {
 		return this.serial(async () => {
 			const old = this.get();
 			await this.commit({ ...old, language: language(value) });
+		});
+	}
+	public getUpdates(): UpdateSettings {
+		return structuredClone(this.active?.updates ?? { autoCheck: true });
+	}
+	public saveUpdates(value: unknown): Promise<void> {
+		return this.serial(async () => {
+			const old = this.get();
+			if (old.schemaVersion !== 2) throw new Error("migration_required");
+			await this.commit({ ...old, updates: updateSettings(value) });
 		});
 	}
 	private serial(work: () => Promise<void>): Promise<void> {

@@ -3,7 +3,14 @@ import { SCENE_ROUTE_SOURCE, sceneSelector } from "./scenes.js";
 export type Language = "en" | "ru";
 export type ActionKind = "brightness" | "color" | "off" | "on" | "preset" | "scene" | "transition";
 export type Connection = { port: number; accessToken: string };
-export type GlobalSettings = { schemaVersion: 1 | 2; connection?: Connection | null; language: Language };
+export type UpdateSettings = { autoCheck: boolean; notifiedVersion?: string };
+export type GlobalSettings = {
+	schemaVersion: 1 | 2;
+	connection?: Connection | null;
+	language: Language;
+	updates?: UpdateSettings;
+};
+export const STABLE_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 export type Assignment = {
 	schemaVersion: 1;
 	rgb?: string;
@@ -37,12 +44,23 @@ export function language(value: unknown): Language {
 	if (value !== "en" && value !== "ru") throw new Error("validation");
 	return value;
 }
+export function updateSettings(value: unknown): UpdateSettings {
+	if (!object(value) || typeof value.autoCheck !== "boolean") throw new Error("validation");
+	if (Object.keys(value).some((k) => !["autoCheck", "notifiedVersion"].includes(k))) throw new Error("validation");
+	if (value.notifiedVersion === undefined) return { autoCheck: value.autoCheck };
+	if (typeof value.notifiedVersion !== "string" || !STABLE_TAG.test(value.notifiedVersion))
+		throw new Error("validation");
+	return { autoCheck: value.autoCheck, notifiedVersion: value.notifiedVersion };
+}
 export function globals(value: unknown): GlobalSettings {
 	if (object(value) && Object.keys(value).length === 0) return { schemaVersion: 2, language: "en" };
 	if (!object(value)) throw new Error("validation");
 	if (value.schemaVersion === 2) {
-		if (Object.keys(value).some((k) => !["schemaVersion", "language"].includes(k))) throw new Error("validation");
-		return { schemaVersion: 2, language: language(value.language) };
+		if (Object.keys(value).some((k) => !["schemaVersion", "language", "updates"].includes(k)))
+			throw new Error("validation");
+		const next: GlobalSettings = { schemaVersion: 2, language: language(value.language) };
+		if (value.updates !== undefined) next.updates = updateSettings(value.updates);
+		return next;
 	}
 	if (value.schemaVersion !== 1) throw new Error("validation");
 	return {

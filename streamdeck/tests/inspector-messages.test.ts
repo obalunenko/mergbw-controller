@@ -6,6 +6,7 @@ import { BridgeClient } from "../src/bridge-client.js";
 import { InspectorController, type InspectorReply, parseMessage, safeSnapshot } from "../src/inspector-messages.js";
 import { OperationStore } from "../src/operation-store.js";
 import { Settings } from "../src/settings.js";
+import type { UpdateService } from "../src/updates.js";
 import { deferred, fixture, MemoryStorage, syntheticToken } from "./helpers.js";
 
 const message = (type: string, payload: Record<string, unknown> = {}, sessionId = "session") => ({
@@ -267,5 +268,107 @@ test("read-only timeouts preserve assignments and independent status without imp
 		} finally {
 			pi.dispose();
 		}
+	}
+});
+
+test("update messages validate payloads, require the current offer tag and carry the update snapshot", async () => {
+	for (const raw of [
+		message("update.status", { tag: "v1.3.0" }),
+		message("update.check", { force: true }),
+		message("update.install", {}),
+		message("update.install", { tag: "v1.3.0-rc.1" }),
+		message("update.install", { tag: "v1.3.0", url: "https://evil.example" }),
+		message("update.dismiss", { tag: 1 }),
+		message("update.autoCheck", { autoCheck: "false" }),
+		message("update.autoCheck", {}),
+	])
+		assert.throws(() => parseMessage("a", raw), JSON.stringify(raw.payload));
+	for (const [type, payload] of [
+		["update.status", {}],
+		["update.check", {}],
+		["update.install", { tag: "v1.3.0" }],
+		["update.dismiss", { tag: "v1.3.0" }],
+		["update.autoCheck", { autoCheck: false }],
+	] as const)
+		assert.equal(parseMessage("a", message(type, payload)).type, type);
+
+	const settings = new Settings(new MemoryStorage());
+	await settings.load();
+	settings.receiveAction("a", "on", {});
+	const calls: string[] = [];
+	let state = "available";
+	const listeners = new Set<() => void>();
+	const updates = {
+		subscribe: (listener: () => void) => {
+			listeners.add(listener);
+			return () => listeners.delete(listener);
+		},
+		snapshot: () => ({ state, installed: "v1.2.0", latest: "v1.3.0", autoCheck: true, installable: true }),
+		check: async () => {
+			calls.push("check");
+		},
+		install: (tag: unknown) => {
+			if (tag !== "v1.3.0") throw new Error("validation");
+			calls.push(`install ${String(tag)}`);
+			state = "downloading";
+			return Promise.resolve();
+		},
+		dismiss: (tag: unknown) => {
+			if (tag !== "v1.3.0") throw new Error("validation");
+			calls.push(`dismiss ${String(tag)}`);
+		},
+		setAutoCheck: async (value: unknown) => {
+			calls.push(`autoCheck ${String(value)}`);
+		},
+	};
+	const replies: InspectorReply[] = [];
+	const pi = new InspectorController(
+		settings,
+		new OperationStore(),
+		new BridgeClient(),
+		(reply) => {
+			replies.push(reply);
+		},
+		undefined,
+		undefined,
+		updates as unknown as UpdateService,
+	);
+	try {
+		await pi.receive("a", message("inspector.get"));
+		assert.equal(replies.at(-1)?.snapshot?.update?.state, "available");
+		await pi.receive("a", message("update.status"));
+		assert.equal(replies.at(-1)?.ok, true);
+		assert.equal(replies.at(-1)?.snapshot?.update?.latest, "v1.3.0");
+		await pi.receive("a", message("update.check"));
+		await pi.receive("a", message("update.dismiss", { tag: "v1.2.9" }));
+		assert.equal(replies.at(-1)?.messageKey, "validation");
+		await pi.receive("a", message("update.dismiss", { tag: "v1.3.0" }));
+		await pi.receive("a", message("update.install", { tag: "v1.4.0" }));
+		assert.equal(replies.at(-1)?.messageKey, "validation");
+		await pi.receive("a", message("update.install", { tag: "v1.3.0" }));
+		assert.equal(replies.at(-1)?.ok, true);
+		assert.equal(replies.at(-1)?.snapshot?.update?.state, "downloading");
+		await pi.receive("a", message("update.autoCheck", { autoCheck: false }));
+		assert.deepEqual(calls, ["check", "dismiss v1.3.0", "install v1.3.0", "autoCheck false"]);
+		const count = replies.length;
+		state = "handed";
+		for (const listener of listeners) listener();
+		assert.equal(replies.length, count + 1);
+		assert.equal(replies.at(-1)?.snapshot?.update?.state, "handed");
+	} finally {
+		pi.dispose();
+	}
+	assert.equal(listeners.size, 0);
+
+	const plain = new InspectorController(settings, new OperationStore(), new BridgeClient(), (reply) => {
+		replies.push(reply);
+	});
+	try {
+		await plain.receive("a", message("inspector.get"));
+		assert.equal(replies.at(-1)?.snapshot?.update, undefined);
+		await plain.receive("a", message("update.check"));
+		assert.equal(replies.at(-1)?.messageKey, "validation");
+	} finally {
+		plain.dispose();
 	}
 });
