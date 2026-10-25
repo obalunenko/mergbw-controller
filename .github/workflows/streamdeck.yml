@@ -38,4 +38,5 @@ jobs:
       - name: Install locked plugin dependencies
         run: task plugin:deps
       - name: Check plugin without Stream Deck or Bluetooth
-        run: task plugin:check
+        # Linux has no assembled macOS payload; validate it during packaging.
+        run: task plugin:check:software
