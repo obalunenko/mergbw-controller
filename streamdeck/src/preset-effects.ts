@@ -1,6 +1,16 @@
 import { object } from "./validation.js";
 
 export type EffectDefinition =
+	| {
+			kind: "lightning";
+			loop: boolean;
+			backgroundRgb: number[];
+			backgroundBrightness: number;
+			minPauseMs: number;
+			maxPauseMs: number;
+			maxFlashes: number;
+			durationMs?: number;
+	  }
 	| { kind: "breathing"; loop: boolean; minBrightness: number; cycleMs: number }
 	| { kind: "candle"; loop: boolean; depth: number; flickerMs: number; durationMs?: number }
 	| { kind: "palette"; loop: boolean; colors: number[][]; transitionMs: number }
@@ -23,7 +33,7 @@ export type PresetPage = {
 	nextCursor: string | null;
 };
 export type PresetRead = { generation: string; id: string; preset: PresetDefinition };
-export const presetKinds: PresetKind[] = ["static", "palette", "strobe", "breathing", "candle"];
+export const presetKinds: PresetKind[] = ["static", "palette", "strobe", "breathing", "candle", "lightning"];
 const integer = (value: unknown, low: number, high: number): value is number =>
 	typeof value === "number" && Number.isSafeInteger(value) && value >= low && value <= high;
 const exact = (value: Record<string, unknown>, keys: string[]): boolean =>
@@ -93,6 +103,18 @@ export function presetDefinition(value: unknown, editing = true, secret = ""): P
 				integer(e.flickerMs, 250, 5000) &&
 				(e.loop || integer(e.durationMs, 1000, 3600000));
 			break;
+		case "lightning": {
+			const keys = ["kind", "loop", "backgroundRgb", "backgroundBrightness", "minPauseMs", "maxPauseMs", "maxFlashes"];
+			valid =
+				exact(e, e.loop ? keys : [...keys, "durationMs"]) &&
+				color(e.backgroundRgb) &&
+				integer(e.backgroundBrightness, 0, result.brightness - 1) &&
+				integer(e.minPauseMs, 500, 120000) &&
+				integer(e.maxPauseMs, e.minPauseMs, 120000) &&
+				integer(e.maxFlashes, 1, 5) &&
+				(e.loop || integer(e.durationMs, 1000, 3600000));
+			break;
+		}
 	}
 	if (!valid) throw new Error("validation");
 	result.effect = structuredClone(e) as EffectDefinition;
@@ -125,6 +147,19 @@ export function defaultPreset(kind: PresetKind = "static"): PresetDefinition {
 			base.brightness = 65;
 			base.effect = { kind, loop: true, depth: 35, flickerMs: 500 };
 			break;
+		case "lightning":
+			base.rgb = [232, 240, 255];
+			base.brightness = 100;
+			base.effect = {
+				kind,
+				loop: true,
+				backgroundRgb: [26, 42, 108],
+				backgroundBrightness: 15,
+				minPauseMs: 2000,
+				maxPauseMs: 15000,
+				maxFlashes: 3,
+			};
+			break;
 	}
 	return base;
 }
@@ -139,7 +174,7 @@ export function effectSnapshot(value: unknown, secret = ""): value is EffectSnap
 		generationId(value.id) &&
 		presetId(value.presetId) &&
 		!(secret && (value.id.includes(secret) || value.presetId.includes(secret))) &&
-		["palette", "strobe", "breathing", "candle"].includes(String(value.kind)) &&
+		["palette", "strobe", "breathing", "candle", "lightning"].includes(String(value.kind)) &&
 		["running", "cancelling", "completed", "cancelled", "failed", "unknown"].includes(String(value.state)) &&
 		integer(value.elapsedMs, 0, Number.MAX_SAFE_INTEGER) &&
 		(value.durationMs === null || integer(value.durationMs, 500, 3600000)) &&

@@ -425,7 +425,7 @@ for (const kind of presetEffects.presetKinds)
 		ui.get("editor-name").value = `Preset ${kind}`;
 		ui.get("editor-kind").value = kind;
 		ui.get("editor-kind").fire("change");
-		if (kind === "candle") {
+		if (kind === "candle" || kind === "lightning") {
 			ui.get("editor-loop").checked = false;
 			ui.get("editor-loop").fire("change");
 			assert.equal(ui.get("editor-duration-controls").hidden, false);
@@ -436,13 +436,83 @@ for (const kind of presetEffects.presetKinds)
 		assert.equal(message.type, "configuration.preparePreset");
 		const preset = presetEffects.presetDefinition(message.payload.preset);
 		assert.equal(preset.effect?.kind ?? "static", kind);
-		if (kind === "candle") assert.equal(preset.effect?.kind === "candle" && preset.effect.durationMs, 5000);
+		if (kind === "candle" || kind === "lightning")
+			assert.equal(
+				(preset.effect?.kind === "candle" || preset.effect?.kind === "lightning") && preset.effect.durationMs,
+				5000,
+			);
 		assert.equal(
 			ui.sent.filter((message) => message.type === "effect.cancel" || message.type === "assignment.save").length,
 			0,
 		);
 		assert.equal(ui.get("editor-kind").selectedOptions[0]?.textContent, i18n.translate("ru", `kind.${kind}`));
 	});
+
+test("preset editor shows lightning fields, round-trips a draft and rejects invalid pause and background", () => {
+	const ui = inspector(),
+		initial = editorSnapshot();
+	ui.reply(initial);
+	ui.get("editor-new").fire("click");
+	ui.get("editor-name").value = "Storm";
+	ui.get("editor-kind").value = "lightning";
+	ui.get("editor-kind").fire("change");
+	for (const type of ["palette", "strobe", "breathing", "candle", "lightning"])
+		assert.equal(ui.get(`editor-${type}-controls`).hidden, type !== "lightning");
+	assert.equal(ui.get("editor-duration-controls").hidden, true);
+	assert.equal(ui.get("editor-rgb-controls").hidden, false);
+	ui.get("editor-loop").checked = false;
+	ui.get("editor-loop").fire("change");
+	assert.equal(ui.get("editor-duration-controls").hidden, false);
+	ui.get("editor-loop").checked = true;
+	ui.get("editor-loop").fire("change");
+	ui.get("editor-review").fire("click");
+	const created = ui.sent.at(-1)!.payload.preset as presetEffects.PresetDefinition;
+	assert.deepEqual(created.effect, {
+		kind: "lightning",
+		loop: true,
+		backgroundRgb: [26, 42, 108],
+		backgroundBrightness: 15,
+		minPauseMs: 2000,
+		maxPauseMs: 15000,
+		maxFlashes: 3,
+	});
+	const edit = inspector();
+	const preset: presetEffects.PresetDefinition = {
+		label: "Short storm",
+		rgb: [232, 240, 255],
+		brightness: 90,
+		effect: {
+			kind: "lightning",
+			loop: false,
+			backgroundRgb: [1, 2, 3],
+			backgroundBrightness: 0,
+			minPauseMs: 750,
+			maxPauseMs: 1250,
+			maxFlashes: 5,
+			durationMs: 60000,
+		},
+	};
+	edit.reply(initial);
+	edit.get("editor-edit").fire("click");
+	edit.reply({ ...initial, presetDefinition: { generation: "a".repeat(32), id: "colors", preset } });
+	assert.equal(edit.get("editor-kind").value, "lightning");
+	assert.equal(edit.get("editor-background-rgb").value, "010203");
+	assert.equal(edit.get("editor-duration-controls").hidden, false);
+	const sent = edit.sent.length;
+	edit.get("editor-min-pause").value = "2";
+	edit.get("editor-review").fire("click");
+	assert.equal(edit.sent.length, sent);
+	assert.equal(edit.get("editor-error").textContent, i18n.en.pauseOrder);
+	edit.get("editor-min-pause").value = "0.75";
+	edit.get("editor-background-brightness").value = "90";
+	edit.get("editor-review").fire("click");
+	assert.equal(edit.sent.length, sent);
+	assert.equal(edit.get("editor-error").textContent, i18n.en.backgroundBelowFlash);
+	edit.get("editor-background-brightness").value = "0";
+	edit.get("editor-review").fire("click");
+	assert.equal(edit.sent.at(-1)?.type, "configuration.preparePreset");
+	assert.deepEqual(edit.sent.at(-1)?.payload.preset, preset);
+});
 
 test("preset deletion is reviewed and effect controls use the exact visible run", () => {
 	const ui = inspector(),

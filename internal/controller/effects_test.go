@@ -31,6 +31,12 @@ func testEffectAction(kind string, loop bool) protocol.EffectAction {
 		if !loop {
 			effect.DurationMS = 1000
 		}
+	case "lightning":
+		effect.BackgroundRGB, effect.BackgroundBrightness = []int{26, 42, 108}, 15
+		effect.MinPauseMS, effect.MaxPauseMS, effect.MaxFlashes = 500, 1000, 3
+		if !loop {
+			effect.DurationMS = 2000
+		}
 	}
 	return protocol.EffectAction{PresetID: "test-effect", Preset: protocol.Preset{Label: "Test effect", RGB: []int{255, 80, 0}, Brightness: 75, Effect: effect}}
 }
@@ -55,7 +61,7 @@ func waitEffect(t *testing.T, c *Controller, id string) protocol.EffectSnapshot 
 }
 
 func TestFiniteEffectsCompleteWithHonestSnapshotsAndEndpoints(t *testing.T) {
-	for _, kind := range []string{"palette", "strobe", "breathing", "candle"} {
+	for _, kind := range []string{"palette", "strobe", "breathing", "candle", "lightning"} {
 		t.Run(kind, func(t *testing.T) {
 			link := NewMockLink(gomock.NewController(t))
 			link.EXPECT().Connect(gomock.Any()).Return(nil)

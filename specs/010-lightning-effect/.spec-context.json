@@ -1,0 +1,666 @@
+{
+  "workflow": "companion",
+  "specName": "Эффект «Молния»",
+  "branch": "feature/missed-scenes",
+  "currentStep": "implement",
+  "status": "completed",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T13:01:01.211Z"
+    },
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-25T13:02:21.924Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T13:04:43.209Z"
+    },
+    {
+      "step": "plan",
+      "substep": "research",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:07:20.985Z"
+    },
+    {
+      "step": "plan",
+      "substep": "design",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:08:34.188Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:08:37.647Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T13:15:46.401Z"
+    },
+    {
+      "step": "tasks",
+      "substep": "generate",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:16:31.329Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:16:31.657Z"
+    },
+    {
+      "step": "analyze",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:22:30.609Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T13:38:19.902Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T001",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:38:39.180Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T002",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:39:27.521Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T003",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:39:36.638Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T008",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:41:30.531Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T009",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:41:30.587Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T010",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:41:30.645Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T011",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:41:30.700Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T012",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:41:30.771Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T013",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:41:48.902Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T014",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:41:48.955Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T015",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:42:08.555Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T004",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:42:12.631Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T005",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:42:12.700Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T006",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:42:12.769Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T007",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:42:52.605Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T016",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:43:29.604Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T017",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:43:29.671Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T018",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:43:29.741Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T019",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T13:46:06.938Z"
+    },
+    {
+      "step": "converge",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-10-25T13:49:56.392Z"
+    },
+    {
+      "step": "converge",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-10-25T13:50:42.276Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T020",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T14:13:26.450Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-10-25T14:13:26.467Z"
+    }
+  ],
+  "coverage": {
+    "FR-001": {
+      "title": "Effect kind lightning alongside existing effects; existing unchanged",
+      "tasks": [
+        "T002",
+        "T003",
+        "T005",
+        "T009",
+        "T010",
+        "T012"
+      ]
+    },
+    "FR-002": {
+      "title": "Flash color/brightness from preset; effect adds background, pause range, max flashes, loop/duration",
+      "tasks": [
+        "T002",
+        "T012"
+      ]
+    },
+    "FR-003": {
+      "title": "Background between strikes; effect starts on background",
+      "tasks": [
+        "T004",
+        "T007"
+      ],
+      "tests": [
+        "internal/controller/lightning_effect_test.go::TestLightningStartsOnScaledBackgroundAndEndsBeforeFirstStrike"
+      ]
+    },
+    "FR-004": {
+      "title": "Random pause in range, random 1..N flashes, short unequal gaps",
+      "tasks": [
+        "T004",
+        "T007"
+      ],
+      "tests": [
+        "internal/controller/lightning_effect_test.go::TestLightningHundredStrikesFollowScriptedRandomness"
+      ]
+    },
+    "FR-005": {
+      "title": "Flash/gap timing set by controller, not below measured LT-06 minimum",
+      "tasks": [
+        "T007",
+        "T018",
+        "T020"
+      ]
+    },
+    "FR-006": {
+      "title": "Full validation before packets; min<=max pause, background below flash",
+      "tasks": [
+        "T002",
+        "T003",
+        "T008",
+        "T012",
+        "T015"
+      ],
+      "tests": [
+        "internal/protocol/effects_test.go::TestEffectRejectsMissingNullForeignAndInvalidParameters",
+        "streamdeck/tests/effect-contract.test.ts"
+      ]
+    },
+    "FR-007": {
+      "title": "Stopped by any other command, stop or Stream Deck close",
+      "tasks": [
+        "T004",
+        "T007"
+      ],
+      "tests": [
+        "internal/controller/lightning_effect_test.go::TestLightningCancelSendsNothingFurther"
+      ]
+    },
+    "FR-008": {
+      "title": "Slow BLE shifts timing, no bursts",
+      "tasks": [
+        "T004",
+        "T007"
+      ]
+    },
+    "FR-009": {
+      "title": "With duration, ends on background after current flash",
+      "tasks": [
+        "T004",
+        "T005",
+        "T007"
+      ],
+      "tests": [
+        "internal/controller/lightning_effect_test.go::TestLightningDeadlineInsideStrikeFinishesFlashOnBackground"
+      ]
+    },
+    "FR-010": {
+      "title": "Plugin editor offers Lightning EN/RU with defaults and validation",
+      "tasks": [
+        "T011",
+        "T013",
+        "T014",
+        "T015"
+      ],
+      "tests": [
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "FR-011": {
+      "title": "CLI preset and HTTP preset route run lightning presets",
+      "tasks": [
+        "T006"
+      ],
+      "tests": [
+        "internal/bridge/effects_test.go::TestEffectHTTPDynamicPresetsAccepted"
+      ]
+    },
+    "FR-012": {
+      "title": "READMEs document effect, parameters, defaults, needs running controller",
+      "tasks": [
+        "T016",
+        "T017"
+      ]
+    }
+  },
+  "size": "normal",
+  "classification": {
+    "projectedFiles": 12,
+    "projectedTasks": 16,
+    "scopeSignal": "none",
+    "verdict": "normal"
+  },
+  "expectations": [
+    "no new hardware scene IDs",
+    "no Multi Action support",
+    "no Linux checks"
+  ],
+  "context": [
+    "area: internal/protocol/effects.go (effect model and validation)",
+    "area: internal/controller/effects.go (effect runner, 80 ms packet gap, 250 ms sampling)",
+    "area: streamdeck preset editor",
+    "constraint: spec 008 effect rules: no overdue bursts, cooperative stop"
+  ],
+  "intent": "Natural-looking software lightning effect preset for LT-06",
+  "decisions": [
+    {
+      "decision": "One 0x03 color packet per flash edge; brightness register fixed at flash brightness, background sent as scaled RGB",
+      "why": "80 ms gap per packet; two packets per edge would double the shortest flash",
+      "rejected": "color+brightness packets per edge"
+    },
+    {
+      "decision": "Flash hold 100-180 ms, inner gap 60-250 ms, intensity 70-100% as controller constants with c.random()",
+      "why": "FR-005 keeps timing out of the editor; owner LT-06 run tunes the floor",
+      "rejected": "hardware-tag sweep test"
+    },
+    {
+      "decision": "Ranges: pause 500-120000 ms, maxFlashes 1-5, background brightness below flash, durationMs 1000-3600000",
+      "why": "mirror candle and breathing rules",
+      "rejected": "open-ended ranges"
+    },
+    {
+      "decision": "Shared editor-duration-controls moved out of candle block",
+      "why": "candle and lightning both need it",
+      "rejected": "second duration input"
+    },
+    {
+      "decision": "Skip the inner gap after the last flash of a strike and check the deadline before each random draw",
+      "why": "The next pause follows at once, and no randomness is drawn after the deadline",
+      "rejected": "A gap after every flash"
+    },
+    {
+      "decision": "Built US1 inline, dispatched US2 to one worker",
+      "why": "US1 owns 4 files, US2 owns 8",
+      "rejected": "Dispatching both"
+    },
+    {
+      "decision": "Keep the provisional timing constants and the one-packet scaled background",
+      "why": "Owner observation on the LT-06 passed",
+      "rejected": "Two-packet color plus brightness fallback"
+    },
+    {
+      "decision": "Accept the unobserved background-brightness-0 check as a known gap",
+      "why": "Owner: personal-use MVP",
+      "rejected": "Blocking completion on that observation"
+    }
+  ],
+  "step_summaries": {
+    "plan": {
+      "summary": "Lightning as fifth effect kind across protocol, controller runner and plugin editor",
+      "key_finding": "Every BLE write waits the shared 80 ms gap, so single-packet flash edges are the lever for short flashes"
+    },
+    "tasks": {
+      "summary": "20 tasks: setup, foundational model (2), US1 runner (4), US2 editor (8), polish (5)"
+    },
+    "implement": {
+      "summary": "Lightning effect in protocol, controller, bridge tests, Stream Deck editor and READMEs; hardware tuning pending"
+    }
+  },
+  "approach": "Add lightning to the Effect model and validation in internal/protocol, a fifth runner case in internal/controller that pauses randomly and fires 1..N single-packet flashes over a scaled-RGB background, and a Lightning form in the Stream Deck preset editor. Owner observation on the LT-06 tunes the flash timing constants.",
+  "workingBranch": "feature/lightning-effect",
+  "currentTask": null,
+  "task_summaries": {
+    "T001": {
+      "status": "DONE",
+      "did": "Branch feature/lightning-effect already exists on master, which includes merged PR #3 (scenes)",
+      "files": [
+        "git"
+      ]
+    },
+    "T002": {
+      "status": "DONE",
+      "did": "Lightning fields, JSON keys, kind allow-list, Validate case with R5 ranges, DurationMS and ClonePreset deep copy",
+      "files": [
+        "internal/protocol/effects.go"
+      ]
+    },
+    "T003": {
+      "status": "DONE",
+      "did": "Round-trip loop and finite lightning variants, decode and Validate rejection cases, BackgroundRGB clone isolation",
+      "files": [
+        "internal/protocol/effects_test.go"
+      ]
+    },
+    "T008": {
+      "status": "DONE",
+      "did": "lightning boundary cases in effect contract test",
+      "files": [
+        "streamdeck/tests/effect-contract.test.ts"
+      ]
+    },
+    "T009": {
+      "status": "DONE",
+      "did": "lightning added to preset-effects kind list",
+      "files": [
+        "streamdeck/tests/preset-effects.test.ts"
+      ]
+    },
+    "T010": {
+      "status": "DONE",
+      "did": "lightning added to editor all-kinds list",
+      "files": [
+        "streamdeck/tests/preset-editor.test.ts"
+      ]
+    },
+    "T011": {
+      "status": "DONE",
+      "did": "inspector lightning visibility, round-trip and review rejection cases",
+      "files": [
+        "streamdeck/tests/inspector-ui.test.ts"
+      ]
+    },
+    "T012": {
+      "status": "DONE",
+      "did": "lightning definition type, validation, defaults and snapshot kind",
+      "files": [
+        "streamdeck/src/preset-effects.ts"
+      ]
+    },
+    "T013": {
+      "status": "DONE",
+      "did": "lightning editor block added, duration block shared",
+      "files": [
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/ui/index.html"
+      ]
+    },
+    "T014": {
+      "status": "DONE",
+      "did": "EN/RU lightning kind, field labels and review errors",
+      "files": [
+        "streamdeck/src/i18n.ts"
+      ]
+    },
+    "T015": {
+      "status": "DONE",
+      "did": "inspector shows, loads, reads and pre-checks lightning drafts",
+      "files": [
+        "streamdeck/src/ui/inspector.ts"
+      ]
+    },
+    "T004": {
+      "status": "DONE",
+      "did": "Lightning controller tests: start packets, 100-strike scripted run, cancel/shutdown, deadline inside a strike",
+      "files": [
+        "internal/controller/lightning_effect_test.go"
+      ]
+    },
+    "T005": {
+      "status": "DONE",
+      "did": "lightning in testEffectAction and the finite-effects endpoint test (last frame is scaled background)",
+      "files": [
+        "internal/controller/effects_test.go"
+      ]
+    },
+    "T006": {
+      "status": "DONE",
+      "did": "Lightning row in the bridge dynamic-preset table",
+      "files": [
+        "internal/bridge/effects_test.go"
+      ]
+    },
+    "T007": {
+      "status": "DONE",
+      "did": "Lightning runner: start on scaled background, random pauses and 1..N one-packet flashes, deadline finishes the flash on background",
+      "files": [
+        "internal/controller/effects.go"
+      ]
+    },
+    "T016": {
+      "status": "DONE",
+      "did": "Lightning row, defaults and computer-driven/LT-06 timing note in README",
+      "files": [
+        "README.md"
+      ]
+    },
+    "T017": {
+      "status": "DONE",
+      "did": "Same Lightning row and note in Russian",
+      "files": [
+        "README_RU.md"
+      ]
+    },
+    "T018": {
+      "status": "DONE",
+      "did": "Verification record with pending constant and behaviour rows",
+      "files": [
+        "specs/010-lightning-effect/hardware-verification.md"
+      ]
+    },
+    "T019": {
+      "status": "DONE",
+      "did": "gofmt clean; test:core, test:race, vet, build and plugin:check:software all pass",
+      "files": [
+        "repo"
+      ]
+    },
+    "T020": {
+      "status": "DONE",
+      "did": "Spike plugin built and linked; owner confirmed lightning on LT-06; timing constants kept; one-packet background kept",
+      "files": [
+        "specs/010-lightning-effect/hardware-verification.md",
+        "internal/controller/effects.go"
+      ]
+    }
+  },
+  "verified": [
+    {
+      "what": "Go unit tests",
+      "command": "task test:core",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.2,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/managed\t(cached) · ok  \tgithub.com/obalunenko/mergbw-controller/cmd/sunset/supervisor\t(cached) · task: [test:core] go test ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble ./internal/managed ./cmd/sunset/supervisor"
+    },
+    {
+      "what": "Go race tests",
+      "command": "task test:race",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.2,
+      "result": "ok  \tgithub.com/obalunenko/mergbw-controller/internal/managed\t(cached) · ok  \tgithub.com/obalunenko/mergbw-controller/cmd/sunset/supervisor\t(cached) · task: [test:race] go test -race ./internal/protocol ./internal/config ./internal/logging ./internal/controller ./internal/bridge ./internal/ble ./internal/managed ./cmd/sunset/supervisor"
+    },
+    {
+      "what": "Go vet",
+      "command": "task vet",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.3,
+      "result": "task: [vet] go vet ./..."
+    },
+    {
+      "what": "Go build",
+      "command": "task build",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 0.1,
+      "result": "task: [build] go build -trimpath -buildvcs=false -o sunset ./cmd/sunset"
+    },
+    {
+      "what": "Plugin software checks",
+      "command": "task plugin:check:software",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 51.9,
+      "result": "---------------------------------------------------------------------- · Ran 27 tests in 0.360s · OK"
+    },
+    {
+      "what": "LT-06 owner observation of the default Lightning preset (SC-001, SC-006, R1, FR-007, FR-009)",
+      "command": "manual: spike plugin dist/plugin-local-lightning-20261025 linked",
+      "result": "Owner answered yes: looks natural, flashes visible, background dim, stop and finite end correct; no timing change"
+    }
+  ],
+  "concerns": [
+    {
+      "note": "T020 (LT-06 observation: flash timing constants, scaled background vs two-packet fallback, SC-001, SC-006) is open; hardware-verification.md rows are pending",
+      "step": "implement"
+    },
+    {
+      "note": "Linux task check not run, by owner decision (macOS only)",
+      "step": "implement"
+    },
+    {
+      "note": "Background brightness 0 not observed on the LT-06; the owner gave a blanket yes without an answer to that item",
+      "step": "implement"
+    }
+  ],
+  "last_action": "T001-T020 done; hardware verification recorded"
+}

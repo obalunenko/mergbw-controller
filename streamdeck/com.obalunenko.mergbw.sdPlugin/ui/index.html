@@ -216,10 +216,37 @@
 							<label for="editor-flicker" data-i18n="editorFlicker">Flicker interval (seconds)</label
 							><input id="editor-flicker" type="number" min="0.25" max="5" step="0.001" />
 						</details>
-						<div id="editor-duration-controls" hidden>
-							<label for="editor-duration" data-i18n="editorDuration">Run duration (seconds)</label
-							><input id="editor-duration" type="number" min="1" max="3600" step="0.001" />
+					</div>
+					<div id="editor-lightning-controls" hidden>
+						<label for="editor-background-color" data-i18n="editorBackground">Background color</label>
+						<div class="color-row">
+							<input id="editor-background-color" type="color" value="#1a2a6c" /><input
+								id="editor-background-rgb"
+								type="text"
+								maxlength="7"
+								spellcheck="false"
+								aria-label="Background RGB HEX"
+							/>
 						</div>
+						<label for="editor-background-brightness" data-i18n="editorBackgroundBrightness"
+							>Background brightness (%)</label
+						><input id="editor-background-brightness" type="number" min="0" max="99" step="1" /><label
+							for="editor-min-pause"
+							data-i18n="editorMinPause"
+							>Minimum pause (seconds)</label
+						><input id="editor-min-pause" type="number" min="0.5" max="120" step="0.001" /><label
+							for="editor-max-pause"
+							data-i18n="editorMaxPause"
+							>Maximum pause (seconds)</label
+						><input id="editor-max-pause" type="number" min="0.5" max="120" step="0.001" /><label
+							for="editor-max-flashes"
+							data-i18n="editorMaxFlashes"
+							>Maximum flashes per strike</label
+						><input id="editor-max-flashes" type="number" min="1" max="5" step="1" />
+					</div>
+					<div id="editor-duration-controls" hidden>
+						<label for="editor-duration" data-i18n="editorDuration">Run duration (seconds)</label
+						><input id="editor-duration" type="number" min="1" max="3600" step="0.001" />
 					</div>
 					<div id="editor-loop-controls" hidden>
 						<label class="checkbox"

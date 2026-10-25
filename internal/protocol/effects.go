@@ -23,6 +23,13 @@ type Effect struct {
 	Depth         int
 	FlickerMS     int
 	DurationMS    int
+	// Lightning: root RGB and brightness are the flash; these set the dim
+	// background and the random strike pacing.
+	BackgroundRGB        []int
+	BackgroundBrightness int
+	MinPauseMS           int
+	MaxPauseMS           int
+	MaxFlashes           int
 }
 
 func (e Effect) fields() map[string]any {
@@ -36,9 +43,12 @@ func (e Effect) fields() map[string]any {
 		fields["minBrightness"], fields["cycleMs"] = e.MinBrightness, e.CycleMS
 	case "candle":
 		fields["depth"], fields["flickerMs"] = e.Depth, e.FlickerMS
-		if !e.Loop {
-			fields["durationMs"] = e.DurationMS
-		}
+	case "lightning":
+		fields["backgroundRgb"], fields["backgroundBrightness"] = e.BackgroundRGB, e.BackgroundBrightness
+		fields["minPauseMs"], fields["maxPauseMs"], fields["maxFlashes"] = e.MinPauseMS, e.MaxPauseMS, e.MaxFlashes
+	}
+	if (e.Kind == "candle" || e.Kind == "lightning") && !e.Loop {
+		fields["durationMs"] = e.DurationMS
 	}
 	return fields
 }
@@ -54,7 +64,7 @@ func (e *Effect) UnmarshalJSON(data []byte) error {
 	if json.Unmarshal(raw["kind"], &decoded.Kind) != nil || json.Unmarshal(raw["loop"], &decoded.Loop) != nil || string(raw["loop"]) == "null" {
 		return fmt.Errorf("effect requires kind and loop")
 	}
-	if !slices.Contains([]string{"palette", "strobe", "breathing", "candle"}, decoded.Kind) {
+	if !slices.Contains([]string{"palette", "strobe", "breathing", "candle", "lightning"}, decoded.Kind) {
 		return fmt.Errorf("unknown effect kind")
 	}
 	allowed := decoded.fields()
@@ -77,6 +87,12 @@ func (e *Effect) UnmarshalJSON(data []byte) error {
 		Depth         int     `json:"depth"`
 		FlickerMS     int     `json:"flickerMs"`
 		DurationMS    int     `json:"durationMs"`
+
+		BackgroundRGB        []int `json:"backgroundRgb"`
+		BackgroundBrightness int   `json:"backgroundBrightness"`
+		MinPauseMS           int   `json:"minPauseMs"`
+		MaxPauseMS           int   `json:"maxPauseMs"`
+		MaxFlashes           int   `json:"maxFlashes"`
 	}
 	if err := json.Unmarshal(data, &values); err != nil {
 		return err
@@ -85,27 +101,36 @@ func (e *Effect) UnmarshalJSON(data []byte) error {
 	decoded.OnMS, decoded.OffMS = values.OnMS, values.OffMS
 	decoded.MinBrightness, decoded.CycleMS = values.MinBrightness, values.CycleMS
 	decoded.Depth, decoded.FlickerMS, decoded.DurationMS = values.Depth, values.FlickerMS, values.DurationMS
+	decoded.BackgroundRGB, decoded.BackgroundBrightness = values.BackgroundRGB, values.BackgroundBrightness
+	decoded.MinPauseMS, decoded.MaxPauseMS, decoded.MaxFlashes = values.MinPauseMS, values.MaxPauseMS, values.MaxFlashes
 	*e = decoded
 	return nil
 }
 
 func (e Effect) Validate(brightness int) error {
 	between := func(value, low, high int) bool { return value >= low && value <= high }
+	noLightning := len(e.BackgroundRGB) == 0 && e.BackgroundBrightness == 0 && e.MinPauseMS == 0 && e.MaxPauseMS == 0 && e.MaxFlashes == 0
+	duration := (e.Loop && e.DurationMS == 0) || (!e.Loop && between(e.DurationMS, 1000, 3600000))
 	valid := false
 	switch e.Kind {
 	case "palette":
-		valid = between(len(e.Colors), 1, 15) && between(e.TransitionMS, 500, 60000) && e.OnMS == 0 && e.OffMS == 0 && e.MinBrightness == 0 && e.CycleMS == 0 && e.Depth == 0 && e.FlickerMS == 0 && e.DurationMS == 0
+		valid = between(len(e.Colors), 1, 15) && between(e.TransitionMS, 500, 60000) && e.OnMS == 0 && e.OffMS == 0 && e.MinBrightness == 0 && e.CycleMS == 0 && e.Depth == 0 && e.FlickerMS == 0 && e.DurationMS == 0 && noLightning
 		for _, color := range e.Colors {
 			if _, err := rgbBytes(color); err != nil {
 				return err
 			}
 		}
 	case "strobe":
-		valid = between(e.OnMS, 250, 60000) && between(e.OffMS, 250, 60000) && len(e.Colors) == 0 && e.TransitionMS == 0 && e.MinBrightness == 0 && e.CycleMS == 0 && e.Depth == 0 && e.FlickerMS == 0 && e.DurationMS == 0
+		valid = between(e.OnMS, 250, 60000) && between(e.OffMS, 250, 60000) && len(e.Colors) == 0 && e.TransitionMS == 0 && e.MinBrightness == 0 && e.CycleMS == 0 && e.Depth == 0 && e.FlickerMS == 0 && e.DurationMS == 0 && noLightning
 	case "breathing":
-		valid = between(e.MinBrightness, 0, 99) && e.MinBrightness < brightness && between(e.CycleMS, 1000, 120000) && len(e.Colors) == 0 && e.TransitionMS == 0 && e.OnMS == 0 && e.OffMS == 0 && e.Depth == 0 && e.FlickerMS == 0 && e.DurationMS == 0
+		valid = between(e.MinBrightness, 0, 99) && e.MinBrightness < brightness && between(e.CycleMS, 1000, 120000) && len(e.Colors) == 0 && e.TransitionMS == 0 && e.OnMS == 0 && e.OffMS == 0 && e.Depth == 0 && e.FlickerMS == 0 && e.DurationMS == 0 && noLightning
 	case "candle":
-		valid = between(e.Depth, 0, 100) && between(e.FlickerMS, 250, 5000) && len(e.Colors) == 0 && e.TransitionMS == 0 && e.OnMS == 0 && e.OffMS == 0 && e.MinBrightness == 0 && e.CycleMS == 0 && ((e.Loop && e.DurationMS == 0) || (!e.Loop && between(e.DurationMS, 1000, 3600000)))
+		valid = between(e.Depth, 0, 100) && between(e.FlickerMS, 250, 5000) && len(e.Colors) == 0 && e.TransitionMS == 0 && e.OnMS == 0 && e.OffMS == 0 && e.MinBrightness == 0 && e.CycleMS == 0 && duration && noLightning
+	case "lightning":
+		if _, err := rgbBytes(e.BackgroundRGB); err != nil {
+			return err
+		}
+		valid = between(e.BackgroundBrightness, 0, 99) && e.BackgroundBrightness < brightness && between(e.MinPauseMS, 500, 120000) && between(e.MaxPauseMS, e.MinPauseMS, 120000) && between(e.MaxFlashes, 1, 5) && len(e.Colors) == 0 && e.TransitionMS == 0 && e.OnMS == 0 && e.OffMS == 0 && e.MinBrightness == 0 && e.CycleMS == 0 && e.Depth == 0 && e.FlickerMS == 0 && duration
 	}
 	if !valid {
 		return fmt.Errorf("invalid effect parameters")
@@ -121,6 +146,7 @@ func ClonePreset(p Preset) Preset {
 		for i := range e.Colors {
 			e.Colors[i] = slices.Clone(e.Colors[i])
 		}
+		e.BackgroundRGB = slices.Clone(e.BackgroundRGB)
 		p.Effect = &e
 	}
 	return p
@@ -151,7 +177,7 @@ func (a EffectAction) DurationMS() *int64 {
 		duration = e.OnMS + e.OffMS
 	case "breathing":
 		duration = e.CycleMS
-	case "candle":
+	case "candle", "lightning":
 		duration = e.DurationMS
 	}
 	return new(int64(duration))

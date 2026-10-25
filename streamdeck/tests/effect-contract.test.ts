@@ -55,6 +55,52 @@ test("definitions reject null, foreign/missing fields and invalid variant bounda
 	assert.throws(() => presetDefinition({ ...base, label: syntheticToken }, false, syntheticToken));
 });
 
+test("lightning definitions accept defaults and reject invalid boundaries", () => {
+	const source = { ...defaultPreset("lightning"), label: "Storm" };
+	assert.deepEqual(presetDefinition(source), source);
+	const finite = {
+		...source,
+		effect: {
+			kind: "lightning",
+			loop: false,
+			backgroundRgb: [26, 42, 108],
+			backgroundBrightness: 15,
+			minPauseMs: 2000,
+			maxPauseMs: 2000,
+			maxFlashes: 1,
+			durationMs: 60000,
+		},
+	};
+	assert.deepEqual(presetDefinition(finite), finite);
+	const effect = {
+		kind: "lightning",
+		loop: true,
+		backgroundRgb: [26, 42, 108],
+		backgroundBrightness: 15,
+		minPauseMs: 2000,
+		maxPauseMs: 15000,
+		maxFlashes: 3,
+	};
+	const missing: Record<string, unknown> = { ...effect };
+	delete missing.maxFlashes;
+	for (const [brightness, value] of [
+		[100, missing],
+		[100, { ...effect, maxFlashes: null }],
+		[100, { ...effect, depth: 35 }],
+		[100, { ...effect, durationMs: 60000 }],
+		[100, { ...effect, loop: false }],
+		[100, { ...effect, minPauseMs: 15001 }],
+		[100, { ...effect, minPauseMs: 499 }],
+		[100, { ...effect, maxPauseMs: 120001 }],
+		[100, { ...effect, maxFlashes: 0 }],
+		[100, { ...effect, maxFlashes: 6 }],
+		[100, { ...effect, backgroundBrightness: 100 }],
+		[0, { ...effect, backgroundBrightness: 0 }],
+		[100, { ...effect, backgroundRgb: [26, 256, 108] }],
+	] as [number, unknown][])
+		assert.throws(() => presetDefinition({ ...source, brightness, effect: value }));
+});
+
 test("effect snapshots represent loops honestly and reject malformed physical claims", () => {
 	assert.ok(effectSnapshot(run));
 	assert.ok(effectSnapshot({ ...run, durationMs: 1000, elapsedMs: 2000 }));
