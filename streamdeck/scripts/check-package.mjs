@@ -153,7 +153,7 @@ export function checkRuntime(directory, options = {}) {
 			action.Icon !== `imgs/${kind}` ||
 			JSON.stringify(action.Controllers) !== (kind === "brightness" ? '["Keypad","Encoder"]' : '["Keypad"]') ||
 			(kind === "brightness" ? JSON.stringify(action.Encoder) !== '{"layout":"$B1"}' : action.Encoder !== undefined) ||
-			action.SupportedInMultiActions !== false ||
+			action.SupportedInMultiActions !== true ||
 			action.DisableAutomaticStates !== true ||
 			action.States?.length !== 1 ||
 			action.States[0].Image !== `imgs/${kind}` ||

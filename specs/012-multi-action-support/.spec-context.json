@@ -1,0 +1,454 @@
+{
+  "workflow": "companion",
+  "specName": "Действия MeRGBW в Multi Action",
+  "branch": "master",
+  "currentStep": "implement",
+  "status": "completed",
+  "history": [
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-11-01T12:33:18.000Z"
+    },
+    {
+      "step": "specify",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-11-01T12:41:35.588Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-11-01T12:48:23.046Z"
+    },
+    {
+      "step": "plan",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-11-01T12:52:25.253Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-11-01T12:54:36.101Z"
+    },
+    {
+      "step": "tasks",
+      "substep": null,
+      "kind": "complete",
+      "by": "extension",
+      "at": "2026-11-01T12:57:17.444Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "start",
+      "by": "extension",
+      "at": "2026-11-01T13:14:54.534Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T001",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:16:59.868Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T002",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:18:31.132Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T003",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:18:31.205Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T004",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:18:35.835Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T005",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:18:35.906Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T006",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:19:02.764Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T007",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:19:48.939Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T008",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:19:54.766Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T009",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:20:39.249Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T010",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:20:39.319Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T011",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:20:51.212Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T012",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:21:01.996Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T013",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:21:29.343Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T014",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:21:29.416Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T015",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:21:29.490Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T016",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T13:24:10.597Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "task": "T017",
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T14:05:18.059Z"
+    },
+    {
+      "step": "implement",
+      "substep": null,
+      "kind": "complete",
+      "by": "ai",
+      "at": "2026-11-01T14:05:18.076Z"
+    }
+  ],
+  "currentTask": null,
+  "task_summaries": {
+    "T001": {
+      "status": "DONE",
+      "did": "Baseline on 136e224: task plugin:check:software green, 299 plugin tests pass, no pre-existing failure",
+      "files": [
+        "none"
+      ]
+    },
+    "T002": {
+      "status": "DONE",
+      "did": "Package test: all seven actions true in Multi Action; false and missing flag rejected (fails before T004/T005)",
+      "files": [
+        "streamdeck/tests/package.test.ts"
+      ]
+    },
+    "T003": {
+      "status": "DONE",
+      "did": "New multi-action.test.ts: seven step kinds send key routes; step writes no title/image on appear, keyDown, settings and language change (fails before T006)",
+      "files": [
+        "streamdeck/tests/multi-action.test.ts"
+      ]
+    },
+    "T004": {
+      "status": "DONE",
+      "did": "Manifest: SupportedInMultiActions true on all seven actions",
+      "files": [
+        "streamdeck/com.obalunenko.mergbw.sdPlugin/manifest.json"
+      ]
+    },
+    "T005": {
+      "status": "DONE",
+      "did": "Package check requires SupportedInMultiActions === true",
+      "files": [
+        "streamdeck/scripts/check-package.mjs"
+      ]
+    },
+    "T006": {
+      "status": "DONE",
+      "did": "BaseAction tracks steps in a separate map via isStep(): no feedback.ready for steps, results still reach them, refreshDefaults iterates visible only",
+      "files": [
+        "streamdeck/src/actions/base-action.ts"
+      ]
+    },
+    "T007": {
+      "status": "DONE",
+      "did": "US2 tests: steps dispatch without waiting; accepted Transition step writes no title; dynamic preset step starts and stops like a key with no title",
+      "files": [
+        "streamdeck/tests/multi-action.test.ts"
+      ]
+    },
+    "T008": {
+      "status": "DONE",
+      "did": "Feedback.result skips the Accepted title for a step; BaseAction passes steps.has(context)",
+      "files": [
+        "streamdeck/src/feedback.ts",
+        "streamdeck/src/actions/base-action.ts"
+      ]
+    },
+    "T009": {
+      "status": "DONE",
+      "did": "US3 tests: corrupt and deleted-preset steps send nothing and alert while next step runs; no connection and not-ready reject; pending repeat skipped; step diagnostics flagged, no token",
+      "files": [
+        "streamdeck/tests/multi-action.test.ts"
+      ]
+    },
+    "T010": {
+      "status": "DONE",
+      "did": "Diagnostics test: multiAction written only for literal true; false, \"true\", 1 and absent omit it",
+      "files": [
+        "streamdeck/tests/diagnostics.test.ts"
+      ]
+    },
+    "T011": {
+      "status": "DONE",
+      "did": "Diagnostic.multiAction?: boolean; emit writes multiAction: \"true\" only for literal true",
+      "files": [
+        "streamdeck/src/diagnostics.ts"
+      ]
+    },
+    "T012": {
+      "status": "DONE",
+      "did": "OperationRecord carries multiAction?: true from acquire; BaseAction flags step acquire, action.rejected/started and result emits",
+      "files": [
+        "streamdeck/src/operation-store.ts",
+        "streamdeck/src/actions/base-action.ts"
+      ]
+    },
+    "T013": {
+      "status": "DONE",
+      "did": "README: seven actions in Multi Action/Switch; Multi Action paragraph with 0.5 s Delay, Transition/effect Delay, failure, repeat and title rules",
+      "files": [
+        "README.md"
+      ]
+    },
+    "T014": {
+      "status": "DONE",
+      "did": "README_RU: same Multi Action content in Russian, 0,5 с Delay",
+      "files": [
+        "README_RU.md"
+      ]
+    },
+    "T015": {
+      "status": "DONE",
+      "did": "006 plugin contract: one-line note superseded in part by 012 multi-action contract",
+      "files": [
+        "specs/006-streamdeck-control-plugin/contracts/plugin.md"
+      ]
+    },
+    "T016": {
+      "status": "DONE",
+      "did": "task plugin:check:software exit 0: lint, format, typecheck, 310/310 plugin tests, build, CLI validate, package check, 33 native script tests. Go unchanged: test:core/race/vet/build not required; Linux task check not run",
+      "files": [
+        "none"
+      ]
+    },
+    "T017": {
+      "status": "DONE",
+      "did": "hardware-verification.md: rows 1-9 observed OK by the owner on the arm64 spike 1.0.3.4; device model not stated",
+      "files": [
+        "specs/012-multi-action-support/hardware-verification.md"
+      ]
+    }
+  },
+  "verified": [
+    {
+      "what": "plugin software check (lint, format, typecheck, 310 tests, build, CLI validate, package check, native script tests)",
+      "command": "task plugin:check:software",
+      "source": "derived",
+      "exitCode": 0,
+      "durationSeconds": 52.6,
+      "result": "---------------------------------------------------------------------- · Ran 33 tests in 0.545s · OK"
+    },
+    {
+      "what": "Owner device session on LT-06, rows 1-9 (arm64 spike 1.0.3.4)",
+      "command": "manual",
+      "result": "Owner reported all rows OK in one summary (2026-11-01); no per-row detail, Stream Deck model and row 6 alert location not stated",
+      "warnings": [
+        "Summary report, not per-row observations"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "decision": "Built all phases inline, in order",
+      "why": "No story phase has a Files line, and all three edit base-action.ts and multi-action.test.ts, so they cannot run in parallel; each is a few small edits",
+      "rejected": "One worker per story phase, run sequentially"
+    },
+    {
+      "decision": "OperationStore.acquire takes multiAction through its existing Pick",
+      "why": "Pick keeps the optional readonly field; same type as the planned intersection with less code",
+      "rejected": "Pick<...> & { multiAction?: true }"
+    },
+    {
+      "decision": "Device build is a spike in dist/plugin-local-multi-action-20261101 (1.0.3.4), not linked",
+      "why": "task plugin:package needs a staged two-architecture payload and only the arm64 slice exists; spike plus explicit link is the documented local path. Linking replaces the installed plugin, so it waits for the owner",
+      "rejected": "Linking without asking, or building the Intel slice elsewhere"
+    },
+    {
+      "decision": "Step tests use ControlledClock for OperationStore and BridgeClient",
+      "why": "Keeps the 45 s operation deadline from arming real timers in tests",
+      "rejected": "systemClock"
+    },
+    {
+      "decision": "Verification is mac arm64 only: the arm64 spike build is the device build; the Intel slice and universal installer (task plugin:package) are out of scope",
+      "why": "Owner, 2026-11-01: personal use, keep only the mac arm64 check. Supersedes the plugin:package exit 201 concern",
+      "rejected": "Building an Intel slice to produce the universal installer"
+    }
+  ],
+  "concerns": [
+    {
+      "note": "T017 open: the owner's LT-06 session has not run. SC-001 (editor shows all seven) and SC-006 (row 4 observed) are unverified, so the spec is not marked complete. hardware-verification.md is a draft with every row pending",
+      "step": "implement"
+    },
+    {
+      "note": "task plugin:package exited 201: dist/plugin-stage is missing because no darwin_amd64 slice exists. The spike build stands in for the device session",
+      "step": "implement"
+    },
+    {
+      "note": "Pre-existing, unchanged: the Accepted key title text reads 'Transition accepted...' for preset keys too",
+      "step": "implement"
+    },
+    {
+      "note": "Go checks not required (no Go file changed): task test:core, test:race, vet, build not run. Linux task check not run (owner works on macOS)",
+      "step": "implement"
+    }
+  ],
+  "coverage": {
+    "FR-001": {
+      "tests": [
+        "streamdeck/tests/package.test.ts::every action is available in Multi Action"
+      ]
+    },
+    "FR-012": {
+      "tests": [
+        "streamdeck/tests/package.test.ts::every action is available in Multi Action"
+      ]
+    },
+    "FR-003": {
+      "tests": [
+        "streamdeck/tests/multi-action.test.ts::each step kind sends its key route",
+        "streamdeck/tests/multi-action.test.ts::a dynamic preset step starts its effect like a key and writes no title"
+      ]
+    },
+    "FR-004": {
+      "tests": [
+        "streamdeck/tests/multi-action.test.ts::a step dispatches without waiting for another step"
+      ]
+    },
+    "FR-005": {
+      "tests": [
+        "streamdeck/tests/multi-action.test.ts::an invalid step sends nothing",
+        "alerts",
+        "and the next step still runs"
+      ]
+    },
+    "FR-006": {
+      "tests": [
+        "streamdeck/tests/multi-action.test.ts::an invalid step sends nothing",
+        "alerts",
+        "and the next step still runs",
+        "streamdeck/tests/multi-action.test.ts::a step without a connection or readiness is rejected without a request"
+      ]
+    },
+    "FR-007": {
+      "tests": [
+        "streamdeck/tests/multi-action.test.ts::a repeated press skips a pending step"
+      ]
+    },
+    "FR-008": {
+      "tests": [
+        "streamdeck/tests/multi-action.test.ts::a step without a connection or readiness is rejected without a request"
+      ]
+    },
+    "FR-009": {
+      "tests": [
+        "streamdeck/tests/multi-action.test.ts::a step writes no title or image",
+        "streamdeck/tests/multi-action.test.ts::an accepted step writes no title"
+      ]
+    },
+    "FR-010": {
+      "tests": [
+        "streamdeck/tests/multi-action.test.ts::diagnostics flag step events without secrets",
+        "streamdeck/tests/diagnostics.test.ts::diagnostics write the Multi Action flag only as the literal true"
+      ]
+    }
+  },
+  "step_summaries": {
+    "implement": {
+      "summary": "All seven MeRGBW actions available in Multi Action; steps send key commands without titles, Accepted titles or queueing, and are flagged in diagnostics; docs updated; owner device session pending"
+    }
+  },
+  "last_action": "Owner session all OK; recording T017"
+}

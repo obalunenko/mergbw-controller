@@ -40,8 +40,10 @@ export class Feedback {
 	public async invalid(key: KeyView): Promise<void> {
 		await key.showAlert().catch(() => {});
 	}
-	public async result(key: KeyView, record: OperationRecord): Promise<void> {
+	public async result(key: KeyView, record: OperationRecord, step = false): Promise<void> {
 		if (record.status === "accepted") {
+			// A step's Accepted status stays in its panel; the title would land on the Multi Action key.
+			if (step) return;
 			await key.setTitle(translate(this.settings.getLanguage(), "accepted")).catch(() => {});
 			return;
 		}

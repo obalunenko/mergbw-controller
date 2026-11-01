@@ -24,8 +24,14 @@ export type ActionServices = {
 	diagnostics: Diagnostics;
 	runtime?: import("../managed-controller.js").ManagedController;
 };
+// Stream Deck marks Multi Action steps; a missing field means a key.
+function isStep(ev: { payload: unknown }): boolean {
+	return (ev.payload as { isInMultiAction?: boolean }).isInMultiAction === true;
+}
 export class BaseAction extends SingletonAction<Assignment> {
 	private readonly visible = new Map<string, KeyView>();
+	// Steps never get runtime titles or icons: those would land on the Multi Action key.
+	private readonly steps = new Map<string, KeyView>();
 	private readonly feedback: Feedback;
 	constructor(
 		public readonly kind: ActionKind,
@@ -47,8 +53,9 @@ export class BaseAction extends SingletonAction<Assignment> {
 				requestId: record.requestId,
 				errorCategory: record.errorCategory,
 				durationMs: record.durationMs,
+				multiAction: record.multiAction === true,
 			});
-			const key = this.visible.get(record.context);
+			const key = this.visible.get(record.context) ?? this.steps.get(record.context);
 			if (
 				key &&
 				services.operations.canRender(
@@ -58,20 +65,24 @@ export class BaseAction extends SingletonAction<Assignment> {
 					services.runtime ? (capability) => services.runtime!.current(capability) : undefined,
 				)
 			)
-				void this.feedback.result(key, record);
+				void this.feedback.result(key, record, this.steps.has(record.context));
 		});
 	}
 	public override async onWillAppear(ev: WillAppearEvent<Assignment>): Promise<void> {
 		const { settings, operations } = this.services;
 		settings.receiveAction(ev.action.id, this.kind, ev.payload.settings);
 		operations.appear(ev.action.id);
-		if (ev.action.isKey()) {
-			this.visible.set(ev.action.id, ev.action);
-			await this.feedback.ready(ev.action, this.kind, ev.action.id);
+		if (!ev.action.isKey()) return;
+		if (isStep(ev)) {
+			this.steps.set(ev.action.id, ev.action);
+			return;
 		}
+		this.visible.set(ev.action.id, ev.action);
+		await this.feedback.ready(ev.action, this.kind, ev.action.id);
 	}
 	public override onWillDisappear(ev: WillDisappearEvent<Assignment>): void {
 		this.visible.delete(ev.action.id);
+		this.steps.delete(ev.action.id);
 		this.services.operations.disappear(ev.action.id);
 		this.services.inspector.close(ev.action.id);
 	}
@@ -90,6 +101,7 @@ export class BaseAction extends SingletonAction<Assignment> {
 		const { settings, operations, diagnostics } = this.services;
 		const startedAt = operations.clock.now();
 		const context = ev.action.id;
+		const step = isStep(ev);
 		if (operations.get(context)?.status === "pending") return;
 		let record;
 		try {
@@ -106,6 +118,7 @@ export class BaseAction extends SingletonAction<Assignment> {
 				settingsRevision: settings.revision(context),
 				connectionRevision: settings.connectionRevision,
 				snapshot: { connection, route, ...(capability ? { capability } : {}) },
+				...(step ? { multiAction: true as const } : {}),
 			});
 		} catch (error) {
 			const errorCategory = error instanceof Error && error.message === "preset" ? "preset" : "validation";
@@ -115,13 +128,19 @@ export class BaseAction extends SingletonAction<Assignment> {
 				outcome: "rejected",
 				errorCategory,
 				durationMs: Math.max(0, operations.clock.now() - startedAt),
+				multiAction: step,
 			});
 			await this.feedback.invalid(ev.action);
 			return;
 		}
 		if (!record) return;
 		const release = diagnostics.retain(record.snapshot.connection.accessToken);
-		diagnostics.emit("action.started", { actionKind: this.kind, operationId: record.operationId, outcome: "pending" });
+		diagnostics.emit("action.started", {
+			actionKind: this.kind,
+			operationId: record.operationId,
+			outcome: "pending",
+			multiAction: step,
+		});
 		// Pending is shown in the inspector. Reserve key alerts for failures.
 		try {
 			const result = await this.command(record);

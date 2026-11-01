@@ -68,6 +68,7 @@ export type Diagnostic = {
 	installed?: string;
 	latest?: string;
 	result?: UpdateResult;
+	multiAction?: boolean;
 };
 const RELEASE_TAG =
 	/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?(?:\+[1-9]\d{0,5})?$/;
@@ -166,6 +167,7 @@ export class Diagnostics {
 		if (id) fields.requestId = id;
 		if (typeof input.operationId === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(input.operationId))
 			fields.operationId = this.text(input.operationId);
+		if (input.multiAction === true) fields.multiAction = "true";
 		this.write(fields);
 	}
 	private keep(secret: string): void {

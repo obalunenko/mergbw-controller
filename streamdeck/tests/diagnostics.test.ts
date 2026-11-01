@@ -51,6 +51,19 @@ test("diagnostic runtime allowlist excludes raw fields, invalid identifiers, err
 	assert.equal(logs.length, before);
 });
 
+test("diagnostics write the Multi Action flag only as the literal true", () => {
+	const logs: Record<string, number | string>[] = [];
+	const diagnostics = new Diagnostics((fields) => logs.push(fields));
+	diagnostics.emit("action.sent", { actionKind: "color", outcome: "sent", multiAction: true });
+	assert.deepEqual(logs, [{ event: "action.sent", actionKind: "color", outcome: "sent", multiAction: "true" }]);
+	for (const value of [false, "true", 1, undefined]) {
+		diagnostics.emit("action.sent", { actionKind: "color", outcome: "sent", ...({ multiAction: value } as object) });
+		assert.equal("multiAction" in logs.at(-1)!, false, String(value));
+	}
+	diagnostics.emit("action.sent", { actionKind: "color", outcome: "sent" });
+	assert.equal("multiAction" in logs.at(-1)!, false);
+});
+
 test("decimal tokens and in-flight previous tokens never leak through request IDs or labels", () => {
 	const old = "123456789012345678901234";
 	const next = "987654321098765432109876";
