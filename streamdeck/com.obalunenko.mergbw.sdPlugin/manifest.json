@@ -32,7 +32,7 @@
             "Controllers": [
                 "Keypad"
             ],
-            "SupportedInMultiActions": false,
+            "SupportedInMultiActions": true,
             "DisableAutomaticStates": true,
             "States": [
                 {
@@ -51,7 +51,7 @@
             "Controllers": [
                 "Keypad"
             ],
-            "SupportedInMultiActions": false,
+            "SupportedInMultiActions": true,
             "DisableAutomaticStates": true,
             "States": [
                 {
@@ -70,7 +70,7 @@
             "Controllers": [
                 "Keypad"
             ],
-            "SupportedInMultiActions": false,
+            "SupportedInMultiActions": true,
             "DisableAutomaticStates": true,
             "States": [
                 {
@@ -89,7 +89,7 @@
             "Controllers": [
                 "Keypad"
             ],
-            "SupportedInMultiActions": false,
+            "SupportedInMultiActions": true,
             "DisableAutomaticStates": true,
             "States": [
                 {
@@ -112,7 +112,7 @@
             "Encoder": {
                 "layout": "$B1"
             },
-            "SupportedInMultiActions": false,
+            "SupportedInMultiActions": true,
             "DisableAutomaticStates": true,
             "States": [
                 {
@@ -131,7 +131,7 @@
             "Controllers": [
                 "Keypad"
             ],
-            "SupportedInMultiActions": false,
+            "SupportedInMultiActions": true,
             "DisableAutomaticStates": true,
             "States": [
                 {
@@ -150,7 +150,7 @@
             "Controllers": [
                 "Keypad"
             ],
-            "SupportedInMultiActions": false,
+            "SupportedInMultiActions": true,
             "DisableAutomaticStates": true,
             "States": [
                 {

@@ -91,7 +91,7 @@ Check ON/OFF first, then verify RGB and brightness. URLs contain the generated a
 
 ## Native Stream Deck plugin
 
-The plugin provides seven MeRGBW Keypad actions with one shared setup panel on macOS **13.5+** and Stream Deck **7.1+**. The installer contains the controller for Apple Silicon and Intel. Using a prebuilt installer requires no Terminal, Go, Node.js or separately running server. You need your lamp's manufacturer-data identity; automatic discovery of that identity is outside this feature.
+The plugin provides seven MeRGBW Keypad actions with one shared setup panel on macOS **13.5+** and Stream Deck **7.1+**. All seven are also available as steps in **Multi Action** and **Multi Action Switch**. The installer contains the controller for Apple Silicon and Intel. Using a prebuilt installer requires no Terminal, Go, Node.js or separately running server. You need your lamp's manufacturer-data identity; automatic discovery of that identity is outside this feature.
 
 Open `com.obalunenko.mergbw.development.streamDeckPlugin`, add a MeRGBW action and open its panel. First launch opens **Lamp and connection**; after setup, this screen is available from the link below key settings. Choose EN or RU and one setup method:
 
@@ -110,6 +110,8 @@ All keys share one owned controller and BLE connection. The plugin starts it aft
 | Preset | Current controller label with a stable saved ID |
 | Transition | Explicit starting/ending RGB and brightness, integer duration 1–60 seconds |
 | Scene | A built-in lamp [scene](#scenes) or raw ID `80`–`93`; default Disco |
+
+**Multi Action:** a MeRGBW step uses the same panel as a key and sends the same command. The plugin sends each step as soon as Stream Deck runs it, so the order comes from Stream Deck **Delay**. Put a 0.5 s Delay between ordinary MeRGBW steps. This is a recommendation, not a measured minimum: the controller runs one command at a time, so the later step only needs the earlier request to arrive first. After a Transition or a dynamic preset, add a Delay as long as it should play. Without a Delay, order is not guaranteed: Scene then Off can end with the lamp on. A failed step shows an alert and does not stop the other steps. Pressing the Multi Action again skips steps that are still running. A dynamic preset step follows the key's start/stop rules: a repeated press stops its run, unless other MeRGBW steps run before it and restart the effect. Steps never change the Multi Action key's title or icon; Accepted status for transitions and effects shows in the step panel.
 
 **Preset settings:** one selector groups **Built-in presets** and **My presets**. Selecting a preset saves its assignment automatically; its color, brightness and effect appear below. Use **Customize a copy** for a built-in preset, **Edit** for your selected custom preset, or **+ Create preset**. The separate editor shows only the selected effect's parameters. Switching effects preserves the draft's color, brightness, timings and ordered palette. **Library** opens shared presets for editing/deletion; it loads automatically, with more pages available when needed. Static presets retain their existing behavior. Dynamic presets support:
 

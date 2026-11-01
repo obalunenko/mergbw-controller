@@ -87,6 +87,30 @@ test("only Brightness supports Encoder and requires the exact built-in indicator
 	}
 });
 
+test("every action is available in Multi Action", () => {
+	const fresh = runtime();
+	try {
+		const manifest = JSON.parse(readFileSync(join(fresh.directory, "manifest.json"), "utf8"));
+		assert.equal(manifest.Actions.length, 7);
+		for (const action of manifest.Actions) assert.equal(action.SupportedInMultiActions, true, action.UUID);
+		checkRuntime(fresh.directory, { softwareOnly: true });
+	} finally {
+		fresh.clean();
+	}
+	for (const fault of ["false", "missing"]) {
+		const { directory, clean } = runtime();
+		try {
+			const manifest = JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8"));
+			if (fault === "false") manifest.Actions[3].SupportedInMultiActions = false;
+			if (fault === "missing") delete manifest.Actions[3].SupportedInMultiActions;
+			writeFileSync(join(directory, "manifest.json"), JSON.stringify(manifest));
+			assert.throws(() => checkRuntime(directory, { softwareOnly: true }), /action paths or behavior/);
+		} finally {
+			clean();
+		}
+	}
+});
+
 test("private/dev paths are ignored at source and forbidden in installer entries", () => {
 	const { directory, clean } = runtime();
 	try {

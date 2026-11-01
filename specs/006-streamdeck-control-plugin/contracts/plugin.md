@@ -15,6 +15,7 @@
 | PropertyInspectorPath | ui/index.html |
 
 Five stable action UUIDs: com.obalunenko.mergbw.on, .off, .color, .brightness, .preset. Every action supports Controllers:["Keypad"], one state and no automatic toggling. Disable automatic states explicitly if applicable; SupportedInMultiActions:false avoids undocumented macro/duplicate execution semantics in this release. Icons/assets and paths must pass pinned CLI validation. No supplied profile with credentials, automatic launch of sunset or BLE imports.
+Superseded in part by `specs/012-multi-action-support/contracts/multi-action.md`: all seven actions declare `SupportedInMultiActions:true`.
 
 Action-list names default to English (On/Off/Color/Brightness/Preset) with bilingual descriptions. PI fields, error/recovery text and default runtime labels use explicitly selected en/ru. Dictionaries are packaged locally; no remote localization requests.
 

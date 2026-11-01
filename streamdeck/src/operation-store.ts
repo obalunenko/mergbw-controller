@@ -35,6 +35,7 @@ export type OperationRecord = {
 	};
 	readonly startedAt: number;
 	readonly deadlineAt: number;
+	readonly multiAction?: true;
 	status: Outcome;
 	transition?: TransitionSnapshot;
 	effect?: EffectSnapshot;
@@ -76,7 +77,10 @@ export class OperationStore {
 		if (this.records.get(context)?.status !== "pending") this.records.delete(context);
 	}
 	public acquire(
-		input: Pick<OperationRecord, "actionKind" | "connectionRevision" | "context" | "settingsRevision" | "snapshot">,
+		input: Pick<
+			OperationRecord,
+			"actionKind" | "connectionRevision" | "context" | "multiAction" | "settingsRevision" | "snapshot"
+		>,
 	): OperationRecord | undefined {
 		if (this.records.get(input.context)?.status === "pending") return undefined;
 		const startedAt = this.clock.now();
