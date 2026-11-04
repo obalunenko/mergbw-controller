@@ -220,7 +220,7 @@ func (b *Backend) connectLocked(ctx context.Context) error {
 	if err != nil {
 		return friendlyError("подключение к лампе", err)
 	}
-	// v0.16.0 Darwin can return Device{}, nil on an early connection failure.
+	// v0.17.0 Darwin can return Device{}, nil on an early connection failure.
 	// Calling Connected on that zero Device would dereference a nil internal.
 	if device == nil || device.Address() != match.address.String() {
 		return fmt.Errorf("%w: библиотека вернула пустое или другое устройство", ErrNotConnected)
@@ -443,7 +443,7 @@ func (b *Backend) discoveryErrorLocked(ctx context.Context, stage string, cause 
 		b.fatal = fmt.Errorf("%w: %s: %v; перезапусти сервер перед следующей попыткой", ErrNeedsRestart, stage, cause)
 		return b.fatal
 	}
-	if strings.Contains(strings.ToLower(cause.Error()), "not find") || strings.Contains(strings.ToLower(cause.Error()), "could not find") {
+	if strings.Contains(strings.ToLower(cause.Error()), "service not found") || strings.Contains(strings.ToLower(cause.Error()), "characteristic not found") {
 		return fmt.Errorf("%w: %s: %v", ErrIncompatible, stage, cause)
 	}
 	return friendlyError(stage, cause)

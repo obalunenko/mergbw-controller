@@ -45,7 +45,7 @@ task release:notes RELEASE_TAG=v1.0.0 RELEASE_REPOSITORY=obalunenko/mergbw-contr
 xcode-select --install
 ```
 
-Используется обычный компилятор Go и библиотека `tinygo.org/x/bluetooth v0.16.0`. Компилятор TinyGo не требуется. Backend macOS использует CoreBluetooth через CGO, поэтому сборка выполняется на Mac — см. [официальные требования библиотеки](https://github.com/tinygo-org/bluetooth/blob/v0.16.0/README.md#macos).
+Используется обычный компилятор Go и библиотека `tinygo.org/x/bluetooth v0.17.0`. Компилятор TinyGo не требуется. Backend macOS использует CoreBluetooth через CGO, поэтому сборка выполняется на Mac — см. [официальные требования библиотеки](https://github.com/tinygo-org/bluetooth/blob/v0.17.0/README.md#macos).
 
 ```bash
 git clone https://github.com/obalunenko/mergbw-controller.git
@@ -345,7 +345,7 @@ task speckit:update:test
 
 - [King1704G control.py, закреплённая версия](https://github.com/King1704G/custom_components-sunset_light_cheapass_amazon_light/blob/165539104949e8bc623b46040dee1ad33a3eb30c/custom_components/sunset_light/control.py): пакеты, контрольная сумма и ID сцен. Проверены OFF `55 01 FF 06 00 A3` и ON `55 01 FF 06 01 A2`.
 - [rexxars config_flow.py, закреплённая версия](https://github.com/rexxars/ha-mergbw/blob/2771a214601d8c00ed21a4e05ca7616bd30fce0b/custom_components/mergbw/config_flow.py): логика обнаружения по рекламе; не источник проверенных команд для этой реализации.
-- [Go Bluetooth v0.16.0](https://github.com/tinygo-org/bluetooth/tree/v0.16.0): интеграция с платформой; [go.mod](https://github.com/tinygo-org/bluetooth/blob/v0.16.0/go.mod) требует Go 1.25.0.
+- [Go Bluetooth v0.17.0](https://github.com/tinygo-org/bluetooth/tree/v0.17.0): интеграция с платформой; [go.mod](https://github.com/tinygo-org/bluetooth/blob/v0.17.0/go.mod) требует Go 1.25.0.
 - [Elgato System Actions](https://help.elgato.com/hc/en-us/articles/360028234471-Elgato-Stream-Deck-System-Actions-Hotkey-Open-Website-Multimedia): Website и фоновый GET.
 
 ## Лицензия

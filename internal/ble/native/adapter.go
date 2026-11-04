@@ -28,8 +28,8 @@ func (a *adapter) Enable() error   { return a.native.Enable() }
 func (a *adapter) StopScan() error { return a.native.StopScan() }
 
 func (a *adapter) SetConnectHandler(callback func(ble.Device, bool)) {
-	a.native.SetConnectHandler(func(d bluetooth.Device, connected bool) {
-		callback(device{native: d}, connected)
+	a.native.SetConnectionStateHandler(func(d bluetooth.Device, state bluetooth.ConnectionState) {
+		callback(device{native: d}, state.Connected)
 	})
 }
 

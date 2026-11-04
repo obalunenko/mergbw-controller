@@ -1,5 +1,5 @@
 // Package ble implements the local MeRGBW LT-06 transport with
-// tinygo.org/x/bluetooth v0.16.0 through an injected synchronous Adapter.
+// tinygo.org/x/bluetooth v0.17.0 through an injected synchronous Adapter.
 // The native subpackage owns the TinyGo import; this package and its generated
 // mocks can be tested without native initialization. cmd/sunset injects
 // native.DefaultAdapter. Use one Backend per process: the upstream adapter and
@@ -49,6 +49,6 @@
 // are run only by an explicit local task test:hardware invocation, never CI.
 //
 // Source audit:
-// https://github.com/tinygo-org/bluetooth/tree/v0.16.0
-// https://github.com/tinygo-org/cbgo/tree/v0.0.4
+// https://github.com/tinygo-org/bluetooth/tree/v0.17.0
+// https://github.com/tinygo-org/cbgo/tree/v0.1.0
 package ble

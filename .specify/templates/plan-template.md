@@ -18,7 +18,7 @@
 `tools/task/` and `tools/mockgen/` modules. Python 3.11+ and Bash support local
 Spec Kit tooling.
 
-**Primary Dependencies**: Standard library plus `tinygo.org/x/bluetooth v0.16.0`;
+**Primary Dependencies**: Standard library plus `tinygo.org/x/bluetooth v0.17.0`;
 Task 3.54.0 in the separate tools module. [List feature-specific changes.]
 
 **Storage**: JSON settings/presets and generated Stream Deck URLs. [Affected
