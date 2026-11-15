@@ -755,7 +755,8 @@ func TestDiscoveryErrorClassificationAndStickyTimeout(t *testing.T) {
 			{"permission_denied", "permission denied", ErrPermission},
 			{"not_authorized", "not authorized", ErrPermission},
 			{"unauthorized", "unauthorized adapter", ErrPermission},
-			{"missing_result", "could not find requested UUID", ErrIncompatible},
+			{"missing_service", "bluetooth: service not found", ErrIncompatible},
+			{"missing_characteristic", "bluetooth: characteristic not found", ErrIncompatible},
 			{"timeout", "Discovery TIMEOUT", ErrNeedsRestart},
 			{"other_error", "radio busy", nil},
 		} {

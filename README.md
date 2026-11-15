@@ -45,7 +45,7 @@ Install **Go 1.27.0+** from [go.dev/dl](https://go.dev/dl/) and Apple's **Xcode 
 xcode-select --install
 ```
 
-The project uses ordinary Go and `tinygo.org/x/bluetooth v0.16.0`; the TinyGo compiler is not required. The macOS backend uses CoreBluetooth through CGO and must be built on macOS. See the [upstream macOS requirements](https://github.com/tinygo-org/bluetooth/blob/v0.16.0/README.md#macos).
+The project uses ordinary Go and `tinygo.org/x/bluetooth v0.17.0`; the TinyGo compiler is not required. The macOS backend uses CoreBluetooth through CGO and must be built on macOS. See the [upstream macOS requirements](https://github.com/tinygo-org/bluetooth/blob/v0.17.0/README.md#macos).
 
 ```bash
 git clone https://github.com/obalunenko/mergbw-controller.git
@@ -343,7 +343,7 @@ The update check reports installed versions, pin drift, and available upstream r
 
 - [King1704G control.py, pinned revision](https://github.com/King1704G/custom_components-sunset_light_cheapass_amazon_light/blob/165539104949e8bc623b46040dee1ad33a3eb30c/custom_components/sunset_light/control.py): packet layout, folded checksum, power, RGB, brightness, and scene IDs. Verified power packets: OFF `55 01 FF 06 00 A3`; ON `55 01 FF 06 01 A2`.
 - [rexxars config_flow.py, pinned revision](https://github.com/rexxars/ha-mergbw/blob/2771a214601d8c00ed21a4e05ca7616bd30fce0b/custom_components/mergbw/config_flow.py): advertisement discovery reference, not a source of verified control commands for this implementation.
-- [Go Bluetooth v0.16.0](https://github.com/tinygo-org/bluetooth/tree/v0.16.0): platform integration; its [go.mod](https://github.com/tinygo-org/bluetooth/blob/v0.16.0/go.mod) requires Go 1.25.0.
+- [Go Bluetooth v0.17.0](https://github.com/tinygo-org/bluetooth/tree/v0.17.0): platform integration; its [go.mod](https://github.com/tinygo-org/bluetooth/blob/v0.17.0/go.mod) requires Go 1.25.0.
 - [Elgato System Actions](https://help.elgato.com/hc/en-us/articles/360028234471-Elgato-Stream-Deck-System-Actions-Hotkey-Open-Website-Multimedia): Website and background GET requests.
 
 ## License
