@@ -36,7 +36,11 @@ def git(*args):
 
 
 def has_ref(ref):
-    return subprocess.run(["git", "rev-parse", "--quiet", "--verify", ref], capture_output=True).returncode == 0
+    try:
+        git("rev-parse", "--quiet", "--verify", ref)
+    except subprocess.CalledProcessError:
+        return False
+    return True
 
 
 def version(tag):
