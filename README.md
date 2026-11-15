@@ -91,7 +91,7 @@ Check ON/OFF first, then verify RGB and brightness. URLs contain the generated a
 
 ## Native Stream Deck plugin
 
-The plugin provides seven MeRGBW Keypad actions with one shared setup panel on macOS **13.5+** and Stream Deck **7.1+**. All seven are also available as steps in **Multi Action** and **Multi Action Switch**. The installer contains the controller for Apple Silicon and Intel. Using a prebuilt installer requires no Terminal, Go, Node.js or separately running server. You need your lamp's manufacturer-data identity; automatic discovery of that identity is outside this feature.
+The plugin provides seven MeRGBW Keypad actions with one shared setup panel on macOS **13.5+** and Stream Deck **7.6+**. All seven are also available as steps in **Multi Action** and **Multi Action Switch**. The installer contains the controller for Apple Silicon and Intel. Using a prebuilt installer requires no Terminal, Go, Node.js or separately running server. You need your lamp's manufacturer-data identity; automatic discovery of that identity is outside this feature.
 
 Open `com.obalunenko.mergbw.development.streamDeckPlugin`, add a MeRGBW action and open its panel. First launch opens **Lamp and connection**; after setup, this screen is available from the link below key settings. Choose EN or RU and one setup method:
 
