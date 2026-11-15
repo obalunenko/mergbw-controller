@@ -44,8 +44,15 @@ tasks:
     cmds:
       - '{{.PYTHON}} scripts/release.py notes --tag {{shellQuote .RELEASE_TAG}} --repository {{shellQuote .RELEASE_REPOSITORY}} --output dist/release-notes.md'
 
+  release:tag:
+    desc: Create and push an annotated release tag from a clean master that matches origin (requires RELEASE_TAG=vX.Y.Z).
+    requires:
+      vars: [RELEASE_TAG]
+    cmds:
+      - '{{.PYTHON}} scripts/release.py tag --tag {{shellQuote .RELEASE_TAG}}'
+
   release:test:
-    desc: Check release history selection and archive contents without network or Bluetooth.
+    desc: Check release history selection, latest marker, tagging and archive contents without network or Bluetooth.
     cmds:
       - '{{.PYTHON}} scripts/test_release.py'
 
