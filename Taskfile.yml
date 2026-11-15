@@ -201,7 +201,7 @@ tasks:
       - task: build
 
   plugin:deps:
-    desc: Install locked local Stream Deck dependencies (Node 24).
+    desc: Install locked local Stream Deck dependencies (Node 26).
     dir: streamdeck
     cmds:
       - npm ci

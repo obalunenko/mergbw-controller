@@ -131,7 +131,7 @@ export function checkRuntime(directory, options = {}) {
 		typeof manifest.Version !== "string" ||
 		!/^\d+\.\d+\.\d+\.\d+$/.test(manifest.Version) ||
 		manifest.SDKVersion !== 3 ||
-		manifest.Nodejs?.Version !== "24" ||
+		manifest.Nodejs?.Version !== "26" ||
 		manifest.Software?.MinimumVersion !== "7.1" ||
 		JSON.stringify(manifest.OS) !== JSON.stringify([{ Platform: "mac", MinimumVersion: "13.5" }])
 	)

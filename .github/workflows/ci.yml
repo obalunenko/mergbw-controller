@@ -62,7 +62,7 @@ jobs:
 
 
   plugin-software:
-    name: Plugin / Linux / Node 24 / BLE-free fixtures
+    name: Plugin / Linux / Node 26 / BLE-free fixtures
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -80,7 +80,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '24'
+          node-version: '26'
           cache: npm
           cache-dependency-path: streamdeck/package-lock.json
       - name: Install locked plugin dependencies
