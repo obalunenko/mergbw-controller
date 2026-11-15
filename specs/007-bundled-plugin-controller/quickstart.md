@@ -10,7 +10,7 @@ The procedures below remain an optional future reference, not completion gates f
 
 ## Prerequisites
 
-Developer validation: repository Go 1.27.0+ toolchain, Node 24, Task via `make tools`; Xcode command-line tools/SDK for native macOS builds. End users of the final installer need only supported macOS/Stream Deck and the lamp configuration/identity; no developer prerequisites or Terminal step.
+Developer validation: repository Go 1.27.0+ toolchain, Node 26, Task via `make tools`; Xcode command-line tools/SDK for native macOS builds. End users of the final installer need only supported macOS/Stream Deck and the lamp configuration/identity; no developer prerequisites or Terminal step.
 
 Use synthetic identities/tokens and temporary data for automated tests. Do not copy private root settings/presets into fixtures, archives, reports or source control. Import acceptance with real data is local, not CI. See [configuration](contracts/configuration-ui.md) for formats and [runtime](contracts/managed-runtime.md) for states/timing.
 
@@ -51,7 +51,7 @@ Also cover authoritative save read-back (`applied`, `not_applied`, `commit_unkno
 
 This separate T024/T025 path runs as soon as US1 and the minimal `spike` builder are implemented. It does not use the later T067 Task interfaces or a universal installer. Follow the acceptance-owner decision above and preserve current data before replacing the same-UUID plugin. A prior Terminal Bluetooth grant must not be used as evidence that the installed plugin has the correct permission attribution. Both native components are built for the current Mac only. These are developer setup commands; the native components are subsequently launched only by Stream Deck.
 
-From the repository root in a Node 24 shell, after T024:
+From the repository root in a Node 26 shell, after T024:
 
 ```bash
 make tools

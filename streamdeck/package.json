@@ -4,7 +4,7 @@
     "private": true,
     "type": "module",
     "engines": {
-        "node": "24.x"
+        "node": "26.x"
     },
     "scripts": {
         "build": "rollup -c",
@@ -35,7 +35,7 @@
         "@rollup/plugin-commonjs": "29.0.3",
         "@rollup/plugin-node-resolve": "16.0.3",
         "@rollup/plugin-typescript": "12.3.0",
-        "@types/node": "24.19.2",
+        "@types/node": "26.6.6",
         "eslint": "9.39.5",
         "eslint-plugin-jsdoc": "54.7.0",
         "prettier": "3.9.10",

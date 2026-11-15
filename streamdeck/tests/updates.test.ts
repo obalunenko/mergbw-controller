@@ -102,8 +102,8 @@ test("semver and (tag, build) ordering decide what is newer", () => {
 		"v1.0.0",
 	];
 	for (let i = 1; i < ordered.length; i++) {
-		assert.equal(compareTags(ordered[i]!, ordered[i - 1]!), 1, ordered[i]);
-		assert.equal(compareTags(ordered[i - 1]!, ordered[i]!), -1, ordered[i]);
+		assert.equal(compareTags(ordered[i]!, ordered[i - 1]!), 1, ordered[i]!);
+		assert.equal(compareTags(ordered[i - 1]!, ordered[i]!), -1, ordered[i]!);
 	}
 	assert.equal(compareTags("v2.0.0", "v2.0.0"), 0);
 	for (const bad of ["1.2.0", "v1.2", "v01.2.0", "v1.2.0-01", "v1.2.0-", "latest"])
