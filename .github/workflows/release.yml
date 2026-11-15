@@ -184,20 +184,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flags=()
+          # GitHub otherwise marks every newly published release as latest.
+          flags=(--latest="$(python3 scripts/release.py latest --tag "$RELEASE_TAG")")
           if [[ "$RELEASE_TAG" == *-* ]]; then
-            flags+=(--prerelease --latest=false)
+            flags+=(--prerelease)
           fi
+          assets=(dist/*.tar.gz dist/*.streamDeckPlugin dist/SHA256SUMS)
           # gh stages assets in a draft before publishing. A failed upload
           # leaves a draft that a rerun can complete, never a partial release.
-          if release=$(gh release view "$RELEASE_TAG" --json isDraft); then
+          if release=$(gh release view "$RELEASE_TAG" --json isDraft,assets); then
             if [[ $(jq -r .isDraft <<< "$release") != true ]]; then
-              echo "Release is already published; leaving it unchanged."
-              exit 0
+              published=$(jq -r '.assets[].name' <<< "$release" | sort)
+              if [[ "$published" == "$(printf '%s\n' "${assets[@]##*/}" | sort)" ]]; then
+                echo "Release is already published with all assets; leaving it unchanged."
+                exit 0
+              fi
+              if [[ -n "$published" ]]; then
+                echo "::error::Published release $RELEASE_TAG has an incomplete asset set; repair it manually."
+                exit 1
+              fi
+              # Published outside this workflow (e.g. in the web UI), so there
+              # is nothing to download yet. Hide it until all assets are attached.
+              echo "::warning::Release $RELEASE_TAG was published without assets; completing it."
+              gh release edit "$RELEASE_TAG" --draft=true
             fi
-            gh release upload "$RELEASE_TAG" dist/*.tar.gz dist/*.streamDeckPlugin dist/SHA256SUMS --clobber
+            gh release upload "$RELEASE_TAG" "${assets[@]}" --clobber
             gh release edit "$RELEASE_TAG" --title "$RELEASE_TAG" --notes-file release-notes.md --draft=false "${flags[@]}"
           else
-            gh release create "$RELEASE_TAG" dist/*.tar.gz dist/*.streamDeckPlugin dist/SHA256SUMS \
+            gh release create "$RELEASE_TAG" "${assets[@]}" \
               --verify-tag --title "$RELEASE_TAG" --notes-file release-notes.md "${flags[@]}"
           fi

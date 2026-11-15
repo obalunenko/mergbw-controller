@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package the built controller and generate complete, commit-based release notes."""
+"""Package the built controller, tag releases and generate complete, commit-based release notes."""
 
 import argparse
 import re
@@ -22,6 +22,7 @@ GROUPS = {
     "test": "Tests",
 }
 ARCHIVE_FILES = ("sunset", "README.md", "README_RU.md", "LICENSE")
+RELEASE_BRANCH = "master"
 
 
 def release_tag(value):
@@ -32,6 +33,45 @@ def release_tag(value):
 
 def git(*args):
     return subprocess.check_output(["git", *args], text=True).strip()
+
+
+def has_ref(ref):
+    return subprocess.run(["git", "rev-parse", "--quiet", "--verify", ref], capture_output=True).returncode == 0
+
+
+def version(tag):
+    return tuple(int(part) for part in TAG.fullmatch(tag).groups())
+
+
+def is_latest(tag):
+    # GitHub marks every newly published release as latest unless told
+    # otherwise. Only the highest stable version may hold the marker, so a
+    # fix for an older line never replaces it in the plugin update check.
+    if not has_ref(f"refs/tags/{tag}^{{commit}}"):
+        raise ValueError(f"tag {tag} does not exist")
+    if "-" in tag:
+        return False
+    stable = [candidate for candidate in git("tag", "--list").splitlines()
+              if TAG.fullmatch(candidate) and "-" not in candidate]
+    return all(version(candidate) <= version(tag) for candidate in stable)
+
+
+def create_tag(tag):
+    # Releases start only from a pushed tag; a release drafted in the web UI
+    # creates its tag at publication, before any asset exists.
+    branch = git("branch", "--show-current")
+    if branch != RELEASE_BRANCH:
+        raise ValueError(f"release tags are created from {RELEASE_BRANCH}, not {branch or 'a detached HEAD'}")
+    if git("status", "--porcelain", "--untracked-files=no"):
+        raise ValueError("commit or stash local changes before tagging")
+    git("fetch", "--quiet", "origin", RELEASE_BRANCH)
+    if git("rev-parse", "HEAD") != git("rev-parse", f"refs/remotes/origin/{RELEASE_BRANCH}"):
+        raise ValueError(f"{RELEASE_BRANCH} differs from origin/{RELEASE_BRANCH}; pull or push first")
+    if has_ref(f"refs/tags/{tag}") or git("ls-remote", "--tags", "origin", f"refs/tags/{tag}"):
+        raise ValueError(f"tag {tag} already exists")
+    git("tag", "--annotate", tag, "--message", tag)
+    git("push", "--quiet", "origin", f"refs/tags/{tag}")
+    print(f"Pushed {tag}; the release workflow publishes it.")
 
 
 def previous_tag(tag):
@@ -131,9 +171,17 @@ def main():
     changelog.add_argument("--tag", type=release_tag, required=True)
     changelog.add_argument("--repository", required=True)
     changelog.add_argument("--output", type=Path, required=True)
+    marker = commands.add_parser("latest")
+    marker.add_argument("--tag", type=release_tag, required=True)
+    tagging = commands.add_parser("tag")
+    tagging.add_argument("--tag", type=release_tag, required=True)
     args = parser.parse_args()
     if args.command == "archive":
         archive(args.tag, args.go)
+    elif args.command == "latest":
+        print(str(is_latest(args.tag)).lower())
+    elif args.command == "tag":
+        create_tag(args.tag)
     else:
         text = notes(args.tag, args.repository)
         args.output.parent.mkdir(parents=True, exist_ok=True)

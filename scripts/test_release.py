@@ -147,6 +147,60 @@ class ReleaseTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "symlinked"):
             release.archive("v1.0.0", str(fake_go))
 
+    def test_only_highest_stable_tag_is_latest(self):
+        self.git("tag", "v1.9.0")
+        self.commit("feat: next line")
+        self.git("tag", "v1.10.0")
+        self.git("tag", "v2.0.0-rc.1")
+        self.git("tag", "v-next")
+        self.assertTrue(release.is_latest("v1.10.0"))
+        self.assertFalse(release.is_latest("v1.9.0"))
+        self.assertFalse(release.is_latest("v2.0.0-rc.1"))
+        self.git("switch", "--quiet", "-c", "hotfix", "v1.9.0")
+        self.commit("fix: older line")
+        self.git("tag", "v1.9.1")
+        self.assertFalse(release.is_latest("v1.9.1"))
+        with self.assertRaisesRegex(ValueError, "does not exist"):
+            release.is_latest("v3.0.0")
+
+    def remote(self):
+        self.git("branch", "-m", release.RELEASE_BRANCH)
+        origin = self.directory / "origin.git"
+        self.git("init", "--quiet", "--bare", str(origin))
+        self.git("remote", "add", "origin", str(origin))
+        self.git("push", "--quiet", "-u", "origin", release.RELEASE_BRANCH)
+        return origin
+
+    def test_tag_is_annotated_and_pushed_from_synchronized_branch(self):
+        origin = self.remote()
+        release.create_tag("v1.0.0")
+        self.assertEqual(self.git("cat-file", "-t", "v1.0.0"), "tag")
+        pushed = self.git("--git-dir", str(origin), "rev-parse", "v1.0.0^{commit}")
+        self.assertEqual(pushed, self.git("rev-parse", "HEAD"))
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            release.create_tag("v1.0.0")
+        self.git("tag", "--delete", "v1.0.0")
+        with self.assertRaisesRegex(ValueError, "already exists"):
+            release.create_tag("v1.0.0")
+
+    def test_tag_requires_clean_pushed_release_branch(self):
+        origin = self.remote()
+        Path("tracked.txt").write_text("committed", encoding="utf-8")
+        self.git("add", "tracked.txt")
+        self.commit("chore: track file")
+        with self.assertRaisesRegex(ValueError, "differs from origin"):
+            release.create_tag("v1.0.0")
+        self.git("push", "--quiet")
+        Path("tracked.txt").write_text("edited", encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "local changes"):
+            release.create_tag("v1.0.0")
+        self.git("checkout", "--", "tracked.txt")
+        self.git("switch", "--quiet", "-c", "feature")
+        with self.assertRaisesRegex(ValueError, "not feature"):
+            release.create_tag("v1.0.0")
+        self.assertEqual(self.git("tag", "--list"), "")
+        self.assertEqual(self.git("--git-dir", str(origin), "tag", "--list"), "")
+
     def test_rejects_invalid_tags_and_repository(self):
         for tag in ("v1.0.0", "v2.1.3-rc.1"):
             self.assertEqual(release.release_tag(tag), tag)
